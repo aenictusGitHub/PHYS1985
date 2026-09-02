@@ -1,7 +1,6 @@
 # PHYS1985 — Animations de cinématique
 
-Ce dépôt rassemble deux animations interactives en français pour le cours PHYS1985.
-Elles fonctionnent directement dans un navigateur moderne et ne nécessitent aucune installation.
+Voici deux animations interactives pour le cours PHYS1985 - Physique générale I (partie Concepts).
 
 ## Ouvrir les animations
 
@@ -13,8 +12,6 @@ Elles fonctionnent directement dans un navigateur moderne et ne nécessitent auc
 | Cinématique 2D | Cinématique 3D |
 | --- | --- |
 | [![QR code vers l’animation 2D](qr-codes/cinematique_2d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html) | [![QR code vers l’animation 3D](qr-codes/cinematique_3d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html) |
-
-Les QR codes sont aussi fournis en SVG, pratique pour une impression sans perte de qualité.
 
 ## Fichiers
 
