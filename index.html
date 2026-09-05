@@ -3,8 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Animations interactives de cinématique 2D et 3D pour le cours PHYS1985.">
-  <title>PHYS1985 — Animations de cinématique</title>
+  <meta name="description" content="Animations interactives de mécanique pour le cours PHYS1985.">
+  <link rel="canonical" href="https://aenictusgithub.github.io/PHYS1985/">
+  <meta property="og:title" content="PHYS1985 — Animations interactives de mécanique">
+  <meta property="og:description" content="Cinématique, forces, travail et puissance dans des expériences visuelles manipulables.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://aenictusgithub.github.io/PHYS1985/">
+  <meta property="og:image" content="https://aenictusgithub.github.io/PHYS1985/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PHYS1985 — Animations interactives de mécanique">
+  <meta name="twitter:description" content="Cinématique, forces, travail et puissance dans des expériences visuelles manipulables.">
+  <meta name="twitter:image" content="https://aenictusgithub.github.io/PHYS1985/og.png">
+  <title>PHYS1985 — Animations interactives</title>
   <style>
     :root {
       color-scheme: light;
@@ -51,6 +61,7 @@
       background: var(--panel);
       box-shadow: 0 14px 38px rgba(38, 58, 92, 0.09);
     }
+    article.featured { grid-column: 1 / -1; }
     h2 { margin: 0 0 8px; font-size: 1.45rem; }
     article p { min-height: 4.5em; margin: 0 0 20px; color: var(--muted); line-height: 1.5; }
     .button {
@@ -68,6 +79,7 @@
     @media (max-width: 760px) {
       main { padding: 40px 0; }
       .grid { grid-template-columns: 1fr; }
+      article.featured { grid-column: auto; }
     }
     @media (max-width: 440px) {
       article { grid-template-columns: 1fr; }
@@ -79,8 +91,8 @@
   <main>
     <header>
       <p class="eyebrow">PHYS1985 · ULiège</p>
-      <h1>Animations de cinématique</h1>
-      <p class="intro">Explorez visuellement les vecteurs position, vitesse et accélération sur des trajectoires en deux ou trois dimensions.</p>
+      <h1>Animations interactives</h1>
+      <p class="intro">Explorez la cinématique, les forces, le travail et la puissance grâce à des expériences visuelles manipulables.</p>
     </header>
 
     <section class="grid" aria-label="Animations disponibles">
@@ -100,6 +112,15 @@
           <a class="button" href="cinematique_3d_webapp_fr.html">Ouvrir l’animation</a>
         </div>
         <img class="qr" src="qr-codes/cinematique_3d.svg" alt="QR code vers l’animation de cinématique 3D">
+      </article>
+
+      <article class="featured">
+        <div>
+          <h2>Travail et puissance</h2>
+          <p>Champ de force, puissance instantanée, travail cumulé et vérification du théorème de l’énergie cinétique.</p>
+          <a class="button" href="puissance_travail_webapp_fr.html">Ouvrir l’animation</a>
+        </div>
+        <img class="qr" src="qr-codes/puissance_travail.svg" alt="QR code vers l’animation sur le travail et la puissance">
       </article>
     </section>
 
