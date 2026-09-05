@@ -53,6 +53,7 @@ def build(name, source, archive_root, app_kind):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--app", action="append", choices=APPS, help="Only rebuild the selected application(s)")
     args = parser.parse_args()
     overrides = {}
     for item in args.source:
@@ -61,6 +62,8 @@ def main():
             parser.error(f"Unknown application: {name}")
         overrides[name] = Path(path)
     for name, (app_kind, archive_root) in APPS.items():
+        if args.app and name not in args.app:
+            continue
         if name in overrides:
             build(name, overrides[name], archive_root, app_kind)
             continue

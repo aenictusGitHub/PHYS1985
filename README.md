@@ -2,6 +2,7 @@
 
 Voici trois animations interactives pour le cours PHYS1985 - Physique générale I (partie Concepts).
 Les symboles, valeurs et unités mathématiques sont composés en LaTeX avec MathJax.
+Les deux animations de cinématique proposent aussi l’à-coup : un vecteur sélectionnable, sa norme et ses composantes en mètres par seconde cube.
 
 ## Ouvrir les animations
 
@@ -37,6 +38,8 @@ python3 tools/build_apps.py
 ```
 
 Pour reconstruire aussi depuis un dossier source modifié, ajouter `--source nom_application=/chemin/du/dossier` (le nom est le nom du fichier HTML sans extension). Les calculs physiques sont conservés lors de l’harmonisation graphique.
+
+L’option `--app nom_application` limite la reconstruction à une application; elle peut être répétée. Les calculs d’à-coup des deux archives sources sont vérifiables avec `python3 tools/check_jerk.py` (Node.js ou JavaScript système de macOS).
 
 ## Sauvegarde avant harmonisation
 

@@ -178,6 +178,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 .swatch-position { background: var(--position); }
 .swatch-velocity { background: var(--velocity); }
 .swatch-acceleration { background: var(--acceleration); }
+.swatch-jerk { background: #987125; }
+.jerk-relation { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
 .swatch-tangential { background: var(--tangential); }
 .swatch-normal { background: var(--normal); }
 
@@ -966,6 +968,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
             <span>Accélération <span class="tex-math">\(\vec a(t)\)</span></span>
           </label>
           <label class="check-row">
+            <input id="toggle-jerk" type="checkbox" />
+            <span class="swatch swatch-jerk"></span>
+            <span>À-coup <span class="tex-math">\(\vec{\jmath}(t)\)</span></span>
+          </label>
+          <label class="check-row">
             <input id="toggle-tangential" type="checkbox" />
             <span class="swatch swatch-tangential"></span>
             <span>Tangentielle <span class="tex-math">\(\vec a_{\mathrm t}(t)\)</span></span>
@@ -1038,6 +1045,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       <section class="panel-section equation-section">
         <h2>Mouvement</h2>
         <div id="trajectory-equations" class="equations"></div>
+        <div class="equations jerk-relation">
+          <div class="equation"><span class="tex-math">\(\displaystyle \vec{\jmath}(t)=\frac{\mathrm d\vec a}{\mathrm dt}=\frac{\mathrm d^3\vec r}{\mathrm dt^3}\)</span></div>
+          <p class="microcopy">L’à-coup mesure la variation du vecteur accélération. Unité : <span class="tex-math">\(\mathrm{m\,s^{-3}}\)</span>.</p>
+        </div>
       </section>
 
       <footer class="panel-footer">
@@ -1082,6 +1093,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     position: '#d9683b',
     velocity: '#2775b6',
     acceleration: '#7758a6',
+    jerk: '#987125',
     tangential: '#b5688b',
     normal: '#268576',
     trail: [97, 120, 140],
@@ -1584,6 +1596,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       closed: false,
       scaleV: 3,
       scaleA: 25,
+      jerk() { return V(0, 0, 0); },
       equations: [
         String.raw`x(t)=x_0+v_0\cos(\theta_0)t`,
         String.raw`y(t)=y_0+v_0\sin(\theta_0)t-\frac{1}{2}gt^2`,
@@ -1625,7 +1638,44 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       decompositionDefined = true;
     }
 
-    return { position: p, velocity, acceleration, tangential, normal, speed, decompositionDefined };
+    const jerk = jerkAt(trajectory, t);
+    return { position: p, velocity, acceleration, jerk, tangential, normal, speed, decompositionDefined };
+  }
+
+  // Differentiate the smooth position law, not the playback wrap/clamp.
+  // A symmetric seven-point stencil gives fourth-order accuracy without
+  // differentiating the noise in the displayed acceleration.
+  function jerkAt(item, t) {
+    if (item.jerk) return item.jerk(t);
+    const h = 0.004;
+    const pm1 = item.position(t - h);
+    const pp1 = item.position(t + h);
+    const pm2 = item.position(t - 2 * h);
+    const pp2 = item.position(t + 2 * h);
+    const pm3 = item.position(t - 3 * h);
+    const pp3 = item.position(t + 3 * h);
+    const numerator = add(
+      add(scale(sub(pm1, pp1), 13), scale(sub(pp2, pm2), 8)),
+      sub(pm3, pp3),
+    );
+    const result = scale(numerator, 1 / (8 * h ** 3));
+    for (const axis of Object.keys(result)) {
+      if (Math.abs(result[axis]) < 1e-4) result[axis] = 0;
+    }
+    return result;
+  }
+
+  const jerkScales = new WeakMap();
+  function jerkDisplayScale(item) {
+    if (!jerkScales.has(item)) {
+      let maximum = 0;
+      for (let i = 0; i <= 384; i += 1) {
+        maximum = Math.max(maximum, norm(jerkAt(item, item.duration * i / 384)));
+      }
+      // Fixed for each trajectory: arrow length still follows |j(t)|.
+      jerkScales.set(item, maximum > 1e-4 ? 0.65 * PARAMETERS.R / maximum : 1);
+    }
+    return jerkScales.get(item);
   }
 
   const viewport = document.getElementById('viewport');
@@ -1693,6 +1743,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: document.getElementById('toggle-position'),
       velocity: document.getElementById('toggle-velocity'),
       acceleration: document.getElementById('toggle-acceleration'),
+      jerk: document.getElementById('toggle-jerk'),
       tangential: document.getElementById('toggle-tangential'),
       normal: document.getElementById('toggle-normal'),
     },
@@ -1716,6 +1767,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
       plainName: 'accélération',
       color: COLORS.acceleration,
+    },
+    jerk: {
+      symbolTeX: String.raw`\vec{\jmath}`,
+      unitTeX: String.raw`\mathrm{m\,s^{-3}}`,
+      plainName: 'à-coup',
+      color: COLORS.jerk,
     },
     tangential: {
       symbolTeX: String.raw`\vec a_{\mathrm t}`,
@@ -2234,6 +2291,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     if (selected.normal && data.decompositionDefined) drawArrow(data.position, data.normal, item.scaleA * state.vectorScale, COLORS.normal, basis);
     if (selected.tangential && data.decompositionDefined) drawArrow(data.position, data.tangential, item.scaleA * state.vectorScale, COLORS.tangential, basis);
     if (selected.velocity) drawArrow(data.position, data.velocity, item.scaleV * state.vectorScale, COLORS.velocity, basis);
+    if (selected.jerk) drawArrow(data.position, data.jerk, jerkDisplayScale(item) * state.vectorScale, COLORS.jerk, basis);
   }
 
   function drawScene(item, data) {
@@ -2251,6 +2309,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: data.position,
       velocity: data.velocity,
       acceleration: data.acceleration,
+      jerk: data.jerk,
       tangential: data.tangential,
       normal: data.normal,
     };
@@ -2292,6 +2351,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: false,
       velocity: false,
       acceleration: false,
+      jerk: false,
       tangential: false,
       normal: false,
     };
