@@ -452,15 +452,15 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       <section class="panel-section">
         <label class="field-label" for="force-field-select">Champ de force</label>
         <select id="force-field-select">
-          <option value="cellular" selected>Tourbillons périodiques — vidéo</option>
+          <option value="cellular" selected>Tourbillons périodiques</option>
           <option value="periodic">Puits périodiques — conservatif</option>
           <option value="central">Attraction centrale — conservatif</option>
         </select>
-        <p id="force-field-note" class="microcopy block-note">Champ périodique non conservatif utilisé dans la vidéo.</p>
+        <p id="force-field-note" class="microcopy block-note">Champ de force périodique non conservatif.</p>
 
-        <label class="field-label compact" for="scenario-select">Expérience</label>
+        <label class="field-label compact" for="scenario-select">Exemples</label>
         <select id="scenario-select">
-          <option value="positive" selected>Vidéo — travail positif</option>
+          <option value="positive" selected>Tourbillons — travail positif</option>
           <option value="zero">Travail total nul</option>
           <option value="negative">Travail total négatif</option>
           <option value="custom" disabled>Réglage personnalisé</option>
@@ -469,10 +469,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       </section>
 
       <section class="panel-section">
-        <div class="section-heading-row">
-          <h2>Paramètres physiques</h2>
-          <button id="restore-parameters" class="text-button" type="button">Valeurs de la vidéo</button>
-        </div>
+        <h2>Paramètres physiques</h2>
 
         <label class="field-label compact" for="mass-slider">Masse</label>
         <input id="mass-slider" type="range" min="5" max="40" value="20" step="1" />
@@ -557,12 +554,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <label class="check-row">
             <input id="force-toggle" type="checkbox" checked />
             <span class="swatch swatch-force"></span>
-            <span>Force \(\mathbf F(t)\)</span>
+            <span>Force \(\vec{F}(t)\)</span>
           </label>
           <label class="check-row">
             <input id="velocity-toggle" type="checkbox" checked />
             <span class="swatch swatch-velocity"></span>
-            <span>Vitesse \(\mathbf v(t)\)</span>
+            <span>Vitesse \(\vec{v}(t)\)</span>
           </label>
           <label class="check-row">
             <input id="trajectory-toggle" type="checkbox" checked />
@@ -581,20 +578,20 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <h2>Relations</h2>
         <div class="equations">
           <div class="field-formula" data-force-field="cellular">
-            <p>\[\mathbf F(x,y)=F_0\!\left(\sin\frac{x}{L_0}\cos\frac{y}{L_0},-\cos\frac{x}{L_0}\sin\frac{y}{L_0}\right)\]</p>
-            <p class="equation-note">Champ périodique non conservatif de la vidéo.</p>
+            <p>\[\vec{F}(x,y)=F_0\!\left(\sin\frac{x}{L_0}\cos\frac{y}{L_0},-\cos\frac{x}{L_0}\sin\frac{y}{L_0}\right)\]</p>
+            <p class="equation-note">Champ de force périodique non conservatif.</p>
           </div>
           <div class="field-formula" data-force-field="periodic" hidden>
-            <p>\[\mathbf F(x,y)=-F_0\!\left(\sin\frac{x-x_c}{L_0},\sin\frac{y-y_c}{L_0}\right)\]</p>
+            <p>\[\vec{F}(x,y)=-F_0\!\left(\sin\frac{x-x_c}{L_0},\sin\frac{y-y_c}{L_0}\right)\]</p>
             <p class="equation-note">Champ conservatif formant des puits périodiques autour du centre \(C\).</p>
           </div>
           <div class="field-formula" data-force-field="central" hidden>
-            <p>\[\mathbf F(x,y)=-F_0\frac{(x-x_c,\,y-y_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
+            <p>\[\vec{F}(x,y)=-F_0\frac{(x-x_c,\,y-y_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
             <p class="equation-note">Champ central, attractif, conservatif et borné.</p>
           </div>
-          <p>\[P(t)=\mathbf F(t)\cdot\mathbf v(t)=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\]</p>
+          <p>\[P(t)=\vec{F}(t)\cdot\vec{v}(t)=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\]</p>
           <p>\[W_{A\to t}=\int_{t_A}^{t}P(\tau)\,\mathrm d\tau=K(t)-K_A\]</p>
-          <p class="equation-note">Ici \(L_0=1\,\mathrm m\) et \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\). Le théorème reste valable pour chaque choix car \(\mathbf F\) est la force résultante.</p>
+          <p class="equation-note">Ici \(L_0=1\,\mathrm m\) et \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\). Le théorème reste valable pour chaque choix car \(\vec{F}\) est la force résultante.</p>
         </div>
       </section>
 
@@ -609,7 +606,6 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <section class="visual-card scene-card" aria-labelledby="scene-title">
           <header class="card-heading">
             <div>
-              <p class="card-kicker">Espace des positions</p>
               <h2 id="scene-title">Force et vitesse le long de la trajectoire</h2>
             </div>
             <span id="power-sign-badge" class="sign-badge neutral">Puissance nulle</span>
@@ -625,8 +621,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             </div>
             <div id="scene-label-a" class="scene-math-label point-label">\(A\)</div>
             <div id="scene-label-b" class="scene-math-label point-label">\(B\)</div>
-            <div id="scene-label-force" class="scene-math-label force-label">\(\mathbf F\)</div>
-            <div id="scene-label-velocity" class="scene-math-label velocity-label">\(\mathbf v\)</div>
+            <div id="scene-label-force" class="scene-math-label force-label">\(\vec{F}\)</div>
+            <div id="scene-label-velocity" class="scene-math-label velocity-label">\(\vec{v}\)</div>
           </div>
         </section>
 
@@ -644,7 +640,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <canvas id="power-canvas" aria-label="Graphe de la puissance instantanée et aire représentant le travail cumulé"></canvas>
             <div id="chart-ticks" class="chart-tick-layer" aria-hidden="true"></div>
             <div class="chart-axis-label chart-axis-x" aria-hidden="true"><span class="tex-math">\(t\,[\mathrm s]\)</span></div>
-            <div class="chart-axis-label chart-axis-y" aria-hidden="true"><span class="tex-math">\(P=\mathbf F\cdot\mathbf v\,[\mathrm W]\)</span></div>
+            <div class="chart-axis-label chart-axis-y" aria-hidden="true"><span class="tex-math">\(P=\vec{F}\cdot\vec{v}\,[\mathrm W]\)</span></div>
             <div class="chart-legend" aria-hidden="true">
               <span><i class="legend-line"></i>Puissance \(P(t)\)</span>
               <span><i class="legend-positive"></i>Aire positive</span>
@@ -671,7 +667,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <small>variation d’énergie</small>
         </article>
         <article class="readout-card angle-readout">
-          <span class="readout-symbol">\(\theta(\mathbf F,\mathbf v)\)</span>
+          <span class="readout-symbol">\(\theta(\vec{F},\vec{v})\)</span>
           <strong class="dynamic-math-output"><span id="angle-readout" class="math-digits">—</span><span class="tex-math">\(^{\circ}\)</span></strong>
           <small>angle force–vitesse</small>
         </article>
@@ -713,7 +709,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
   const FIELD_TYPES = Object.freeze({
     cellular: {
-      note: "Champ périodique non conservatif utilisé dans la vidéo.",
+      note: "Champ de force périodique non conservatif.",
       maxMagnitudeFactor: 1
     },
     periodic: {
@@ -734,7 +730,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       vx0: 0.2,
       vy0: -0.2,
       duration: 15 * PI,
-      note: "Comme dans la vidéo, le travail total est positif et la particule arrive plus rapide."
+      note: "Avec le champ tourbillonnaire, le travail total est positif et la particule arrive plus rapide."
     },
     zero: {
       fieldId: "cellular",
@@ -776,7 +772,6 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     fieldFormulaBlocks: Array.from(document.querySelectorAll("[data-force-field]")),
     scenario: document.getElementById("scenario-select"),
     scenarioNote: document.getElementById("scenario-note"),
-    restoreParameters: document.getElementById("restore-parameters"),
     mass: document.getElementById("mass-slider"),
     forceScale: document.getElementById("force-slider"),
     vx: document.getElementById("vx-slider"),
@@ -1619,7 +1614,6 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       recompute();
     });
     dom.scenario.addEventListener("change", () => applyPreset(dom.scenario.value));
-    dom.restoreParameters.addEventListener("click", () => applyPreset("positive"));
     bindParameter(dom.mass, "mass");
     bindParameter(dom.forceScale, "forceScale");
     bindParameter(dom.vx, "vx0");
