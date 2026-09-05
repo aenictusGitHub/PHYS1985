@@ -480,7 +480,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <input id="mass-slider" type="range" min="5" max="40" value="20" step="1" />
         <div class="range-readout-row">
           <output id="mass-output" class="dynamic-math-output" aria-label="Masse">
-            <span id="mass-output-digits" class="math-digits">20,00</span><span class="tex-math">\(\,\mathrm{kg}\)</span>
+            <span id="mass-output-digits" class="math-digits">20.00</span><span class="tex-math">\(\,\mathrm{kg}\)</span>
           </output>
           <span class="microcopy">\(m\)</span>
         </div>
@@ -489,7 +489,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <input id="force-slider" type="range" min="0.2" max="2" value="1" step="0.1" />
         <div class="range-readout-row">
           <output id="force-output" class="dynamic-math-output" aria-label="Intensité du champ">
-            <span id="force-output-digits" class="math-digits">1,00</span><span class="tex-math">\(\,\mathrm N\)</span>
+            <span id="force-output-digits" class="math-digits">1.00</span><span class="tex-math">\(\,\mathrm N\)</span>
           </output>
           <span class="microcopy">\(F_0\)</span>
         </div>
@@ -499,14 +499,14 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <label class="field-label compact" for="vx-slider">Vitesse initiale \(v_{Ax}\)</label>
             <input id="vx-slider" type="range" min="-0.5" max="0.5" value="0.2" step="0.01" />
             <output id="vx-output" class="dynamic-math-output" aria-label="Composante horizontale de la vitesse initiale">
-              <span id="vx-output-digits" class="math-digits">0,20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
+              <span id="vx-output-digits" class="math-digits">0.20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
             </output>
           </div>
           <div>
             <label class="field-label compact" for="vy-slider">Vitesse initiale \(v_{Ay}\)</label>
             <input id="vy-slider" type="range" min="-0.5" max="0.5" value="-0.2" step="0.01" />
             <output id="vy-output" class="dynamic-math-output" aria-label="Composante verticale de la vitesse initiale">
-              <span id="vy-output-digits" class="math-digits">−0,20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
+              <span id="vy-output-digits" class="math-digits">−0.20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
             </output>
           </div>
         </div>
@@ -515,7 +515,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <input id="duration-slider" type="range" min="5" max="50" value="47.1239" step="0.01" />
         <div class="range-readout-row">
           <output id="duration-output" class="dynamic-math-output" aria-label="Instant final">
-            <span id="duration-output-digits" class="math-digits">47,12</span><span class="tex-math">\(\,\mathrm s\)</span>
+            <span id="duration-output-digits" class="math-digits">47.12</span><span class="tex-math">\(\,\mathrm s\)</span>
           </output>
           <span class="microcopy">Le point d’arrivée suit la trajectoire</span>
         </div>
@@ -539,7 +539,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <input id="time-slider" type="range" min="0" max="47.1239" value="0" step="0.01" />
         <div class="range-readout-row">
           <output id="time-output" class="dynamic-math-output" aria-label="Temps courant">
-            <span id="time-output-digits" class="math-digits">0,00</span><span class="tex-math">\(\,\mathrm s\)</span>
+            <span id="time-output-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
           </output>
           <label class="inline-check"><input id="loop-toggle" type="checkbox" checked /> Boucle</label>
         </div>
@@ -620,10 +620,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <div id="loading-message">Préparation de l’expérience et des formules…</div>
             <div class="time-badge" aria-hidden="true">
               <span class="dynamic-math-output">
-                <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0,00</span><span class="tex-math">\(\,\mathrm s\)</span>
+                <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
               </span>
               <span class="dynamic-math-output">
-                <span class="tex-math">\(K(t)=\)</span><span id="scene-kinetic-digits" class="math-digits">0,800</span><span class="tex-math">\(\,\mathrm J\)</span>
+                <span class="tex-math">\(K(t)=\)</span><span id="scene-kinetic-digits" class="math-digits">0.800</span><span class="tex-math">\(\,\mathrm J\)</span>
               </span>
             </div>
             <div class="viewport-toolbar">
@@ -643,7 +643,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
               <h2 id="chart-title">Puissance instantanée</h2>
             </div>
             <span id="work-result-badge" class="result-badge dynamic-math-output">
-              <span class="tex-math">\(W_{A\to t}=\)</span><span id="work-result-digits" class="math-digits">0,000</span><span class="tex-math">\(\,\mathrm J\)</span>
+              <span class="tex-math">\(W_{A\to t}=\)</span><span id="work-result-digits" class="math-digits">0.000</span><span class="tex-math">\(\,\mathrm J\)</span>
             </span>
           </header>
           <div class="canvas-wrap chart-wrap">
@@ -663,17 +663,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       <section class="readout-panel" aria-label="Valeurs numériques">
         <article class="readout-card power-readout">
           <span class="readout-symbol">\(P(t)\)</span>
-          <strong class="dynamic-math-output"><span id="power-readout" class="math-digits">0,000</span><span class="tex-math">\(\,\mathrm W\)</span></strong>
+          <strong class="dynamic-math-output"><span id="power-readout" class="math-digits">0.000</span><span class="tex-math">\(\,\mathrm W\)</span></strong>
           <small>puissance instantanée</small>
         </article>
         <article class="readout-card work-readout">
           <span class="readout-symbol">\(W_{A\to t}\)</span>
-          <strong class="dynamic-math-output"><span id="work-readout" class="math-digits">0,000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
+          <strong class="dynamic-math-output"><span id="work-readout" class="math-digits">0.000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
           <small>aire sous \(P(t)\)</small>
         </article>
         <article class="readout-card kinetic-readout">
           <span class="readout-symbol">\(\Delta K_{A\to t}\)</span>
-          <strong class="dynamic-math-output"><span id="delta-k-readout" class="math-digits">0,000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
+          <strong class="dynamic-math-output"><span id="delta-k-readout" class="math-digits">0.000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
           <small>variation d’énergie</small>
         </article>
         <article class="readout-card angle-readout">
@@ -762,17 +762,20 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     }
   });
 
-  const number2 = new Intl.NumberFormat("fr-BE", {
+  const number2 = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
+    useGrouping: false
   });
-  const number3 = new Intl.NumberFormat("fr-BE", {
+  const number3 = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 3,
-    maximumFractionDigits: 3
+    maximumFractionDigits: 3,
+    useGrouping: false
   });
-  const number6 = new Intl.NumberFormat("fr-BE", {
+  const number6 = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 6,
-    maximumFractionDigits: 6
+    maximumFractionDigits: 6,
+    useGrouping: false
   });
   const tickNumber = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2,
