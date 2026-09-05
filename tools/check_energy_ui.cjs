@@ -58,12 +58,28 @@ const context = {
   console: {error(e) { reported.push(e); }},
 };
 function tick(time = 100) { const queue = frames.splice(0); queue.forEach(fn => fn(time)); }
+function checkHistoryAnnotations(withFriction = false) {
+  const labels = $('history-labels').children.filter(node => !node.hidden);
+  const title = labels.find(node => node.dataset.math === 'E\\,[\\mathrm J]');
+  const ticks = labels.filter(node => node.className.includes('tick') && parseFloat(node.style.left) === 41);
+  assert(title && ticks.length === 5, 'energy title and all vertical ticks are present');
+  assert(Math.min(...ticks.map(node => parseFloat(node.style.top))) - parseFloat(title.style.top) >= 30,
+    'unit title has its own row above the vertical graduations');
+  const lines = $('chart-key').children.map(row => row.children[0]).filter(node => node.className === 'legend-line');
+  assert.equal(lines.length, withFriction ? 2 : 1, 'energy curves use dedicated line samples');
+  assert(lines[0].style.borderTop.includes(withFriction ? 'solid' : 'dashed'));
+  if (withFriction) assert(lines[1].style.borderTop.includes('dashed'), 'initial energy reference remains dashed');
+}
 async function main() {
   vm.runInNewContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(reported, []);
   assert($('loading').hidden, 'initialization completes');
   assert(mathStylesInstalled, 'MathJax page styles must be installed for direct tex2svg output');
+  const legendStyle = /\.legend-line\s*\{([^}]+)\}/.exec(css)?.[1];
+  assert(legendStyle && /width:\s*1\.75rem/.test(legendStyle), 'long energy legend sample');
+  assert(/height:\s*0\s*;/.test(legendStyle) && /align-self:\s*center/.test(legendStyle), 'line itself is vertically centered');
+  checkHistoryAnnotations();
   const assistiveStyle = /\.phys-app mjx-assistive-mml\s*\{([^}]+)\}/.exec(css)?.[1];
   assert(assistiveStyle, 'accessible MathML has a scoped visually-hidden fallback');
   assert(assistiveStyle.includes('position: absolute !important'));
@@ -104,7 +120,7 @@ async function main() {
     assert.equal($('energy-key').children.length, model === 'pendulum' ? 4 : 2);
     $('stacked').checked = false; $('stacked').fire('change');
     $('stacked').checked = true; $('stacked').fire('change');
-    width = 300; $('trail').fire('change'); width = 640;
+    width = 300; $('trail').fire('change'); checkHistoryAnnotations(); width = 640;
   }
   $('example-select').value = '0'; $('example-select').fire('change');
   $('play').click(); tick(1000); tick(1100);
@@ -122,6 +138,7 @@ async function main() {
     $('friction-toggle').checked = true; $('friction-toggle').fire('change');
     assert(!$('damping-controls').hidden && !$('dissipation-card').hidden);
     assert.equal($('friction-badge').textContent, 'Avec frottements');
+    checkHistoryAnnotations(true);
     assert.equal($('damping-readout').dataset.number, '0.25|\\mathrm{s^{-1}}');
     assert.equal($('energy-key').children.length, model === 'pendulum' ? 5 : 3);
     assert($('error-symbol').dataset.math.includes('diss'));
@@ -147,11 +164,12 @@ async function main() {
     $('friction-toggle').checked = false; $('friction-toggle').fire('change');
     assert($('damping-controls').hidden && $('dissipation-card').hidden);
     assert.equal($('friction-badge').textContent, 'Sans frottement');
+    checkHistoryAnnotations();
     assert.equal($('energy-key').children.length, model === 'pendulum' ? 4 : 2);
     $('time-slider').value = '20'; $('time-slider').fire('input');
     assert.equal(parseFloat($('dissipation-readout').dataset.number), 0);
   }
   assert.deepEqual(reported, []);
-  console.log('Energy UI controllers: MathJax styles, accessible nonduplicated math, looped spring geometry, initial TeX values, both modes, examples, sliders, playback, keyboard and chart seeking passed.');
+  console.log('Energy UI controllers: separated axis title, centered long legend samples, MathJax styles, accessible nonduplicated math, looped spring geometry, initial TeX values, both modes, examples, sliders, playback, keyboard and chart seeking passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

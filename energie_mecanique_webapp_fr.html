@@ -63,6 +63,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .history-card { margin-top: .85rem; }
 .inline-legend { display: flex; flex-wrap: wrap; gap: .5rem .9rem; font-size: var(--text-value); }
 .inline-legend > span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.legend-line { display: inline-block; width: 1.75rem; height: 0; flex-shrink: 0; align-self: center; }
 #history { height: 280px; cursor: crosshair; touch-action: none; }
 .phys-app[data-app="conservation"] .readout-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .7rem; margin-top: .85rem; }
 .readout-card { border-top: 2px solid var(--card-color) !important; }
@@ -797,7 +798,7 @@ async function startEnergyApp() {
         const legend = document.createElement('span'); legend.append(swatch.cloneNode(), label.cloneNode(true)); $('chart-key').append(legend);
       }
       const on = state.p.gamma > 0;
-      const total = document.createElement('span'); const dash = document.createElement('span'); dash.className = 'key-swatch'; dash.style.borderTop = `2px ${on ? 'solid' : 'dashed'} ${COLORS.ink}`;
+      const total = document.createElement('span'); const dash = document.createElement('span'); dash.className = 'legend-line'; dash.style.borderTop = `2px ${on ? 'solid' : 'dashed'} ${COLORS.ink}`;
       const label = document.createElement('span'); math(label, on ? 'E(t)' : 'E'); total.append(dash, label); $('chart-key').append(total);
       if (on) {
         const reference = document.createElement('span'), marker = dash.cloneNode(), symbol = document.createElement('span');
@@ -887,7 +888,8 @@ async function startEnergyApp() {
     }
     function chartGeometry(w, h) {
       const ymax = Math.max(.1, state.simulation.samples[0].E * 1.16);
-      return {left: 66, right: w - 28, top: 23, bottom: h - 45, ymax};
+      // Keep a separate header row for the unit, above every y-axis tick.
+      return {left: 66, right: w - 28, top: 48, bottom: h - 45, ymax};
     }
     function drawHistory(sample) {
       const {ctx, w, h} = surface('history-canvas'), r = chartGeometry(w, h);
@@ -905,7 +907,7 @@ async function startEnergyApp() {
         label('history-labels', `y${i}`, e.toFixed(r.ymax < 1 ? 2 : 1), r.left - 25, Y(e), COLORS.muted, true);
       }
       label('history-labels', 'xunit', tex`t\,[\mathrm s]`, (r.left + r.right) / 2, h - 10);
-      label('history-labels', 'yunit', tex`E\,[\mathrm J]`, 29, 10);
+      label('history-labels', 'yunit', tex`E\,[\mathrm J]`, 36, 18);
       const stride = Math.max(1, Math.floor(state.simulation.samples.length / Math.max(200, w)));
       const samples = state.simulation.samples.filter((s, i) => i % stride === 0 && s.t < state.t);
       samples.push(sample);
