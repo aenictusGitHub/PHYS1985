@@ -150,6 +150,12 @@ input[type="checkbox"] { accent-color: var(--accent); }
 }
 .paired-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
 .paired-controls output { display: block; font-size: 0.82rem; }
+.velocity-polar-controls > div { display: flex; flex-direction: column; }
+.velocity-polar-controls .field-label {
+  display: flex;
+  min-height: 3.2rem;
+  align-items: flex-end;
+}
 
 .tex-math {
   display: inline-flex;
@@ -427,6 +433,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 @media (max-width: 620px) {
   .app-header, .panel-section { padding-left: 1rem; padding-right: 1rem; }
   .paired-controls { grid-template-columns: 1fr; gap: 0; }
+  .velocity-polar-controls .field-label { min-height: 0; }
   .visualization-panel { min-height: 1080px; padding: 0.5rem; }
   .experiment-grid { gap: 0.5rem; }
   .card-heading { align-items: flex-start; flex-direction: column; }
@@ -499,10 +506,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <span id="force-symbol-g" class="microcopy" hidden>\(g\)</span>
         </div>
 
-        <div class="paired-controls">
+        <div class="paired-controls velocity-polar-controls">
           <div>
-            <label class="field-label compact" for="initial-speed-slider">Module de la vitesse initiale \(\lVert\vec v_A\rVert\)</label>
-            <input id="initial-speed-slider" type="range" min="0" max="0.75" value="0.2828427125" step="0.01" />
+            <label class="field-label compact" for="initial-speed-slider">Module de la vitesse initiale \(|\vec v_A|\)</label>
+            <input id="initial-speed-slider" type="range" min="0" max="2" value="0.2828427125" step="0.01" />
             <output id="initial-speed-output" class="dynamic-math-output" aria-label="Module de la vitesse initiale">
               <span id="initial-speed-output-digits" class="math-digits">0.28</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
             </output>
