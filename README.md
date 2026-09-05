@@ -13,9 +13,9 @@ Les deux animations de cinématique proposent aussi l’à-coup : un vecteur sé
 
 ## QR codes
 
-| Cinématique 2D | Cinématique 3D | Travail et puissance |
-| --- | --- | --- |
-| [![QR code vers l’animation 2D](qr-codes/cinematique_2d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html) | [![QR code vers l’animation 3D](qr-codes/cinematique_3d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html) | [![QR code vers l’animation Travail et puissance](qr-codes/puissance_travail.png)](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html) |
+| Cinématique 2D | Cinématique 3D | Travail et puissance | Énergie mécanique |
+| --- | --- | --- | --- |
+| [![QR code vers l’animation 2D](qr-codes/cinematique_2d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html) | [![QR code vers l’animation 3D](qr-codes/cinematique_3d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html) | [![QR code vers l’animation Travail et puissance](qr-codes/puissance_travail.png)](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html) | [![QR code vers l’animation Énergie mécanique](qr-codes/energie_mecanique.png)](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) |
 
 Énergie mécanique : [QR code PNG](qr-codes/energie_mecanique.png) · [QR code SVG](qr-codes/energie_mecanique.svg).
 
