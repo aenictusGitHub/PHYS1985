@@ -7,9 +7,10 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const zip = path.join(__dirname, '..', 'energie_mecanique_webapp_fr.zip');
 const read = name => execFileSync('unzip', ['-p', zip, 'energie_mecanique_webapp_fr_source/' + name], {encoding: 'utf8'});
-const html = read('index.html'), source = read('app.js');
+const html = read('index.html'), source = read('app.js'), css = read('style.css');
 const nodes = new Map(), frames = [], reported = [];
 let width = 640;
+let mathStylesInstalled = false;
 const ctx = new Proxy({}, {get(target, key) {
   if (key in target) return target[key];
   return (...args) => {
@@ -50,7 +51,7 @@ $('model-select').value = 'oscillator'; $('playback-speed').value = '1';
 const document = {readyState: 'complete', createElement: tag => new Element(tag), getElementById: $, querySelectorAll: () => [], addEventListener() {}};
 const context = {
   document, window: {devicePixelRatio: 1},
-  MathJax: {startup: {promise: Promise.resolve()}, tex2svg(text) { assert(!text.includes('NaN')); const node = new Element('math'); node.dataset.tex = text; return node; }},
+  MathJax: {startup: {promise: Promise.resolve(), document: {updateDocument() { mathStylesInstalled = true; }}}, tex2svg(text) { assert(!text.includes('NaN')); const node = new Element('math'); node.dataset.tex = text; return node; }},
   Option: function(text, value) { const node = new Element('option'); node.value = value; node.textContent = text; return node; },
   ResizeObserver: class { observe() {} },
   requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
@@ -62,6 +63,19 @@ async function main() {
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(reported, []);
   assert($('loading').hidden, 'initialization completes');
+  assert(mathStylesInstalled, 'MathJax page styles must be installed for direct tex2svg output');
+  const assistiveStyle = /\.phys-app mjx-assistive-mml\s*\{([^}]+)\}/.exec(css)?.[1];
+  assert(assistiveStyle, 'accessible MathML has a scoped visually-hidden fallback');
+  assert(assistiveStyle.includes('position: absolute !important'));
+  assert(assistiveStyle.includes('clip-path: inset(50%) !important'));
+  assert(!/display:\s*none|visibility:\s*hidden/.test(assistiveStyle), 'preserve screen-reader access');
+  for (const end of [40, 80, 250, 600, 1200]) {
+    const points = vm.runInNewContext(`coilSpringPoints(20, ${end}, 100)`, context);
+    assert.equal(points[0][0], 20); assert.equal(points[points.length - 1][0], end);
+    assert(points.every(([x,y]) => x >= 20 - 1e-9 && x <= end + 1e-9 && Math.abs(y - 100) <= 10.000001), 'spring stays attached within its bounds');
+    assert(points.some(([x], i) => i && x < points[i - 1][0]), 'projected spires must loop, not be a zigzag or simple wave');
+    assert(points.length > 400, 'smoothly sampled coils');
+  }
   assert.equal($('value-m').dataset.number, '1.00|\\mathrm{kg}', 'initial values are TeX');
   assert.equal($('total-readout').dataset.number, '2.000|\\mathrm J');
   $('time-slider').value = '.785398'; $('time-slider').fire('input');
@@ -104,6 +118,6 @@ async function main() {
   $('history').fire('pointerdown', {clientX: 340, pointerId: 1});
   assert(Number($('time-slider').value) > 20 && Number($('time-slider').value) < 40);
   assert.deepEqual(reported, []);
-  console.log('Energy UI controllers: initial TeX values, both modes, all examples, sliders, reset, display options, playback, keyboard and chart seeking passed.');
+  console.log('Energy UI controllers: MathJax styles, accessible nonduplicated math, looped spring geometry, initial TeX values, both modes, examples, sliders, playback, keyboard and chart seeking passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
