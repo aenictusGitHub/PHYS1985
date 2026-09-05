@@ -15,6 +15,7 @@ APPS = {
     "cinematique_2d_webapp_fr": ("kinematics-2d", "cinematique_2d_webapp_fr_formules_vecteurs_latex_svg_v2_source"),
     "cinematique_3d_webapp_fr": ("kinematics-3d", "cinematique_3d_webapp_fr_position_origine_latex_svg_corrigee_v2"),
     "puissance_travail_webapp_fr": ("energy", "puissance_travail_webapp_fr_source"),
+    "energie_mecanique_webapp_fr": ("conservation", "energie_mecanique_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 

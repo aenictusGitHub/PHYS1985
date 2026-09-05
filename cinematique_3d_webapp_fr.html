@@ -968,11 +968,6 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
             <span>Accélération <span class="tex-math">\(\vec a(t)\)</span></span>
           </label>
           <label class="check-row">
-            <input id="toggle-jerk" type="checkbox" />
-            <span class="swatch swatch-jerk"></span>
-            <span>À-coup <span class="tex-math">\(\vec{\jmath}(t)\)</span></span>
-          </label>
-          <label class="check-row">
             <input id="toggle-tangential" type="checkbox" />
             <span class="swatch swatch-tangential"></span>
             <span>Tangentielle <span class="tex-math">\(\vec a_{\mathrm t}(t)\)</span></span>
@@ -981,6 +976,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
             <input id="toggle-normal" type="checkbox" />
             <span class="swatch swatch-normal"></span>
             <span>Centripète <span class="tex-math">\(\vec a_{\mathrm c}(t)\)</span></span>
+          </label>
+          <label class="check-row">
+            <input id="toggle-jerk" type="checkbox" />
+            <span class="swatch swatch-jerk"></span>
+            <span>À-coup <span class="tex-math">\(\vec{\jmath}(t)\)</span></span>
           </label>
         </div>
 
@@ -1093,9 +1093,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     position: '#d9683b',
     velocity: '#2775b6',
     acceleration: '#7758a6',
-    jerk: '#987125',
     tangential: '#b5688b',
     normal: '#268576',
+    jerk: '#987125',
     trail: [97, 120, 140],
   });
 
@@ -1743,9 +1743,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: document.getElementById('toggle-position'),
       velocity: document.getElementById('toggle-velocity'),
       acceleration: document.getElementById('toggle-acceleration'),
-      jerk: document.getElementById('toggle-jerk'),
       tangential: document.getElementById('toggle-tangential'),
       normal: document.getElementById('toggle-normal'),
+      jerk: document.getElementById('toggle-jerk'),
     },
   };
 
@@ -1768,12 +1768,6 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       plainName: 'accélération',
       color: COLORS.acceleration,
     },
-    jerk: {
-      symbolTeX: String.raw`\vec{\jmath}`,
-      unitTeX: String.raw`\mathrm{m\,s^{-3}}`,
-      plainName: 'à-coup',
-      color: COLORS.jerk,
-    },
     tangential: {
       symbolTeX: String.raw`\vec a_{\mathrm t}`,
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
@@ -1785,6 +1779,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
       plainName: 'accélération centripète',
       color: COLORS.normal,
+    },
+    jerk: {
+      symbolTeX: String.raw`\vec{\jmath}`,
+      unitTeX: String.raw`\mathrm{m\,s^{-3}}`,
+      plainName: 'à-coup',
+      color: COLORS.jerk,
     },
   });
 
@@ -2309,9 +2309,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: data.position,
       velocity: data.velocity,
       acceleration: data.acceleration,
-      jerk: data.jerk,
       tangential: data.tangential,
       normal: data.normal,
+      jerk: data.jerk,
     };
     const selected = vectorSelection();
 
@@ -2351,9 +2351,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       position: false,
       velocity: false,
       acceleration: false,
-      jerk: false,
       tangential: false,
       normal: false,
+      jerk: false,
     };
     if (name === 'velocity') selected.velocity = true;
     if (name === 'acceleration') selected.acceleration = true;

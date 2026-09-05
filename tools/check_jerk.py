@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 import shutil
 import subprocess
+import re
 
 PROJECT = Path(__file__).resolve().parent.parent
 CASES = ((2, 'cinematique_2d_webapp_fr'), (3, 'cinematique_3d_webapp_fr'))
@@ -74,6 +75,18 @@ with TemporaryDirectory(prefix='phys1985-jerk-check-') as directory:
             source = archive.read(app_file).decode()
             html = archive.read(app_file.replace('/app.js', '/index.html')).decode()
         assert 'id="toggle-jerk"' in html
+        last_acceleration = 'centripetal' if dimensions == 2 else 'normal'
+        assert html.index('id="toggle-jerk"') > html.index(f'id="toggle-{last_acceleration}"')
+        metadata = source[source.index('  const VECTOR_META ='):source.index('  const readoutElements =')]
+        assert metadata.index('    jerk:') > metadata.index(f'    {last_acceleration}:')
+        toggles = re.search(r'    toggles: \{(.*?)\n    \}', source, re.S).group(1)
+        readouts = re.search(r'function updateReadouts\(data\) \{\s*const vectors = \{(.*?)\n    \}', source, re.S).group(1)
+        presets = re.search(r'function applyVectorPreset\(name\) \{\s*const selected = \{(.*?)\n    \}', source, re.S).group(1)
+        for block in [toggles, readouts, presets]:
+            keys = re.findall(r'^\s*(\w+):', block, re.M)
+            assert len(set(keys)) == len(keys), 'Duplicate UI vector key'
+            assert keys == ['position', 'velocity', 'acceleration', 'tangential', last_acceleration, 'jerk']
+        assert 'data.' not in toggles
         assert "unitTeX: String.raw`\\mathrm{m\\,s^{-3}}`" in source
         # Reuse the real trajectory laws and numerical functions; omit the UI.
         pure = source[:source.index("  const viewport = document.getElementById('viewport');")]
