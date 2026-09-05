@@ -74,7 +74,7 @@ async function main() {
     assert.equal(points[0][0], 20); assert.equal(points[points.length - 1][0], end);
     assert(points.every(([x,y]) => x >= 20 - 1e-9 && x <= end + 1e-9 && Math.abs(y - 100) <= 10.000001), 'spring stays attached within its bounds');
     assert(points.some(([x], i) => i && x < points[i - 1][0]), 'projected spires must loop, not be a zigzag or simple wave');
-    assert(points.length > 400, 'smoothly sampled coils');
+    assert.equal(points.length, 12 * 48 + 3, 'twelve smoothly sampled coils');
   }
   assert.equal($('value-m').dataset.number, '1.00|\\mathrm{kg}', 'initial values are TeX');
   assert.equal($('total-readout').dataset.number, '2.000|\\mathrm J');
@@ -117,6 +117,40 @@ async function main() {
   $('history').fire('keydown', {key: 'Home'}); assert.equal(Number($('time-slider').value), 0);
   $('history').fire('pointerdown', {clientX: 340, pointerId: 1});
   assert(Number($('time-slider').value) > 20 && Number($('time-slider').value) < 40);
+  for (const model of ['oscillator', 'pendulum']) {
+    $('model-select').value = model; $('model-select').fire('change');
+    $('friction-toggle').checked = true; $('friction-toggle').fire('change');
+    assert(!$('damping-controls').hidden && !$('dissipation-card').hidden);
+    assert.equal($('friction-badge').textContent, 'Avec frottements');
+    assert.equal($('damping-readout').dataset.number, '0.25|\\mathrm{s^{-1}}');
+    assert.equal($('energy-key').children.length, model === 'pendulum' ? 5 : 3);
+    assert($('error-symbol').dataset.math.includes('diss'));
+    assert(!$('conservation-note').textContent.includes('sans frottement'));
+    $('time-slider').value = '20'; $('time-slider').fire('input');
+    const e = parseFloat($('total-readout').dataset.number), d = parseFloat($('dissipation-readout').dataset.number);
+    assert(d > 0 && e < d, 'damping dissipates energy');
+    assert(Math.abs(parseFloat($('error-readout').dataset.number)) < 1e-4);
+    $('stacked').checked = false; $('stacked').fire('change');
+    $('stacked').checked = true; $('stacked').fire('change');
+    $('detail').checked = false; $('detail').fire('change');
+    assert.equal($('energy-key').children.length, 3);
+    $('detail').checked = true; $('detail').fire('change');
+    $('damping-slider').value = '2'; $('damping-slider').fire('input'); tick();
+    assert.equal(Number($('time-slider').value), 0);
+    $('time-slider').value = '60'; $('time-slider').fire('input');
+    assert(parseFloat($('total-readout').dataset.number) < .001);
+    $('example-select').value = '3'; $('example-select').fire('change');
+    $('time-slider').value = '60'; $('time-slider').fire('input');
+    assert.equal(parseFloat($('dissipation-readout').dataset.number), 0, 'no dissipation at rest');
+    $('reset-parameters').click();
+    assert.equal($('damping-readout').dataset.number, '0.25|\\mathrm{s^{-1}}');
+    $('friction-toggle').checked = false; $('friction-toggle').fire('change');
+    assert($('damping-controls').hidden && $('dissipation-card').hidden);
+    assert.equal($('friction-badge').textContent, 'Sans frottement');
+    assert.equal($('energy-key').children.length, model === 'pendulum' ? 4 : 2);
+    $('time-slider').value = '20'; $('time-slider').fire('input');
+    assert.equal(parseFloat($('dissipation-readout').dataset.number), 0);
+  }
   assert.deepEqual(reported, []);
   console.log('Energy UI controllers: MathJax styles, accessible nonduplicated math, looped spring geometry, initial TeX values, both modes, examples, sliders, playback, keyboard and chart seeking passed.');
 }

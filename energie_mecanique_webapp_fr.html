@@ -15,6 +15,9 @@ button, select, input { font: inherit; }
 .section-heading-row, .range-readout-row, .panel-footer { display: flex; justify-content: space-between; gap: .6rem; }
 .parameter { margin-bottom: .85rem; }
 .parameter:last-child { margin-bottom: 0; }
+.friction-option { margin-top: .8rem; border-top: 1px solid var(--line); }
+#damping-controls { margin-top: .5rem; }
+#damping-readout { font-size: var(--text-value); }
 .parameter-title { display: flex; justify-content: space-between; align-items: baseline; gap: .7rem; }
 .parameter-title label { margin: 0; }
 .parameter output, #duration-readout { font-size: var(--text-value); white-space: nowrap; }
@@ -48,8 +51,8 @@ canvas { display: block; width: 100%; height: 100%; }
 .plot-label.tick { font-size: var(--text-tick); color: var(--muted); }
 .time-badge { position: absolute; display: flex; gap: .25rem; align-items: baseline; }
 #position-badge { position: absolute; bottom: .35rem; left: 50%; transform: translateX(-50%); display: flex; align-items: baseline; gap: .2rem; color: var(--muted); font-size: var(--text-value); }
-.balance-content { height: 272px; display: flex; gap: 1.2rem; align-items: center; padding: 1.25rem; }
-.energy-meter { width: 3.5rem; height: 100%; flex-shrink: 0; display: flex; align-items: flex-end; border: 1px solid var(--line); border-radius: .4rem; overflow: hidden; background: #f1f4f7; }
+.balance-content { min-height: 272px; display: flex; gap: 1.2rem; align-items: center; padding: 1.25rem; }
+.energy-meter { width: 3.5rem; height: 230px; flex-shrink: 0; display: flex; align-items: flex-end; border: 1px solid var(--line); border-radius: .4rem; overflow: hidden; background: #f1f4f7; }
 #energy-stack { display: flex; flex-direction: column-reverse; width: 100%; height: 100%; }
 .energy-segment { width: 100%; min-height: 0; }
 #energy-key { min-width: 0; display: grid; gap: .9rem; }
@@ -61,7 +64,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .inline-legend { display: flex; flex-wrap: wrap; gap: .5rem .9rem; font-size: var(--text-value); }
 .inline-legend > span { display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
 #history { height: 280px; cursor: crosshair; touch-action: none; }
-.phys-app[data-app="conservation"] .readout-panel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; margin-top: .85rem; }
+.phys-app[data-app="conservation"] .readout-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: .7rem; margin-top: .85rem; }
 .readout-card { border-top: 2px solid var(--card-color) !important; }
 .readout-card strong, .readout-card small { display: block; }
 .readout-card small { color: var(--muted); }
@@ -73,7 +76,8 @@ canvas { display: block; width: 100%; height: 100%; }
 #loading { font-size: var(--text-ui); color: var(--muted); }
 @container energy-view (max-width: 640px) {
   .energy-layout { grid-template-columns: minmax(0,1fr); }
-  .balance-content { height: 190px; }
+  .balance-content { min-height: 190px; }
+  .energy-meter { height: 150px; }
   #energy-key { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .phys-app[data-app="conservation"] .readout-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .history-card .card-heading { flex-direction: column; align-items: flex-start; }
@@ -487,8 +491,16 @@ const EnergyModels = (() => {
     const omega = Math.sqrt(p.k / p.m);
     const x = p.x0 * Math.cos(omega * t) + p.v0 / omega * Math.sin(omega * t);
     const v = -p.x0 * omega * Math.sin(omega * t) + p.v0 * Math.cos(omega * t);
+    return oscillatorState(p, [x, v, 0], t);
+  }
+  function oscillatorState(p, y, t) {
+    const [x, v, D] = y;
     const K = .5 * p.m * v * v, U = .5 * p.k * x * x;
-    return {t, x, v, K, U, E: K + U, parts: [K, U]};
+    return {t, y, x, v, K, U, D, E: K + U, parts: [K, U]};
+  }
+  function oscillatorRhs(p, y) {
+    const [x, v] = y, gamma = p.gamma || 0;
+    return [v, -p.k / p.m * x - gamma * v, gamma * p.m * v * v];
   }
   function rhs(p, y) {
     const [a, b, u, v] = y, delta = a - b;
@@ -497,11 +509,16 @@ const EnergyModels = (() => {
     const f = -cross * Math.sin(delta) * v * v - (p.m1 + p.m2) * p.g * p.l1 * Math.sin(a);
     const h = cross * Math.sin(delta) * u * u - p.m2 * p.g * p.l2 * Math.sin(b);
     const determinant = A * C - B * B;
-    return [u, v, (f * C - B * h) / determinant, (A * h - B * f) / determinant];
+    // Cartesian viscous forces -gamma*m_i*v_i give Q = -gamma*M*qdot.
+    // The last component integrates the dissipated work independently of E.
+    const gamma = p.gamma || 0;
+    return [u, v, (f * C - B * h) / determinant - gamma * u,
+      (A * h - B * f) / determinant - gamma * v,
+      gamma * (A * u * u + 2 * B * u * v + C * v * v)];
   }
-  function step(p, y, dt) {
+  function step(p, y, dt, derivative = rhs) {
     const shift = (k, scale) => y.map((v, i) => v + scale * k[i]);
-    const a = rhs(p, y), b = rhs(p, shift(a, dt / 2)), c = rhs(p, shift(b, dt / 2)), d = rhs(p, shift(c, dt));
+    const a = derivative(p, y), b = derivative(p, shift(a, dt / 2)), c = derivative(p, shift(b, dt / 2)), d = derivative(p, shift(c, dt));
     return y.map((v, i) => v + dt * (a[i] + 2 * b[i] + 2 * c[i] + d[i]) / 6);
   }
   function pendulum(p, y, t) {
@@ -515,15 +532,17 @@ const EnergyModels = (() => {
     const K2 = .5 * p.m2 * (vx2 * vx2 + vz2 * vz2);
     const U1 = p.m1 * p.g * p.l1 * (1 - Math.cos(a));
     const U2 = p.m2 * p.g * (p.l1 * (1 - Math.cos(a)) + p.l2 * (1 - Math.cos(b)));
-    return {t, y, x1, z1, x2, z2, K: K1 + K2, U: U1 + U2, E: K1 + U1 + K2 + U2, parts: [K1, U1, K2, U2]};
+    return {t, y, x1, z1, x2, z2, K: K1 + K2, U: U1 + U2, D: y[4] || 0, E: K1 + U1 + K2 + U2, parts: [K1, U1, K2, U2]};
   }
   function simulate(model, p, duration) {
     const count = Math.round(duration * 60), samples = [];
-    if (model === 'oscillator') {
+    if (model === 'oscillator' && !(p.gamma > 0)) {
       for (let i = 0; i <= count; i++) samples.push(oscillator(p, i / 60));
       return {samples, at: t => oscillator(p, t), maxError: 0};
     }
-    let y = [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2];
+    const evaluate = model === 'oscillator' ? oscillatorState : pendulum;
+    const derivative = model === 'oscillator' ? oscillatorRhs : rhs;
+    let y = model === 'oscillator' ? [p.x0, p.v0, 0] : [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2, 0];
     const advance = (initial, dt) => {
       // Step doubling controls local error even for extreme mass ratios. The
       // Richardson correction raises accuracy without forcing energy to match.
@@ -531,8 +550,8 @@ const EnergyModels = (() => {
       while (elapsed < dt - 1e-14) {
         if (++attempts > 10000) throw new Error('Le calcul demande un pas de temps trop petit.');
         h = Math.min(h, dt - elapsed);
-        const full = step(p, next, h);
-        const half = step(p, step(p, next, h / 2), h / 2);
+        const full = step(p, next, h, derivative);
+        const half = step(p, step(p, next, h / 2, derivative), h / 2, derivative);
         const error = Math.max(...half.map((v, i) => Math.abs(v - full[i]) / (15 * (1 + Math.max(Math.abs(next[i]), Math.abs(v))))));
         if (!Number.isFinite(error)) throw new Error('Le calcul du mouvement a échoué.');
         if (error <= 1e-11) {
@@ -544,27 +563,27 @@ const EnergyModels = (() => {
       }
       return next;
     };
-    samples.push(pendulum(p, y, 0));
+    samples.push(evaluate(p, y, 0));
     let maxError = 0;
     for (let i = 1; i <= count; i++) {
       y = advance(y, 1 / 60);
-      const sample = pendulum(p, y, i / 60);
+      const sample = evaluate(p, y, i / 60);
       if (!Number.isFinite(sample.E)) throw new Error('Le calcul du mouvement a échoué.');
-      maxError = Math.max(maxError, Math.abs(sample.E - samples[0].E));
+      maxError = Math.max(maxError, Math.abs(sample.E + sample.D - samples[0].E));
       samples.push(sample);
     }
     return {samples, maxError, at(t) {
       const bounded = Math.max(0, Math.min(duration, t));
       const base = samples[Math.min(count, Math.floor(bounded * 60))];
-      return pendulum(p, advance(base.y, bounded - base.t), bounded);
+      return evaluate(p, advance(base.y, bounded - base.t), bounded);
     }};
   }
-  return {oscillator, rhs, step, pendulum, simulate};
+  return {oscillator, oscillatorState, oscillatorRhs, rhs, step, pendulum, simulate};
 })();
 
 // A projected helix: fixed turn count, smoothly changing pitch, straight leads.
 function coilSpringPoints(start, end, centerY) {
-  const turns = 9, samplesPerTurn = 48, length = Math.max(0, end - start);
+  const turns = 12, samplesPerTurn = 48, length = Math.max(0, end - start);
   const lead = Math.min(9, length * .15), radiusX = length / (4 * turns + 8);
   const radiusY = Math.min(10, length / 2);
   const first = start + lead + 2 * radiusX, last = end - lead;
@@ -589,7 +608,7 @@ async function startEnergyApp() {
   try {
     await MathJax.startup.promise;
     const tex = String.raw;
-    const COLORS = {K: '#2775b6', U: '#b5688b', E: '#268576', K2: '#268576', U2: '#bc8b3b', ink: '#233449', muted: '#607185', grid: '#dce4ec'};
+    const COLORS = {K: '#2775b6', U: '#b5688b', E: '#268576', K2: '#268576', U2: '#bc8b3b', D: '#a0acb9', ink: '#233449', muted: '#607185', grid: '#dce4ec'};
     const DEFINITIONS = {
       oscillator: {
         title: 'Oscillateur harmonique',
@@ -668,13 +687,14 @@ async function startEnergyApp() {
       el.setAttribute('aria-label', string + (unit ? ' ' + unit.replace(/\\mathrm|[{}]/g, '').replace(/\\,/g, ' ') : ''));
     }
     function components(sample) {
-      if (state.model === 'pendulum' && $('detail').checked) return [
+      const parts = state.model === 'pendulum' && $('detail').checked ? [
         {symbol: 'K_1', value: sample.parts[0], color: COLORS.K},
         {symbol: 'U_1', value: sample.parts[1], color: COLORS.U},
         {symbol: 'K_2', value: sample.parts[2], color: COLORS.K2},
         {symbol: 'U_2', value: sample.parts[3], color: COLORS.U2},
-      ];
-      return [{symbol: 'K', value: sample.K, color: COLORS.K}, {symbol: 'U', value: sample.U, color: COLORS.U}];
+      ] : [{symbol: 'K', value: sample.K, color: COLORS.K}, {symbol: 'U', value: sample.U, color: COLORS.U}];
+      if (state.p.gamma > 0) parts.push({symbol: tex`E_{\mathrm{diss}}`, value: sample.D, color: COLORS.D});
+      return parts;
     }
     function setPlaying(value) {
       state.playing = value; state.last = null;
@@ -713,16 +733,39 @@ async function startEnergyApp() {
     function setModel() {
       state.model = $('model-select').value;
       const definition = DEFINITIONS[state.model];
-      $('scene-title').textContent = definition.title; $('model-note').textContent = definition.note;
-      $('reference-note').textContent = definition.reference;
+      $('scene-title').textContent = definition.title;
       $('example-select').replaceChildren(...definition.examples.map(([label], i) => new Option(label, String(i))));
       const custom = new Option('Réglage personnalisé', 'custom'); custom.disabled = true; $('example-select').append(custom);
-      $('relations').replaceChildren(...definition.equations.map(eq => {
-        const div = document.createElement('div'); div.className = 'equation'; math(div, eq); return div;
-      }));
       $('detail-row').hidden = $('trail-row').hidden = state.model !== 'pendulum';
       $('position-badge').hidden = state.model !== 'oscillator';
       setExample(0);
+    }
+    function updateFrictionInterface() {
+      const on = $('friction-toggle').checked, definition = DEFINITIONS[state.model];
+      state.p.gamma = on ? Number($('damping-slider').value) : 0;
+      $('damping-controls').hidden = !on;
+      $('dissipation-card').hidden = !on;
+      $('friction-badge').textContent = on ? 'Avec frottements' : 'Sans frottement';
+      number($('damping-readout'), Number($('damping-slider').value), 2, tex`\mathrm{s^{-1}}`);
+      $('model-note').textContent = on
+        ? (state.model === 'oscillator' ? 'La force de frottement freine la masse. L’énergie mécanique est progressivement dissipée.' : 'Les deux masses échangent de l’énergie et subissent un frottement. Leur énergie mécanique totale diminue.')
+        : definition.note;
+      $('reference-note').textContent = definition.reference;
+      $('conservation-note').textContent = on
+        ? 'Frottement visqueux sur chaque masse, proportionnel à sa vitesse. L’énergie mécanique perdue est transférée au milieu ; elle n’est pas détruite.'
+        : 'Système idéal, sans frottement. Les échanges modifient la répartition de l’énergie, pas son total.';
+      let equations = definition.equations;
+      if (on) {
+        equations = state.model === 'oscillator'
+          ? [tex`U=\frac12 kx^2,\quad K=\frac12 mv_x^2`, tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot x+\gamma\dot x+\frac{k}{m}x=0`]
+          : [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f,i}=-m_i\gamma\vec v_i`];
+        equations = [...equations, tex`E=K+U`, tex`\frac{\mathrm dE}{\mathrm dt}=-2\gamma K`, tex`E_{\mathrm{diss}}=\int_0^t 2\gamma K(\tau)\,\mathrm d\tau`, tex`E+E_{\mathrm{diss}}=E(0)`];
+      }
+      $('relations').replaceChildren(...equations.map(eq => {
+        const div = document.createElement('div'); div.className = 'equation'; math(div, eq); return div;
+      }));
+      math($('balance-symbol'), on ? tex`E+E_{\mathrm{diss}}=E(0)` : 'E=K+U');
+      math($('error-symbol'), on ? tex`\Delta E+E_{\mathrm{diss}}` : 'E(t)-E(0)');
     }
     function scheduleRebuild() {
       setPlaying(false);
@@ -733,6 +776,7 @@ async function startEnergyApp() {
     function rebuild() {
       setPlaying(false); state.t = 0;
       state.duration = Number($('duration').value);
+      updateFrictionInterface();
       state.simulation = EnergyModels.simulate(state.model, state.p, state.duration);
       $('time-slider').max = state.duration; $('history').setAttribute('aria-valuemax', state.duration);
       number($('duration-readout'), state.duration, 0, tex`\mathrm s`);
@@ -752,8 +796,13 @@ async function startEnergyApp() {
         $('energy-stack').append(segment);
         const legend = document.createElement('span'); legend.append(swatch.cloneNode(), label.cloneNode(true)); $('chart-key').append(legend);
       }
-      const total = document.createElement('span'); const dash = document.createElement('span'); dash.className = 'key-swatch'; dash.style.borderTop = `2px dashed ${COLORS.ink}`;
-      const label = document.createElement('span'); math(label, 'E'); total.append(dash, label); $('chart-key').append(total);
+      const on = state.p.gamma > 0;
+      const total = document.createElement('span'); const dash = document.createElement('span'); dash.className = 'key-swatch'; dash.style.borderTop = `2px ${on ? 'solid' : 'dashed'} ${COLORS.ink}`;
+      const label = document.createElement('span'); math(label, on ? 'E(t)' : 'E'); total.append(dash, label); $('chart-key').append(total);
+      if (on) {
+        const reference = document.createElement('span'), marker = dash.cloneNode(), symbol = document.createElement('span');
+        marker.style.borderTop = `2px dashed ${COLORS.muted}`; math(symbol, 'E(0)'); reference.append(marker, symbol); $('chart-key').append(reference);
+      }
     }
     function surface(id) {
       const canvas = $(id), rect = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -792,16 +841,16 @@ async function startEnergyApp() {
       const curve = [];
       for (let i = 0; i <= 120; i++) { const x = -range + 2 * range * i / 120; curve.push([X(x), Y(.5 * p.k * x * x)]); }
       line(ctx, curve, COLORS.U, 2);
-      line(ctx, [[left, Y(initial.E)], [right, Y(initial.E)]], COLORS.E, 1.5, [5, 4]);
+      line(ctx, [[left, Y(sample.E)], [right, Y(sample.E)]], COLORS.E, 1.5, [5, 4]);
       line(ctx, [[X(sample.x), bottom], [X(sample.x), Y(sample.U)]], COLORS.U, 4);
-      line(ctx, [[X(sample.x), Y(sample.U)], [X(sample.x), Y(initial.E)]], COLORS.K, 4);
+      line(ctx, [[X(sample.x), Y(sample.U)], [X(sample.x), Y(sample.E)]], COLORS.K, 4);
       dot(ctx, X(sample.x), Y(sample.U), 5, COLORS.ink);
       label('scene-labels', 'potential', tex`U(x)=\tfrac12 kx^2`, (left + right) / 2, 54, COLORS.U);
-      label('scene-labels', 'energy', 'E', right - 2, Y(initial.E) - 13, COLORS.E);
+      label('scene-labels', 'energy', p.gamma > 0 ? 'E(t)' : 'E', right - 8, Y(sample.E) - 13, COLORS.E);
       label('scene-labels', 'zero', '0', X(0), bottom + 18, COLORS.muted, true);
       if (A > 1e-8) {
-        label('scene-labels', 'aminus', '-A', X(-A), bottom + 18, COLORS.muted, true);
-        label('scene-labels', 'aplus', 'A', X(A), bottom + 18, COLORS.muted, true);
+        label('scene-labels', 'aminus', p.gamma > 0 ? '-A_0' : '-A', X(-A), bottom + 18, COLORS.muted, true);
+        label('scene-labels', 'aplus', p.gamma > 0 ? 'A_0' : 'A', X(A), bottom + 18, COLORS.muted, true);
       }
       const rail = h - 52, massX = X(sample.x), anchor = 20;
       line(ctx, [[anchor, rail - 25], [anchor, rail + 20]], COLORS.muted, 3);
@@ -875,7 +924,8 @@ async function startEnergyApp() {
         if (!stacked) dot(ctx, X(sample.t), Y(values[values.length - 1]), 3, parts[k].color);
         lower = upper;
       }
-      line(ctx, [[r.left, Y(state.simulation.samples[0].E)], [r.right, Y(state.simulation.samples[0].E)]], COLORS.ink, 1.5, [6, 4]);
+      line(ctx, [[r.left, Y(state.simulation.samples[0].E)], [r.right, Y(state.simulation.samples[0].E)]], state.p.gamma > 0 ? COLORS.muted : COLORS.ink, 1.5, [6, 4]);
+      if (state.p.gamma > 0) line(ctx, samples.map(s => [X(s.t), Y(s.E)]), COLORS.ink, 2);
       line(ctx, [[X(state.t), r.top], [X(state.t), r.bottom]], '#8998a7', 1.5, [3, 3]);
       dot(ctx, X(state.t), Y(sample.E), 4, COLORS.ink);
     }
@@ -891,21 +941,28 @@ async function startEnergyApp() {
         number($('kinetic-readout'), sample.K, 3, tex`\mathrm J`);
         number($('potential-readout'), sample.U, 3, tex`\mathrm J`);
         number($('total-readout'), sample.E, 3, tex`\mathrm J`);
-        const error = sample.E - E0;
+        number($('dissipation-readout'), sample.D, 3, tex`\mathrm J`);
+        const error = sample.E + sample.D - E0;
         number($('error-readout'), error, Math.abs(error) < .0000005 ? 0 : 6, tex`\mathrm J`);
         for (const [i, part] of components(sample).entries()) {
           number($(`part-${i}`), part.value, 3, tex`\mathrm J`);
         }
       }
+      const budget = sample.E + sample.D;
       for (const [i, part] of components(sample).entries()) {
-        $(`segment-${i}`).style.height = `${sample.E > 1e-12 ? 100 * part.value / sample.E : 0}%`;
+        $(`segment-${i}`).style.height = `${budget > 1e-12 ? 100 * part.value / budget : 0}%`;
       }
-      $('energy-stack').style.height = `${E0 > 1e-12 ? Math.min(100, 100 * sample.E / E0) : 0}%`;
-      const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J.`);
+      $('energy-stack').style.height = `${E0 > 1e-12 ? Math.min(100, 100 * budget / E0) : 0}%`;
+      const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J ; énergie dissipée ${sample.D.toFixed(3)} J.`);
       hideLabels('scene-labels');
       if (state.model === 'oscillator') drawOscillator(sample); else drawPendulum(sample);
       drawHistory(sample);
-      $('observation').textContent = E0 < 1e-12 ? 'Le système reste au repos à l’équilibre : les énergies cinétique et potentielle sont nulles.' : state.model === 'pendulum' ? 'Chaque masse peut gagner ou perdre de l’énergie. Seule la somme des énergies des deux masses est conservée.' : sample.K / E0 < .05 ? 'Près d’une extrémité, la masse ralentit : l’énergie est essentiellement potentielle.' : sample.U / E0 < .05 ? 'Près de l’équilibre, la vitesse est maximale : l’énergie est essentiellement cinétique.' : 'Pendant le mouvement, l’énergie cinétique et l’énergie potentielle se transforment l’une en l’autre.';
+      $('observation').textContent = E0 < 1e-12 ? 'Le système reste au repos à l’équilibre : les énergies cinétique et potentielle sont nulles.'
+        : state.p.gamma > 0 ? 'Les frottements dissipent de l’énergie. La partie grise représente l’énergie transférée au milieu ; ajoutée à l’énergie mécanique restante, elle retrouve l’énergie initiale.'
+        : state.model === 'pendulum' ? 'Chaque masse peut gagner ou perdre de l’énergie. Seule la somme des énergies des deux masses est conservée.'
+        : sample.K / E0 < .05 ? 'Près d’une extrémité, la masse ralentit : l’énergie est essentiellement potentielle.'
+        : sample.U / E0 < .05 ? 'Près de l’équilibre, la vitesse est maximale : l’énergie est essentiellement cinétique.'
+        : 'Pendant le mouvement, l’énergie cinétique et l’énergie potentielle se transforment l’une en l’autre.';
     }
     function frame(now) {
       state.frame = 0;
@@ -920,7 +977,12 @@ async function startEnergyApp() {
     }
     $('model-select').addEventListener('change', setModel);
     $('example-select').addEventListener('change', () => setExample(Number($('example-select').value)));
-    $('reset-parameters').addEventListener('click', () => setExample(0));
+    $('reset-parameters').addEventListener('click', () => { $('damping-slider').value = '0.25'; setExample(0); });
+    $('friction-toggle').addEventListener('change', rebuild);
+    $('damping-slider').addEventListener('input', () => {
+      number($('damping-readout'), Number($('damping-slider').value), 2, tex`\mathrm{s^{-1}}`);
+      scheduleRebuild();
+    });
     $('play').addEventListener('click', () => { if (state.t >= state.duration) state.t = 0; setPlaying(!state.playing); });
     $('restart').addEventListener('click', () => { setPlaying(false); setTime(0); });
     $('time-slider').addEventListener('input', () => { setPlaying(false); setTime(Number($('time-slider').value)); });
@@ -977,6 +1039,12 @@ async function startEnergyApp() {
       <section class="panel-section">
         <div class="section-heading-row"><h2>Paramètres physiques</h2><button id="reset-parameters" class="text-button" type="button">Réinitialiser</button></div>
         <div id="parameters"></div>
+        <label class="check-row friction-option"><input id="friction-toggle" type="checkbox" /><span>Avec frottements</span></label>
+        <div id="damping-controls" hidden>
+          <label class="field-label" for="damping-slider">Amortissement <span data-tex="\gamma"></span></label>
+          <input id="damping-slider" type="range" min="0.01" max="2" step="0.01" value="0.25" />
+          <output id="damping-readout" for="damping-slider"></output>
+        </div>
         <p class="microcopy">Modifier un paramètre recommence l’expérience.</p>
       </section>
       <section class="panel-section">
@@ -1004,7 +1072,7 @@ async function startEnergyApp() {
         <h2>Relations</h2>
         <div class="equations" id="relations"></div>
         <p id="reference-note" class="microcopy"></p>
-        <p class="microcopy">Système idéal, sans frottement. Les échanges modifient la répartition de l’énergie, pas son total.</p>
+        <p id="conservation-note" class="microcopy">Système idéal, sans frottement. Les échanges modifient la répartition de l’énergie, pas son total.</p>
       </section>
       <footer class="panel-footer"><span>© J. Martin</span><span>Espace : lire · R : recommencer</span></footer>
     </aside>
@@ -1012,7 +1080,7 @@ async function startEnergyApp() {
       <p id="loading" role="status">Préparation de l’animation et du rendu LaTeX…</p>
       <div class="energy-layout">
         <section class="visual-card motion-card">
-          <header class="card-heading"><h2 id="scene-title">Oscillateur harmonique</h2><span class="result-badge">Sans frottement</span></header>
+          <header class="card-heading"><h2 id="scene-title">Oscillateur harmonique</h2><span id="friction-badge" class="result-badge">Sans frottement</span></header>
           <div id="scene" class="plot-wrap" role="img" aria-label="Mouvement du système et répartition de l’énergie">
             <canvas id="scene-canvas" aria-hidden="true"></canvas>
             <div class="plot-labels" id="scene-labels" aria-hidden="true"></div>
@@ -1026,7 +1094,7 @@ async function startEnergyApp() {
             <div class="energy-meter" aria-hidden="true"><div id="energy-stack"></div></div>
             <div id="energy-key"></div>
           </div>
-          <p class="balance-note microcopy">La hauteur totale représente <span data-tex="E=K+U"></span>.</p>
+          <p class="balance-note microcopy">La hauteur totale représente <span id="balance-symbol" data-tex="E=K+U"></span>.</p>
         </section>
       </div>
       <section class="visual-card history-card">
@@ -1040,7 +1108,8 @@ async function startEnergyApp() {
         <article class="readout-card" style="--card-color:#2775b6"><span data-tex="K(t)"></span><strong id="kinetic-readout"></strong><small>énergie cinétique</small></article>
         <article class="readout-card" style="--card-color:#b5688b"><span data-tex="U(t)"></span><strong id="potential-readout"></strong><small>énergie potentielle</small></article>
         <article class="readout-card" style="--card-color:#268576"><span data-tex="E(t)"></span><strong id="total-readout"></strong><small>énergie mécanique</small></article>
-        <article class="readout-card" style="--card-color:#607185"><span data-tex="E(t)-E(0)"></span><strong id="error-readout"></strong><small id="accuracy-note">écart numérique</small></article>
+        <article id="dissipation-card" class="readout-card" style="--card-color:#a0acb9" hidden><span data-tex="E_{\mathrm{diss}}(t)"></span><strong id="dissipation-readout"></strong><small>énergie dissipée</small></article>
+        <article class="readout-card" style="--card-color:#607185"><span id="error-symbol" data-tex="E(t)-E(0)"></span><strong id="error-readout"></strong><small id="accuracy-note">écart numérique</small></article>
       </section>
       <p id="observation" class="observation"></p>
     </main>

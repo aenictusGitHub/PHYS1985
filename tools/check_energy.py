@@ -68,6 +68,66 @@ for (const y of [[.4, -.8, .5, 1.2], [2.7, 1.1, -2, 3], [0, 0, 1, -1]]) {
   near((a-b)/(2*h), 0, 1e-6, 'instantaneous dE/dt');
 }
 console.log('Energy: analytical oscillator, rigid rods, equilibrium, mass coupling, full-range cases and continuous scrubbing passed. Maximum relative drift over 60 s: ' + maxRelative);
+
+// Independently integrated dissipated work must balance the mechanical loss.
+let maxDampedError = 0;
+for (const [model, parameters] of [
+  ['oscillator', oscillator], ['oscillator', {m: .2, k: 20, x0: -2, v0: 4}],
+  ['oscillator', {...oscillator, x0: 0, v0: 0}],
+  ['pendulum', pendulum], ['pendulum', cases[4]], ['pendulum', cases[3]],
+]) {
+  for (const gamma of [.01, .25, 2]) {
+    const p = {...parameters, gamma}, sim = EnergyModels.simulate(model, p, 60);
+    const E0 = sim.samples[0].E, tolerance = 1e-6 * Math.max(1, E0);
+    let previousE = E0, previousD = 0;
+    for (const s of sim.samples) {
+      assert(s.E <= previousE + tolerance, 'mechanical energy cannot grow with friction');
+      assert(s.D >= previousD - tolerance && s.D >= -1e-10, 'dissipated energy cannot decrease');
+      near(s.E + s.D, E0, tolerance, 'mechanical plus dissipated balance');
+      previousE = s.E; previousD = s.D;
+    }
+    for (const t of [0, .0034, 1.2345, 26.54321, 59.999, 60]) {
+      const s = sim.at(t); near(s.E + s.D, E0, tolerance, 'damped off-grid balance');
+    }
+    maxDampedError = Math.max(maxDampedError, sim.maxError / Math.max(1, E0));
+    if (E0 === 0) assert(sim.samples.every(s => s.D === 0 && s.E === 0), 'no dissipation at rest');
+    else assert(sim.at(60).E < E0 && sim.at(60).D > 0, 'friction actually damps the motion');
+  }
+}
+// Exact underdamped, critically damped and overdamped oscillator references.
+function dampedReference(p, t) {
+  const a = p.gamma / 2, omega2 = p.k / p.m, discriminant = a * a - omega2;
+  if (Math.abs(discriminant) < 1e-12) {
+    const b = p.v0 + a * p.x0, q = p.x0 + b * t, factor = Math.exp(-a * t);
+    return {x: factor * q, v: factor * (b - a * q)};
+  }
+  if (discriminant < 0) {
+    const w = Math.sqrt(-discriminant), b = (p.v0 + a * p.x0) / w;
+    const q = p.x0 * Math.cos(w*t) + b * Math.sin(w*t);
+    const dq = w * (-p.x0 * Math.sin(w*t) + b * Math.cos(w*t));
+    return {x: Math.exp(-a*t) * q, v: Math.exp(-a*t) * (dq-a*q)};
+  }
+  const r1 = -a + Math.sqrt(discriminant), r2 = -a - Math.sqrt(discriminant);
+  const c1 = (p.v0-r2*p.x0)/(r1-r2), c2 = p.x0-c1;
+  return {x: c1*Math.exp(r1*t)+c2*Math.exp(r2*t), v: r1*c1*Math.exp(r1*t)+r2*c2*Math.exp(r2*t)};
+}
+for (const p of [{m:1,k:1,x0:1,v0:.3,gamma:.4}, {m:1,k:1,x0:1,v0:.3,gamma:2}, {m:4,k:1,x0:1,v0:-.3,gamma:2}]) {
+  const sim = EnergyModels.simulate('oscillator', p, 60);
+  for (const t of [0,.03,.5,1.2345,5,15,60]) {
+    const expected = dampedReference(p,t), actual = sim.at(t);
+    near(actual.x, expected.x, 1e-8, 'damped analytical position');
+    near(actual.v, expected.v, 1e-8, 'damped analytical velocity');
+  }
+}
+for (const y of [[.4,-.8,.5,1.2,0], [2.7,1.1,-2,3,0]]) {
+  const p = {...pendulum,gamma:.7}, d = EnergyModels.rhs(p,y), h = 1e-6;
+  const sample = EnergyModels.pendulum(p,y,0);
+  const a = EnergyModels.pendulum(p,y.map((v,i)=>v+h*d[i]),0).E;
+  const b = EnergyModels.pendulum(p,y.map((v,i)=>v-h*d[i]),0).E;
+  near((a-b)/(2*h), -2*p.gamma*sample.K, 1e-6, 'viscous dissipative power');
+  near(d[4], 2*p.gamma*sample.K, 1e-10, 'independent dissipated work derivative');
+}
+console.log('Friction: all damping regimes, monotone loss, dissipated work, rest, extreme parameters and scrubbing passed. Maximum relative balance error over 60 s: ' + maxDampedError);
 '''
 
 with ZipFile(PROJECT / 'energie_mecanique_webapp_fr.zip') as archive:

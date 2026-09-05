@@ -50,9 +50,10 @@ L’option `--app nom_application` limite la reconstruction à une application; 
 Cette nouvelle application s’inspire des échanges d’énergie présentés dans les vidéos `oscillations_harmoniques.mp4` et `Energie_pendule_double.mp4`. Les dessins et calculs sont réalisés dans l’application ; les vidéos ne sont pas redistribuées.
 
 - Oscillateur : solution analytique, masse, raideur, position et vitesse initiales réglables ; parabole du potentiel et segment représentant l’énergie cinétique.
-- Pendule double : masses, longueurs, angles, vitesses angulaires initiales et pesanteur réglables ; tiges idéales sans masse et sans frottement. Chaque potentiel est référencé à la hauteur minimale accessible à sa masse.
+- Pendule double : masses, longueurs, angles, vitesses angulaires initiales et pesanteur réglables ; tiges idéales sans masse. Chaque potentiel est référencé à la hauteur minimale accessible à sa masse.
+- Option « Avec frottements » pour les deux systèmes : force visqueuse proportionnelle à la vitesse, amortissement réglable, énergie dissipée en gris et vérification du bilan entre énergie mécanique restante et énergie transférée au milieu.
 - Diagramme de répartition, énergies empilées ou courbes séparées, détail par masse, lecture/pause, vitesse de lecture, durée et choix de l’instant par curseur, graphique ou clavier.
-- Calcul du pendule par Runge–Kutta avec contrôle adaptatif du pas et correction de Richardson, sans renormaliser l’énergie. L’écart numérique réel est affiché, arrondi à zéro sous la résolution d’affichage.
+- Calcul du pendule et de l’oscillateur amorti par Runge–Kutta avec contrôle adaptatif du pas et correction de Richardson, sans renormaliser l’énergie. L’énergie dissipée est intégrée indépendamment. L’écart numérique réel du bilan énergétique est affiché, arrondi à zéro sous la résolution d’affichage.
 
 Tests analytiques, conservation, contraintes des tiges, équilibre et navigation temporelle : `python3 tools/check_energy.py`. La variable optionnelle `PHYS1985_NODE` permet de spécifier le chemin de Node.js.
 
