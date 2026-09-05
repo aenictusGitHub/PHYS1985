@@ -314,6 +314,22 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .time-badge .math-digits { min-width: 2.7em; }
 .viewport-toolbar { top: 0.72rem; right: 0.72rem; background: rgba(255,255,255,.9); }
 .viewport-toolbar button { min-height: 2rem; border: 0; background: transparent; font-size: 0.76rem; }
+.drag-a-hint {
+  position: absolute;
+  left: 0.72rem;
+  bottom: 0.72rem;
+  z-index: 2;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(210, 223, 239, 0.35);
+  border-radius: 0.45rem;
+  color: #f8fbff;
+  background: rgba(4, 13, 25, 0.68);
+  font-size: 0.7rem;
+  pointer-events: none;
+  user-select: none;
+}
+.drag-a-hint mjx-container[jax="SVG"] { margin: 0 !important; }
+#scene-viewport.dragging-a { cursor: grabbing; }
 .scene-math-label {
   position: absolute;
   z-index: 3;
@@ -444,6 +460,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   .chart-tick-label { font-size: 0.76rem; }
   .chart-axis-x { font-size: 0.94rem; }
   .chart-axis-y { font-size: 0.86rem; }
+  .drag-a-hint { font-size: 0.64rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -467,6 +484,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <option value="cellular" selected>Tourbillons périodiques</option>
           <option value="periodic">Puits périodiques — conservatif</option>
           <option value="central">Attraction centrale — conservatif</option>
+          <option value="vortex">Tourbillon central — rotation spatiale</option>
           <option value="rotating">Champ tournant — dépendant du temps</option>
           <option value="gravity">Pesanteur uniforme</option>
         </select>
@@ -607,6 +625,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <p>\[\vec{F}(x,y)=-F_0\frac{(x-x_c,\,y-y_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
             <p class="equation-note">Champ central, attractif, conservatif et borné.</p>
           </div>
+          <div class="field-formula" data-force-field="vortex" hidden>
+            <p>\[\vec{F}(x,y)=F_0\frac{(-(y-y_c),\,x-x_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
+            <p class="equation-note">Champ tournant autour du centre \(C\), spatial, non conservatif et borné.</p>
+          </div>
           <div class="field-formula" data-force-field="rotating" hidden>
             <p>\[\vec{F}(t)=F_0\!\left(\cos(\omega_0 t),\,\sin(\omega_0 t)\right)\]</p>
             <p class="equation-note">Champ uniforme tournant, explicitement dépendant du temps, avec \(\omega_0=\frac{2\pi}{10\,\mathrm s}\).</p>
@@ -636,7 +658,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             </div>
             <span id="power-sign-badge" class="sign-badge neutral">Puissance nulle</span>
           </header>
-          <div id="scene-viewport" class="canvas-wrap" tabindex="0" aria-label="Champ de force et trajectoire de la particule. Faire glisser pour déplacer la vue et utiliser la molette pour zoomer.">
+          <div id="scene-viewport" class="canvas-wrap" tabindex="0" aria-label="Champ de force et trajectoire de la particule. Faire glisser le point A pour déplacer le départ, faire glisser ailleurs pour déplacer la vue et utiliser la molette pour zoomer.">
             <canvas id="scene-canvas"></canvas>
             <div id="loading-message">Préparation de l’expérience et des formules…</div>
             <div class="time-badge" aria-hidden="true">
@@ -650,6 +672,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <div class="viewport-toolbar">
               <button id="reset-view" type="button">Réinitialiser la vue</button>
             </div>
+            <div class="drag-a-hint" aria-hidden="true">Faire glisser \(A\)</div>
             <div id="scene-label-a" class="scene-math-label point-label">\(A\)</div>
             <div id="scene-label-b" class="scene-math-label point-label">\(B\)</div>
             <div id="scene-label-force" class="scene-math-label force-label">\(\vec{F}\)</div>
@@ -721,7 +744,6 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   const PI = Math.PI;
   const ROTATING_FIELD_OMEGA = 2 * PI / 10;
   const DOMAIN = Object.freeze({ xMin: 0, xMax: 2 * PI, yMin: 0, yMax: 3 * PI });
-  const INITIAL_POSITION = Object.freeze({ x: 4.4, y: 6.8 });
   const COLORS = Object.freeze({
     ink: "#172033",
     muted: "#64748b",
@@ -752,6 +774,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       note: "Champ conservatif, borné et dirigé vers le centre de la figure.",
       maxMagnitudeFactor: 1
     },
+    vortex: {
+      note: "Champ tournant spatial, non conservatif et borné autour du centre C.",
+      maxMagnitudeFactor: 1
+    },
     rotating: {
       note: "Champ uniforme tournant et explicitement dépendant du temps.",
       maxMagnitudeFactor: 1
@@ -767,6 +793,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
+      x0: 4.4,
+      y0: 6.8,
       speed0: Math.SQRT2 * 0.2,
       angle0: -45,
       duration: 15 * PI,
@@ -776,6 +804,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
+      x0: 4.4,
+      y0: 6.8,
       speed0: Math.SQRT2 * 0.2,
       angle0: -45,
       duration: 36.6022792668,
@@ -785,6 +815,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
+      x0: 4.4,
+      y0: 6.8,
       speed0: Math.SQRT2 * 0.2,
       angle0: -45,
       duration: 7 * PI,
@@ -950,6 +982,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       const factor = -amplitude / Math.sqrt(1 + dx * dx + dy * dy);
       return { x: factor * dx, y: factor * dy };
     }
+    if (fieldId === "vortex") {
+      const dx = x - PI;
+      const dy = y - 1.5 * PI;
+      const factor = amplitude / Math.sqrt(1 + dx * dx + dy * dy);
+      return { x: -factor * dy, y: factor * dx };
+    }
     if (fieldId === "rotating") {
       return {
         x: amplitude * Math.cos(ROTATING_FIELD_OMEGA * time),
@@ -1003,8 +1041,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
     const initialAngleRadians = parameters.angle0 * PI / 180;
     let vector = [
-      INITIAL_POSITION.x,
-      INITIAL_POSITION.y,
+      parameters.x0,
+      parameters.y0,
       parameters.speed0 * Math.cos(initialAngleRadians),
       parameters.speed0 * Math.sin(initialAngleRadians)
     ];
@@ -1792,13 +1830,39 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     dom.resetView.addEventListener("click", resetView);
     dom.sceneViewport.addEventListener("pointerdown", (event) => {
       if (event.target.closest("button")) return;
+      const rect = dom.sceneCanvas.getBoundingClientRect();
+      const transform = viewTransform(rect.width, rect.height);
+      const start = transform.worldToScreen(state.simulation.x[0], state.simulation.y[0]);
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+      const movingPointA = Math.hypot(pointerX - start.x, pointerY - start.y) <= 22;
       dom.sceneViewport.setPointerCapture(event.pointerId);
-      state.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      state.drag = {
+        mode: movingPointA ? "point-a" : "view",
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY
+      };
+      if (movingPointA) {
+        setPlaying(false);
+        dom.sceneViewport.classList.add("dragging-a");
+      }
     });
     dom.sceneViewport.addEventListener("pointermove", (event) => {
       if (!state.drag || state.drag.pointerId !== event.pointerId) return;
       const rect = dom.sceneCanvas.getBoundingClientRect();
       const transform = viewTransform(rect.width, rect.height);
+      if (state.drag.mode === "point-a") {
+        const world = transform.screenToWorld(
+          event.clientX - rect.left,
+          event.clientY - rect.top
+        );
+        state.parameters.x0 = Math.max(DOMAIN.xMin, Math.min(DOMAIN.xMax, world.x));
+        state.parameters.y0 = Math.max(DOMAIN.yMin, Math.min(DOMAIN.yMax, world.y));
+        markCustom();
+        recompute();
+        return;
+      }
       const dx = event.clientX - state.drag.x;
       const dy = event.clientY - state.drag.y;
       state.view.centerX -= dx / transform.scale;
@@ -1808,7 +1872,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       render();
     });
     const endDrag = (event) => {
-      if (state.drag && state.drag.pointerId === event.pointerId) state.drag = null;
+      if (state.drag && state.drag.pointerId === event.pointerId) {
+        state.drag = null;
+        dom.sceneViewport.classList.remove("dragging-a");
+      }
     };
     dom.sceneViewport.addEventListener("pointerup", endDrag);
     dom.sceneViewport.addEventListener("pointercancel", endDrag);
