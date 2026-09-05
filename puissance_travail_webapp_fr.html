@@ -298,6 +298,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .time-badge {
   top: 0.72rem;
   left: 0.72rem;
+  display: grid;
+  gap: 0.22rem;
   padding: 0.42rem 0.62rem;
   color: #f8fbff;
   background: rgba(4, 13, 25, 0.72);
@@ -343,7 +345,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   padding: 0.44rem 0.55rem;
   color: #3d4d64;
   background: rgba(255,255,255,.88);
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   pointer-events: none;
 }
 .chart-legend span { display: flex; align-items: center; gap: 0.4rem; }
@@ -362,10 +364,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 }
 .chart-axis-label mjx-container[jax="SVG"],
 .chart-tick-label mjx-container[jax="SVG"] { display: block !important; margin: 0 !important; }
-.chart-axis-x { left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 0.88rem; }
-.chart-axis-y { left: 7px; top: 50%; transform: translate(-42%, -50%) rotate(-90deg); font-size: 0.82rem; }
+.chart-axis-x { left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 1rem; }
+.chart-axis-y { left: 7px; top: 50%; transform: translate(-42%, -50%) rotate(-90deg); font-size: 0.94rem; }
 .chart-tick-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
-.chart-tick-label { transform: translate(-50%, -50%); font-size: 0.7rem; }
+.chart-tick-label { transform: translate(-50%, -50%); font-size: 0.82rem; }
 .chart-tick-label.y-tick { transform: translate(-100%, -50%); }
 .chart-tick-label .math-digits { min-width: 0; justify-content: center; }
 
@@ -431,7 +433,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   .readout-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .readout-card:last-child { grid-column: 1 / -1; }
   .panel-footer { white-space: normal; }
-  .chart-legend { font-size: 0.62rem; }
+  .chart-legend { font-size: 0.72rem; }
+  .chart-tick-label { font-size: 0.76rem; }
+  .chart-axis-x { font-size: 0.94rem; }
+  .chart-axis-y { font-size: 0.86rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -613,8 +618,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <div id="scene-viewport" class="canvas-wrap" tabindex="0" aria-label="Champ de force et trajectoire de la particule. Faire glisser pour déplacer la vue et utiliser la molette pour zoomer.">
             <canvas id="scene-canvas"></canvas>
             <div id="loading-message">Préparation de l’expérience et des formules…</div>
-            <div class="time-badge" aria-label="Temps courant">
-              <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0,00</span><span class="tex-math">\(\,\mathrm s\)</span>
+            <div class="time-badge" aria-hidden="true">
+              <span class="dynamic-math-output">
+                <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0,00</span><span class="tex-math">\(\,\mathrm s\)</span>
+              </span>
+              <span class="dynamic-math-output">
+                <span class="tex-math">\(K(t)=\)</span><span id="scene-kinetic-digits" class="math-digits">0,800</span><span class="tex-math">\(\,\mathrm J\)</span>
+              </span>
             </div>
             <div class="viewport-toolbar">
               <button id="reset-view" type="button">Réinitialiser la vue</button>
@@ -764,7 +774,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     minimumFractionDigits: 6,
     maximumFractionDigits: 6
   });
-  const tickNumber = new Intl.NumberFormat("fr-BE", { maximumFractionDigits: 2 });
+  const tickNumber = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+    useGrouping: false
+  });
 
   const dom = {
     forceField: document.getElementById("force-field-select"),
@@ -800,6 +813,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     resetView: document.getElementById("reset-view"),
     loading: document.getElementById("loading-message"),
     timeBadge: document.getElementById("time-badge-digits"),
+    sceneKinetic: document.getElementById("scene-kinetic-digits"),
     sceneLabelA: document.getElementById("scene-label-a"),
     sceneLabelB: document.getElementById("scene-label-b"),
     sceneLabelForce: document.getElementById("scene-label-force"),
@@ -1490,6 +1504,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     dom.time.value = String(sample.t);
     setMathDigits(dom.timeOutput, number2.format(sample.t));
     setMathDigits(dom.timeBadge, number2.format(sample.t));
+    setMathDigits(dom.sceneKinetic, number3.format(sample.kinetic));
     setMathDigits(dom.powerReadout, signed(sample.power));
     setMathDigits(dom.workReadout, signed(sample.work));
     setMathDigits(dom.deltaKReadout, signed(deltaK));
@@ -1504,7 +1519,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         : sample.power < -0.002
           ? "La force diminue actuellement l’énergie cinétique."
           : "La puissance est actuellement presque nulle.";
-      dom.accessibleSummary.textContent = `À ${number2.format(sample.t)} secondes, la puissance vaut ${signed(sample.power)} watt et le travail cumulé ${signed(sample.work)} joule. ${signDescription}`;
+      dom.accessibleSummary.textContent = `À ${number2.format(sample.t)} secondes, la puissance vaut ${signed(sample.power)} watt, le travail cumulé ${signed(sample.work)} joule et l’énergie cinétique ${number3.format(sample.kinetic)} joule. ${signDescription}`;
       state.lastAccessibleUpdate = sample.t;
     }
   }
