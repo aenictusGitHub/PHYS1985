@@ -461,6 +461,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <option value="periodic">Puits périodiques — conservatif</option>
           <option value="central">Attraction centrale — conservatif</option>
           <option value="rotating">Champ tournant — dépendant du temps</option>
+          <option value="gravity">Pesanteur uniforme</option>
         </select>
         <p id="force-field-note" class="microcopy block-note">Champ de force périodique non conservatif.</p>
 
@@ -486,13 +487,16 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <span class="microcopy">\(m\)</span>
         </div>
 
-        <label class="field-label compact" for="force-slider">Intensité du champ</label>
+        <label id="force-strength-label" class="field-label compact" for="force-slider">Intensité du champ</label>
         <input id="force-slider" type="range" min="0.2" max="2" value="1" step="0.1" />
         <div class="range-readout-row">
           <output id="force-output" class="dynamic-math-output" aria-label="Intensité du champ">
-            <span id="force-output-digits" class="math-digits">1.00</span><span class="tex-math">\(\,\mathrm N\)</span>
+            <span id="force-output-digits" class="math-digits">1.00</span>
+            <span id="force-unit-newton" class="tex-math">\(\,\mathrm N\)</span>
+            <span id="force-unit-gravity" class="tex-math" hidden>\(\,\mathrm{m\,s^{-2}}\)</span>
           </output>
-          <span class="microcopy">\(F_0\)</span>
+          <span id="force-symbol-f0" class="microcopy">\(F_0\)</span>
+          <span id="force-symbol-g" class="microcopy" hidden>\(g\)</span>
         </div>
 
         <div class="paired-controls">
@@ -598,6 +602,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <div class="field-formula" data-force-field="rotating" hidden>
             <p>\[\vec{F}(t)=F_0\!\left(\cos(\omega_0 t),\,\sin(\omega_0 t)\right)\]</p>
             <p class="equation-note">Champ uniforme tournant, explicitement dépendant du temps, avec \(\omega_0=\frac{2\pi}{10\,\mathrm s}\).</p>
+          </div>
+          <div class="field-formula" data-force-field="gravity" hidden>
+            <p>\[\vec{F}=-mg\,\vec e_z,\qquad U_g(z)=mgz\]</p>
+            <p class="equation-note">Champ de pesanteur uniforme, conservatif et dirigé verticalement vers le bas.</p>
           </div>
           <p>\[P(t)=\vec{F}(t)\cdot\vec{v}(t)=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\]</p>
           <p>\[W_{A\to t}=\int_{t_A}^{t}P(\tau)\,\mathrm d\tau=K(t)-K_A\]</p>
@@ -739,6 +747,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     rotating: {
       note: "Champ uniforme tournant et explicitement dépendant du temps.",
       maxMagnitudeFactor: 1
+    },
+    gravity: {
+      note: "Champ de pesanteur uniforme et conservatif.",
+      maxMagnitudeFactor: 1
     }
   });
 
@@ -798,6 +810,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     fieldFormulaBlocks: Array.from(document.querySelectorAll("[data-force-field]")),
     scenario: document.getElementById("scenario-select"),
     scenarioNote: document.getElementById("scenario-note"),
+    forceStrengthLabel: document.getElementById("force-strength-label"),
     mass: document.getElementById("mass-slider"),
     forceScale: document.getElementById("force-slider"),
     vx: document.getElementById("vx-slider"),
@@ -805,6 +818,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     duration: document.getElementById("duration-slider"),
     massOutput: document.getElementById("mass-output-digits"),
     forceOutput: document.getElementById("force-output-digits"),
+    forceOutputContainer: document.getElementById("force-output"),
+    forceUnitNewton: document.getElementById("force-unit-newton"),
+    forceUnitGravity: document.getElementById("force-unit-gravity"),
+    forceSymbolF0: document.getElementById("force-symbol-f0"),
+    forceSymbolG: document.getElementById("force-symbol-g"),
     vxOutput: document.getElementById("vx-output-digits"),
     vyOutput: document.getElementById("vy-output-digits"),
     durationOutput: document.getElementById("duration-output-digits"),
@@ -861,7 +879,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       velocity: true,
       trajectory: true,
       area: true
-    }
+    },
+    nonGravitySettings: null
   };
 
   let mathIsReady = false;
@@ -929,6 +948,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         y: amplitude * Math.sin(ROTATING_FIELD_OMEGA * time)
       };
     }
+    if (fieldId === "gravity") {
+      return { x: 0, y: -parameters.mass * amplitude };
+    }
     return {
       x: amplitude * Math.sin(x) * Math.cos(y),
       y: -amplitude * Math.cos(x) * Math.sin(y)
@@ -937,6 +959,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
   function fieldReferenceMagnitude(parameters = state.parameters) {
     const fieldType = FIELD_TYPES[parameters.fieldId] || FIELD_TYPES.cellular;
+    if (parameters.fieldId === "gravity") {
+      return Math.max(1e-9, parameters.mass * parameters.forceScale);
+    }
     return Math.max(1e-9, parameters.forceScale * fieldType.maxMagnitudeFactor);
   }
 
@@ -1560,10 +1585,29 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     setMathDigits(dom.durationOutput, number2.format(state.parameters.duration));
   }
 
+  function configureFieldControls() {
+    const gravitySelected = state.parameters.fieldId === "gravity";
+    dom.forceStrengthLabel.textContent = gravitySelected ? "Intensité de la pesanteur" : "Intensité du champ";
+    dom.forceOutputContainer.setAttribute(
+      "aria-label",
+      gravitySelected ? "Intensité de la pesanteur" : "Intensité du champ"
+    );
+    dom.forceUnitNewton.hidden = gravitySelected;
+    dom.forceUnitGravity.hidden = !gravitySelected;
+    dom.forceSymbolF0.hidden = gravitySelected;
+    dom.forceSymbolG.hidden = !gravitySelected;
+    dom.forceScale.min = gravitySelected ? "0.5" : "0.2";
+    dom.forceScale.max = gravitySelected ? "15" : "2";
+    dom.forceScale.step = gravitySelected ? "0.01" : "0.1";
+    dom.duration.min = gravitySelected ? "0.5" : "5";
+    dom.duration.max = gravitySelected ? "5" : "50";
+  }
+
   function updateForceFieldInterface() {
     const fieldId = FIELD_TYPES[state.parameters.fieldId] ? state.parameters.fieldId : "cellular";
     state.parameters.fieldId = fieldId;
     dom.forceField.value = fieldId;
+    configureFieldControls();
     dom.forceFieldNote.textContent = FIELD_TYPES[fieldId].note;
     for (const block of dom.fieldFormulaBlocks) {
       block.hidden = block.dataset.forceField !== fieldId;
@@ -1595,6 +1639,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   }
 
   function setControlsFromParameters() {
+    configureFieldControls();
     dom.forceField.value = state.parameters.fieldId || "cellular";
     dom.mass.value = String(state.parameters.mass);
     dom.forceScale.value = String(state.parameters.forceScale);
@@ -1669,7 +1714,22 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
   function installInteractions() {
     dom.forceField.addEventListener("change", () => {
-      state.parameters.fieldId = dom.forceField.value;
+      const previousField = state.parameters.fieldId;
+      const nextField = dom.forceField.value;
+      if (nextField === "gravity" && previousField !== "gravity") {
+        state.nonGravitySettings = {
+          forceScale: state.parameters.forceScale,
+          duration: state.parameters.duration
+        };
+        state.parameters.forceScale = 9.81;
+        state.parameters.duration = 1.2;
+      } else if (previousField === "gravity" && nextField !== "gravity") {
+        const previousSettings = state.nonGravitySettings || { forceScale: 1, duration: 15 * PI };
+        state.parameters.forceScale = previousSettings.forceScale;
+        state.parameters.duration = previousSettings.duration;
+      }
+      state.parameters.fieldId = nextField;
+      setControlsFromParameters();
       markCustom();
       state.view = { centerX: PI, centerY: 1.5 * PI, zoom: 1 };
       recompute();
