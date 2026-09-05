@@ -25,3 +25,19 @@ Les symboles, valeurs et unités mathématiques sont composés en LaTeX avec Mat
 - `qr-codes/` : QR codes en PNG et SVG.
 
 Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/MathJax-LICENSE.txt`.
+
+## Présentation commune
+
+Les trois applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
+
+Pour reconstruire les trois applications à partir de leurs archives sources après une modification du thème :
+
+```sh
+python3 tools/build_apps.py
+```
+
+Pour reconstruire aussi depuis un dossier source modifié, ajouter `--source nom_application=/chemin/du/dossier` (le nom est le nom du fichier HTML sans extension). Les calculs physiques sont conservés lors de l’harmonisation graphique.
+
+## Sauvegarde avant harmonisation
+
+La [sauvegarde datée du 5 septembre 2026](backups/PHYS1985-avant-harmonisation-2026-09-05.zip) contient toutes les anciennes versions HTML et sources ainsi que les QR codes. Voir les [instructions de restauration](backups/README.md).
