@@ -501,18 +501,19 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
         <div class="paired-controls">
           <div>
-            <label class="field-label compact" for="vx-slider">Vitesse initiale \(v_{Ax}\)</label>
-            <input id="vx-slider" type="range" min="-0.5" max="0.5" value="0.2" step="0.01" />
-            <output id="vx-output" class="dynamic-math-output" aria-label="Composante horizontale de la vitesse initiale">
-              <span id="vx-output-digits" class="math-digits">0.20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
+            <label class="field-label compact" for="initial-speed-slider">Module de la vitesse initiale \(\lVert\vec v_A\rVert\)</label>
+            <input id="initial-speed-slider" type="range" min="0" max="0.75" value="0.2828427125" step="0.01" />
+            <output id="initial-speed-output" class="dynamic-math-output" aria-label="Module de la vitesse initiale">
+              <span id="initial-speed-output-digits" class="math-digits">0.28</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
             </output>
           </div>
           <div>
-            <label class="field-label compact" for="vy-slider">Vitesse initiale \(v_{Ay}\)</label>
-            <input id="vy-slider" type="range" min="-0.5" max="0.5" value="-0.2" step="0.01" />
-            <output id="vy-output" class="dynamic-math-output" aria-label="Composante verticale de la vitesse initiale">
-              <span id="vy-output-digits" class="math-digits">−0.20</span><span class="tex-math">\(\,\mathrm{m\,s^{-1}}\)</span>
+            <label class="field-label compact" for="initial-angle-slider">Angle initial \(\alpha_A\)</label>
+            <input id="initial-angle-slider" type="range" min="-180" max="180" value="-45" step="1" />
+            <output id="initial-angle-output" class="dynamic-math-output" aria-label="Angle initial mesuré depuis l’axe horizontal positif">
+              <span id="initial-angle-output-digits" class="math-digits">−45.00</span><span class="tex-math">\(^{\circ}\)</span>
             </output>
+            <span class="microcopy">mesuré depuis \(+x\)</span>
           </div>
         </div>
 
@@ -759,8 +760,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
-      vx0: 0.2,
-      vy0: -0.2,
+      speed0: Math.SQRT2 * 0.2,
+      angle0: -45,
       duration: 15 * PI,
       note: "Avec le champ tourbillonnaire, le travail total est positif et la particule arrive plus rapide."
     },
@@ -768,8 +769,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
-      vx0: 0.2,
-      vy0: -0.2,
+      speed0: Math.SQRT2 * 0.2,
+      angle0: -45,
       duration: 36.6022792668,
       note: "Les aires positive et négative se compensent : la vitesse finale a la même norme qu’au départ."
     },
@@ -777,8 +778,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       fieldId: "cellular",
       mass: 20,
       forceScale: 1,
-      vx0: 0.2,
-      vy0: -0.2,
+      speed0: Math.SQRT2 * 0.2,
+      angle0: -45,
       duration: 7 * PI,
       note: "Le travail total est négatif : l’énergie cinétique finale est inférieure à l’énergie initiale."
     }
@@ -813,8 +814,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     forceStrengthLabel: document.getElementById("force-strength-label"),
     mass: document.getElementById("mass-slider"),
     forceScale: document.getElementById("force-slider"),
-    vx: document.getElementById("vx-slider"),
-    vy: document.getElementById("vy-slider"),
+    initialSpeed: document.getElementById("initial-speed-slider"),
+    initialAngle: document.getElementById("initial-angle-slider"),
     duration: document.getElementById("duration-slider"),
     massOutput: document.getElementById("mass-output-digits"),
     forceOutput: document.getElementById("force-output-digits"),
@@ -823,8 +824,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     forceUnitGravity: document.getElementById("force-unit-gravity"),
     forceSymbolF0: document.getElementById("force-symbol-f0"),
     forceSymbolG: document.getElementById("force-symbol-g"),
-    vxOutput: document.getElementById("vx-output-digits"),
-    vyOutput: document.getElementById("vy-output-digits"),
+    initialSpeedOutput: document.getElementById("initial-speed-output-digits"),
+    initialAngleOutput: document.getElementById("initial-angle-output-digits"),
     durationOutput: document.getElementById("duration-output-digits"),
     play: document.getElementById("play-button"),
     reset: document.getElementById("reset-button"),
@@ -993,7 +994,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     const work = new Float64Array(count + 1);
     const kinetic = new Float64Array(count + 1);
 
-    let vector = [INITIAL_POSITION.x, INITIAL_POSITION.y, parameters.vx0, parameters.vy0];
+    const initialAngleRadians = parameters.angle0 * PI / 180;
+    let vector = [
+      INITIAL_POSITION.x,
+      INITIAL_POSITION.y,
+      parameters.speed0 * Math.cos(initialAngleRadians),
+      parameters.speed0 * Math.sin(initialAngleRadians)
+    ];
     const record = (index) => {
       t[index] = index * dt;
       const field = forceAt(vector[0], vector[1], t[index], parameters);
@@ -1580,8 +1587,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   function updateParameterOutputs() {
     setMathDigits(dom.massOutput, number2.format(state.parameters.mass));
     setMathDigits(dom.forceOutput, number2.format(state.parameters.forceScale));
-    setMathDigits(dom.vxOutput, number2.format(state.parameters.vx0));
-    setMathDigits(dom.vyOutput, number2.format(state.parameters.vy0));
+    setMathDigits(dom.initialSpeedOutput, number2.format(state.parameters.speed0));
+    setMathDigits(dom.initialAngleOutput, number2.format(state.parameters.angle0));
     setMathDigits(dom.durationOutput, number2.format(state.parameters.duration));
   }
 
@@ -1643,8 +1650,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     dom.forceField.value = state.parameters.fieldId || "cellular";
     dom.mass.value = String(state.parameters.mass);
     dom.forceScale.value = String(state.parameters.forceScale);
-    dom.vx.value = String(state.parameters.vx0);
-    dom.vy.value = String(state.parameters.vy0);
+    dom.initialSpeed.value = String(state.parameters.speed0);
+    dom.initialAngle.value = String(state.parameters.angle0);
     dom.duration.value = String(state.parameters.duration);
   }
 
@@ -1737,8 +1744,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     dom.scenario.addEventListener("change", () => applyPreset(dom.scenario.value));
     bindParameter(dom.mass, "mass");
     bindParameter(dom.forceScale, "forceScale");
-    bindParameter(dom.vx, "vx0");
-    bindParameter(dom.vy, "vy0");
+    bindParameter(dom.initialSpeed, "speed0");
+    bindParameter(dom.initialAngle, "angle0");
     bindParameter(dom.duration, "duration");
 
     dom.play.addEventListener("click", () => {
