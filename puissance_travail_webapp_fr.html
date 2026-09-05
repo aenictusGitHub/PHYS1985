@@ -486,6 +486,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <option value="central">Attraction centrale — conservatif</option>
           <option value="vortex">Tourbillon central — rotation spatiale</option>
           <option value="rotating">Champ tournant — dépendant du temps</option>
+          <option value="traveling">Tourbillons mobiles — espace et temps</option>
           <option value="gravity">Pesanteur uniforme</option>
         </select>
         <p id="force-field-note" class="microcopy block-note">Champ de force périodique non conservatif.</p>
@@ -632,6 +633,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <div class="field-formula" data-force-field="rotating" hidden>
             <p>\[\vec{F}(t)=F_0\!\left(\cos(\omega_0 t),\,\sin(\omega_0 t)\right)\]</p>
             <p class="equation-note">Champ uniforme tournant, explicitement dépendant du temps, avec \(\omega_0=\frac{2\pi}{10\,\mathrm s}\).</p>
+          </div>
+          <div class="field-formula" data-force-field="traveling" hidden>
+            <p>\[\vec{F}(x,y,t)=F_0\!\left(\sin\!\left(\frac{x}{L_0}-\omega_0t\right)\cos\frac{y}{L_0},\,-\cos\!\left(\frac{x}{L_0}-\omega_0t\right)\sin\frac{y}{L_0}\right)\]</p>
+            <p class="equation-note">Champ non uniforme dont les tourbillons se déplacent avec le temps; la figure montre sa configuration à l’instant courant \(t\).</p>
           </div>
           <div class="field-formula" data-force-field="gravity" hidden>
             <p>\[\vec{F}=-mg\,\vec e_z,\qquad U_g(z)=mgz\]</p>
@@ -780,6 +785,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     },
     rotating: {
       note: "Champ uniforme tournant et explicitement dépendant du temps.",
+      maxMagnitudeFactor: 1
+    },
+    traveling: {
+      note: "Champ non uniforme dont les tourbillons se déplacent avec le temps.",
       maxMagnitudeFactor: 1
     },
     gravity: {
@@ -992,6 +1001,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       return {
         x: amplitude * Math.cos(ROTATING_FIELD_OMEGA * time),
         y: amplitude * Math.sin(ROTATING_FIELD_OMEGA * time)
+      };
+    }
+    if (fieldId === "traveling") {
+      const phase = x - ROTATING_FIELD_OMEGA * time;
+      return {
+        x: amplitude * Math.sin(phase) * Math.cos(y),
+        y: -amplitude * Math.cos(phase) * Math.sin(y)
       };
     }
     if (fieldId === "gravity") {

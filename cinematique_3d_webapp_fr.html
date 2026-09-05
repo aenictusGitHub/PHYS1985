@@ -717,8 +717,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   const BASE_CAMERA_DISTANCE = 13800;
   const ZOOM_AXIS_STEP_DISTANCE = 3500;
   const ARROW = Object.freeze({
-    shaftRadiusWorld: 15,
-    headRadiusWorld: 50,
+    shaftRadiusWorld: 19,
+    headRadiusWorld: 55,
     headLengthWorld: 120,
     positionShorteningWorld: 150,
   });
@@ -1775,7 +1775,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     if (!origin || !shaftEnd || !headTip || !headBasePlus || !headBaseMinus) return;
 
     const shaftWidth = Math.max(
-      1.6,
+      2,
       projectedSeparation(
         sub(shaftMidWorld, shaftSide),
         add(shaftMidWorld, shaftSide),
