@@ -29,6 +29,80 @@ for (const p of [oscillator, {m: .2, k: 20, x0: -2, v0: 4}, {m: 5, k: .5, x0: 2,
   near(sim.at(3.4567).E, E, 1e-11, 'oscillator continuous time');
 }
 const pendulum = {m1: 1, m2: 1, l1: 1.2, l2: 1, theta1: 120, theta2: -30, omega1: 0, omega2: 0, g: 9.81};
+const simple = {m: 1, l: 1.2, theta0: 15, omega0: 0, g: 9.81};
+const simpleCases = [simple, {...simple, theta0: 120}, {...simple, theta0: 0, omega0: 7},
+  {...simple, theta0: 0}, {...simple, m: .2, l: .5, g: 20, theta0: 170, omega0: -8},
+  {...simple, m: 5, l: 2.5, g: .5, theta0: -170, omega0: 8}];
+for (const [i, p] of simpleCases.entries()) {
+  const sim = EnergyModels.simulate('simple-pendulum', p, 60), E0 = sim.samples[0].E;
+  assert(sim.maxError < 1e-7 * Math.max(1, E0), 'simple pendulum energy conservation');
+  for (const s of sim.samples) {
+    near(Math.hypot(s.x, s.z), p.l, 1e-12, 'simple pendulum rigid rod');
+    near(s.K, .5*p.m*p.l*p.l*s.omega*s.omega, 1e-10, 'simple kinetic energy');
+    near(s.U, p.m*p.g*(s.z+p.l), 1e-10, 'gravitational potential from height');
+    assert(s.K >= 0 && s.U >= 0, 'nonnegative pendulum energies');
+  }
+  for (const t of [0, .0034, 1.2345, 26.54321, 59.999, 60]) near(sim.at(t).E, E0, 1e-7*Math.max(1,E0), 'simple off-grid conservation');
+  if (i === 2) assert(sim.at(10).theta > 2*Math.PI && sim.samples.every(s => s.omega > 0), 'rotations are not folded or stopped');
+  if (i === 3) assert(sim.samples.every(s => s.E === 0 && s.y.every(v => v === 0)), 'simple exact rest');
+}
+// Small-angle limit and the amplitude-dependent period of the full equation.
+const smallAngle = EnergyModels.simulate('simple-pendulum', {...simple, theta0: .01}, 5);
+const halfPeriod = Math.PI * Math.sqrt(simple.l/simple.g);
+near(smallAngle.at(halfPeriod).theta, -.01*Math.PI/180, 1e-10, 'small-angle half period');
+const largeAngle = EnergyModels.simulate('simple-pendulum', {...simple, theta0: 120}, 5);
+assert(largeAngle.at(halfPeriod).theta > -119*Math.PI/180, 'large oscillation is not linearized');
+for (const gamma of [0,.7]) {
+  const p = {...simple, gamma}, y = [1.3,-2.7,0], d = EnergyModels.simplePendulumRhs(p,y), h = 1e-6;
+  const sample = EnergyModels.simplePendulum(p,y,0);
+  const a = EnergyModels.simplePendulum(p,y.map((v,i) => v+h*d[i]),0).E;
+  const b = EnergyModels.simplePendulum(p,y.map((v,i) => v-h*d[i]),0).E;
+  near((a-b)/(2*h), -2*gamma*sample.K, 1e-7, 'simple instantaneous energy balance');
+  near(d[2], 2*gamma*sample.K, 1e-10, 'simple independently integrated dissipation');
+}
+console.log('Simple pendulum: small-angle limit, nonlinear oscillations, full rotations, rigid rod, energy, dissipation and off-grid scrubbing passed.');
+const gravity = {m1: 1e12, m2: 1e12, r0: 10, speedRatio: 1};
+let gravityError = 0;
+for (const p of [gravity, {...gravity, speedRatio: .65}, {...gravity, m1: 5e12, m2: .2e12},
+  {...gravity, speedRatio: 1.6}, {...gravity, m1: 5e12, m2: 5e12, r0: 6, speedRatio: .5},
+  {...gravity, m1: .2e12, m2: .2e12, r0: 20, speedRatio: 1.8}]) {
+  const sim = EnergyModels.simulate('gravity', p, 60), initial = sim.samples[0];
+  const reference = initial.K + Math.abs(initial.U), totalMass = p.m1 + p.m2;
+  const angular0 = initial.y[0]*initial.y[3] - initial.y[1]*initial.y[2];
+  const error = sim.maxError/reference; gravityError = Math.max(gravityError,error);
+  assert(error < 1e-7, 'two-body energy conservation');
+  for (const s of sim.samples) {
+    assert(s.U < 0 && s.K > 0 && s.D === 0 && s.r > 0, 'correct signed gravitational energies');
+    near(s.parts.reduce((a,b)=>a+b,0), s.E, reference*1e-14, 'pair potential counted once');
+    near((p.m1*s.x1+p.m2*s.x2)/totalMass, 0, 1e-12, 'fixed barycenter x');
+    near((p.m1*s.z1+p.m2*s.z2)/totalMass, 0, 1e-12, 'fixed barycenter z');
+    near(Math.hypot(s.x2-s.x1,s.z2-s.z1), s.r, 1e-10, 'relative separation');
+    near(s.y[0]*s.y[3]-s.y[1]*s.y[2], angular0, 1e-7*Math.abs(angular0), 'angular momentum conservation');
+    near(s.U, -EnergyModels.G*p.m1*p.m2/s.r, reference*1e-14, 'unsoftened Newtonian potential');
+  }
+  for (const t of [.0034,1.2345,26.54321,59.999,60]) near(sim.at(t).E,initial.E,reference*1e-7,'gravitational off-grid energy');
+  const q2 = p.speedRatio*p.speedRatio, semiMajor = p.r0/(2-q2);
+  if (q2 < 2) assert(initial.E < 0, 'bound orbits have negative energy');
+  else assert(initial.E > 0 && sim.at(60).r > p.r0*2, 'unbound orbit escapes');
+  if (p.speedRatio === 1) {
+    const period = 2*Math.PI*Math.sqrt(p.r0**3/(EnergyModels.G*totalMass));
+    near(sim.at(period/4).y[0], 0, 1e-7, 'circular quarter-period phase');
+    near(sim.at(period/4).y[1], p.r0, 1e-7, 'circular quarter-period radius');
+    near(sim.at(period).y[0], p.r0, 1e-7, 'closed Kepler circle');
+    for (const s of sim.samples) near(s.r,p.r0,1e-7,'constant circle separation');
+  } else if (q2 < 1) {
+    const period = 2*Math.PI*Math.sqrt(semiMajor**3/(EnergyModels.G*totalMass));
+    near(sim.at(period/2).r, p.r0*q2/(2-q2), 1e-7, 'elliptical periapsis');
+  }
+}
+for (const y of [[10,3,.5,2],[-4,5,-3,1]]) {
+  const d = EnergyModels.gravityRhs(gravity,y), mu = EnergyModels.G*(gravity.m1+gravity.m2), r = Math.hypot(y[0],y[1]);
+  near(Math.hypot(d[2],d[3]),mu/r**2,1e-12,'inverse-square attraction');
+  const gradDot = EnergyModels.G*gravity.m1*gravity.m2*(y[0]*y[2]+y[1]*y[3])/r**3;
+  const reducedMass = gravity.m1*gravity.m2/(gravity.m1+gravity.m2);
+  near(reducedMass*(y[2]*d[2]+y[3]*d[3])+gradDot,0,.001,'instantaneous gravitational energy balance');
+}
+console.log('Universal gravitation: circular and elliptical Kepler references, escape, signed energy, fixed barycenter, angular momentum and inverse-square force passed. Maximum relative energy error: '+gravityError);
 let maxRelative = 0;
 const cases = [
   pendulum,
@@ -75,6 +149,7 @@ for (const [model, parameters] of [
   ['oscillator', oscillator], ['oscillator', {m: .2, k: 20, x0: -2, v0: 4}],
   ['oscillator', {...oscillator, x0: 0, v0: 0}],
   ['pendulum', pendulum], ['pendulum', cases[4]], ['pendulum', cases[3]],
+  ...simpleCases.map(p => ['simple-pendulum', p]),
 ]) {
   for (const gamma of [.01, .25, 2]) {
     const p = {...parameters, gamma}, sim = EnergyModels.simulate(model, p, 60);

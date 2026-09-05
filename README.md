@@ -9,7 +9,7 @@ Les deux animations de cinématique proposent aussi l’à-coup : un vecteur sé
 - [Cinématique 2D](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html)
 - [Cinématique 3D](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html)
 - [Travail et puissance](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html)
-- [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) : oscillateur harmonique et pendule double.
+- [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) : oscillateur harmonique, pendules simple et double, deux corps gravitationnels.
 
 ## QR codes
 
@@ -50,12 +50,14 @@ L’option `--app nom_application` limite la reconstruction à une application; 
 Cette nouvelle application s’inspire des échanges d’énergie présentés dans les vidéos `oscillations_harmoniques.mp4` et `Energie_pendule_double.mp4`. Les dessins et calculs sont réalisés dans l’application ; les vidéos ne sont pas redistribuées.
 
 - Oscillateur : solution analytique, masse, raideur, position et vitesse initiales réglables ; parabole du potentiel et segment représentant l’énergie cinétique.
+- Pendule simple : équation complète aux grands angles, masse, longueur, angle et vitesse angulaire initiaux et pesanteur réglables ; petites et grandes oscillations, rotations complètes, hauteur et angle affichés. Tige idéale rigide sans masse, potentiel nul au point le plus bas.
 - Pendule double : masses, longueurs, angles, vitesses angulaires initiales et pesanteur réglables ; tiges idéales sans masse. Chaque potentiel est référencé à la hauteur minimale accessible à sa masse.
-- Option « Avec frottements » pour les deux systèmes : force visqueuse proportionnelle à la vitesse, amortissement réglable, énergie dissipée en gris et vérification du bilan entre énergie mécanique restante et énergie transférée au milieu.
+- Deux corps gravitationnels : attraction newtonienne mutuelle, centre de masse fixe, masses, séparation et vitesse relative initiales réglables ; orbites circulaires, elliptiques, masses inégales et échappement. Potentiel de la paire négatif et nul à l’infini ; affichage signé des énergies avec facteurs d’échelle explicites. Ce système est isolé, sans frottement.
+- Option « Avec frottements » pour les trois systèmes : force visqueuse proportionnelle à la vitesse, amortissement réglable, énergie dissipée en gris et vérification du bilan entre énergie mécanique restante et énergie transférée au milieu.
 - Diagramme de répartition, énergies empilées ou courbes séparées, détail par masse, lecture/pause, vitesse de lecture, durée et choix de l’instant par curseur, graphique ou clavier.
-- Calcul du pendule et de l’oscillateur amorti par Runge–Kutta avec contrôle adaptatif du pas et correction de Richardson, sans renormaliser l’énergie. L’énergie dissipée est intégrée indépendamment. L’écart numérique réel du bilan énergétique est affiché, arrondi à zéro sous la résolution d’affichage.
+- Calcul des pendules, des deux corps gravitationnels et de l’oscillateur amorti par Runge–Kutta avec contrôle adaptatif du pas et correction de Richardson, sans renormaliser l’énergie. L’énergie dissipée est intégrée indépendamment. L’écart numérique réel du bilan énergétique est affiché, arrondi à zéro sous la résolution d’affichage.
 
-Tests analytiques, conservation, contraintes des tiges, équilibre et navigation temporelle : `python3 tools/check_energy.py`. La variable optionnelle `PHYS1985_NODE` permet de spécifier le chemin de Node.js.
+Tests analytiques, références orbitales de Kepler, énergie et moment cinétique, contraintes des tiges, équilibre et navigation temporelle : `python3 tools/check_energy.py`. La variable optionnelle `PHYS1985_NODE` permet de spécifier le chemin de Node.js.
 
 Tests unitaires des commandes (avec un adaptateur DOM/canvas minimal, sans navigateur) : `node tools/check_energy_ui.cjs`.
 

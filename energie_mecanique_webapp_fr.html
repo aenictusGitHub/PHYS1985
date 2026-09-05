@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Explorez les échanges d’énergie de l’oscillateur harmonique et du pendule double. Animation interactive PHYS1985." />
+  <meta name="description" content="Explorez les échanges d’énergie : oscillateur harmonique, pendules simple et double, deux corps en interaction gravitationnelle. Animation interactive PHYS1985." />
   <title>Énergie mécanique — PHYS1985</title>
   <style>
 * { box-sizing: border-box; }
@@ -55,6 +55,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .energy-meter { width: 3.5rem; height: 230px; flex-shrink: 0; display: flex; align-items: flex-end; border: 1px solid var(--line); border-radius: .4rem; overflow: hidden; background: #f1f4f7; }
 #energy-stack { display: flex; flex-direction: column-reverse; width: 100%; height: 100%; }
 .energy-segment { width: 100%; min-height: 0; }
+.energy-meter[data-signed="true"] { position: relative; }
+.energy-meter[data-signed="true"] #energy-stack { display: block; position: relative; }
+.energy-meter[data-signed="true"] .energy-segment { position: absolute; left: 0; }
+.energy-meter[data-signed="true"]::after { content: ''; position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid var(--ink); pointer-events: none; }
 #energy-key { min-width: 0; display: grid; gap: .9rem; }
 .key-row { display: grid; grid-template-columns: .6rem minmax(0, 1fr); column-gap: .5rem; align-items: center; font-size: var(--text-value); }
 .key-row .key-value { grid-column: 2; margin-top: .15rem; }
@@ -488,6 +492,7 @@ canvas { display: block; width: 100%; height: 100%; }
 /* Pure physical models. Angles are measured from the downward vertical. */
 const EnergyModels = (() => {
   'use strict';
+  const G = 6.67430e-11;
   function oscillator(p, t) {
     const omega = Math.sqrt(p.k / p.m);
     const x = p.x0 * Math.cos(omega * t) + p.v0 / omega * Math.sin(omega * t);
@@ -502,6 +507,32 @@ const EnergyModels = (() => {
   function oscillatorRhs(p, y) {
     const [x, v] = y, gamma = p.gamma || 0;
     return [v, -p.k / p.m * x - gamma * v, gamma * p.m * v * v];
+  }
+  function simplePendulum(p, y, t) {
+    const [theta, omega, D = 0] = y;
+    const x = p.l * Math.sin(theta), z = -p.l * Math.cos(theta);
+    const K = .5 * p.m * p.l ** 2 * omega ** 2;
+    // Half-angle form avoids cancellation near the lowest point.
+    const U = 2 * p.m * p.g * p.l * Math.sin(theta / 2) ** 2;
+    return {t, y, theta, omega, x, z, K, U, D, E: K + U, parts: [K, U]};
+  }
+  function simplePendulumRhs(p, y) {
+    const [theta, omega] = y, gamma = p.gamma || 0;
+    return [omega, -p.g / p.l * Math.sin(theta) - gamma * omega,
+      gamma * p.m * p.l ** 2 * omega ** 2];
+  }
+  function gravity(p, y, t) {
+    const [x, z, vx, vz] = y, r = Math.hypot(x, z), total = p.m1 + p.m2;
+    const f1 = p.m2 / total, f2 = p.m1 / total, speed2 = vx * vx + vz * vz;
+    const K1 = .5 * p.m1 * f1 ** 2 * speed2, K2 = .5 * p.m2 * f2 ** 2 * speed2;
+    const U = -G * p.m1 * p.m2 / r;
+    return {t, y, r, x1: -f1*x, z1: -f1*z, x2: f2*x, z2: f2*z,
+      K: K1 + K2, U, D: 0, E: K1 + K2 + U, parts: [K1, K2, U]};
+  }
+  function gravityRhs(p, y) {
+    const [x, z, vx, vz] = y, r = Math.hypot(x, z);
+    const factor = -G * (p.m1 + p.m2) / r ** 3;
+    return [vx, vz, factor * x, factor * z];
   }
   function rhs(p, y) {
     const [a, b, u, v] = y, delta = a - b;
@@ -541,9 +572,12 @@ const EnergyModels = (() => {
       for (let i = 0; i <= count; i++) samples.push(oscillator(p, i / 60));
       return {samples, at: t => oscillator(p, t), maxError: 0};
     }
-    const evaluate = model === 'oscillator' ? oscillatorState : pendulum;
-    const derivative = model === 'oscillator' ? oscillatorRhs : rhs;
-    let y = model === 'oscillator' ? [p.x0, p.v0, 0] : [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2, 0];
+    const evaluate = {oscillator: oscillatorState, 'simple-pendulum': simplePendulum, gravity, pendulum}[model];
+    const derivative = {oscillator: oscillatorRhs, 'simple-pendulum': simplePendulumRhs, gravity: gravityRhs, pendulum: rhs}[model];
+    let y = model === 'oscillator' ? [p.x0, p.v0, 0]
+      : model === 'simple-pendulum' ? [p.theta0 * Math.PI / 180, p.omega0, 0]
+      : model === 'gravity' ? [p.r0, 0, 0, p.speedRatio * Math.sqrt(G * (p.m1 + p.m2) / p.r0)]
+      : [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2, 0];
     const advance = (initial, dt) => {
       // Step doubling controls local error even for extreme mass ratios. The
       // Richardson correction raises accuracy without forcing energy to match.
@@ -579,7 +613,7 @@ const EnergyModels = (() => {
       return evaluate(p, advance(base.y, bounded - base.t), bounded);
     }};
   }
-  return {oscillator, oscillatorState, oscillatorRhs, rhs, step, pendulum, simulate};
+  return {G, oscillator, oscillatorState, oscillatorRhs, simplePendulum, simplePendulumRhs, gravity, gravityRhs, rhs, step, pendulum, simulate};
 })();
 
 // A projected helix: fixed turn count, smoothly changing pitch, straight leads.
@@ -630,6 +664,50 @@ async function startEnergyApp() {
         equations: [tex`U=\frac12 kx^2`, tex`K=\frac12 mv_x^2`, tex`E=K+U=\mathrm{constante}`, tex`\omega=\sqrt{\frac{k}{m}},\quad T=\frac{2\pi}{\omega}`, tex`x(t)=x_0\cos\omega t+\frac{v_{x0}}{\omega}\sin\omega t`],
         reference: 'L’origine de l’énergie potentielle est la position d’équilibre du ressort. Le mouvement est horizontal.',
       },
+      'simple-pendulum': {
+        title: 'Pendule simple',
+        note: 'Une masse oscille au bout d’une tige. L’énergie potentielle se transforme en énergie cinétique pendant la descente, puis l’inverse pendant la remontée.',
+        defaults: {m: 1, l: 1.2, theta0: 15, omega0: 0, g: 9.81},
+        fields: [
+          ['m', 'Masse', 'm', .2, 5, .1, tex`\mathrm{kg}`],
+          ['l', 'Longueur', tex`\ell`, .5, 2.5, .05, tex`\mathrm m`],
+          ['theta0', 'Angle initial', tex`\theta_0`, -170, 170, 1, tex`{}^\circ`],
+          ['omega0', 'Vitesse angulaire initiale', tex`\dot\theta_0`, -8, 8, .1, tex`\mathrm{rad\,s^{-1}}`],
+          ['g', 'Pesanteur', 'g', .5, 20, .01, tex`\mathrm{m\,s^{-2}}`],
+        ],
+        examples: [
+          ['Petites oscillations', {}],
+          ['Grandes oscillations', {theta0: 120}],
+          ['Rotations complètes', {theta0: 0, omega0: 7}],
+          ['Au repos à l’équilibre', {theta0: 0, omega0: 0}],
+        ],
+        equations: [tex`U=mg\ell(1-\cos\theta)=mgh`, tex`K=\frac12 m\ell^2\dot\theta^2`, tex`E=K+U=\mathrm{constante}`, tex`\ddot\theta+\frac{g}{\ell}\sin\theta=0`, tex`T\simeq 2\pi\sqrt{\frac{\ell}{g}}\quad(\lvert\theta\rvert\ll1)`],
+        reference: 'Tige rigide, sans masse, pivot fixe. Le potentiel est nul au point le plus bas. L’angle est mesuré depuis la verticale descendante et affiché modulo un tour. L’équation complète est utilisée, sans approximation des petites oscillations.',
+      },
+      gravity: {
+        title: 'Deux corps gravitationnels',
+        note: 'Deux masses s’attirent suivant la loi de gravitation universelle et se déplacent autour de leur centre de masse. L’énergie potentielle de la paire est négative, avec son zéro à l’infini.',
+        defaults: {m1: 1e12, m2: 1e12, r0: 10, speedRatio: 1},
+        energyScale: 1e12, energyUnit: tex`10^{12}\,\mathrm J`,
+        fields: [
+          ['m1', 'Premier corps', 'm_1', .2e12, 5e12, .1e12, tex`\times10^{12}\,\mathrm{kg}`, 1e12],
+          ['m2', 'Deuxième corps', 'm_2', .2e12, 5e12, .1e12, tex`\times10^{12}\,\mathrm{kg}`, 1e12],
+          ['r0', 'Séparation initiale', 'r_0', 6, 20, .1, tex`\mathrm m`],
+          ['speedRatio', 'Vitesse relative initiale', tex`v_0/v_{\mathrm{circ}}`, .5, 1.8, .01, ''],
+        ],
+        examples: [
+          ['Orbites circulaires — masses égales', {}],
+          ['Orbites elliptiques', {speedRatio: .65}],
+          ['Un corps plus massif', {m1: 5e12, m2: .2e12}],
+          ['Trajectoires d’échappement', {speedRatio: 1.6}],
+        ],
+        equations: [tex`\vec F_{1\leftarrow2}=Gm_1m_2\frac{\vec r_2-\vec r_1}{r^3}=-\vec F_{2\leftarrow1}`,
+          tex`r=\lvert\vec r_2-\vec r_1\rvert,\quad U=-\frac{Gm_1m_2}{r}`,
+          tex`K=\frac12m_1\lvert\vec v_1\rvert^2+\frac12m_2\lvert\vec v_2\rvert^2`,
+          tex`E=K+U=\mathrm{constante}`, tex`v_{\mathrm{circ}}=\sqrt{\frac{G(m_1+m_2)}{r_0}}`,
+          tex`G=6.67430\times10^{-11}\,\mathrm{m^3\,kg^{-1}\,s^{-2}}`],
+        reference: 'Masses ponctuelles, sans collision ni frottement ; leur taille dessinée est symbolique. Le centre de masse est immobile. La vitesse relative initiale est perpendiculaire à la séparation. Le potentiel appartient à la paire et n’est compté qu’une fois. Les facteurs d’échelle des masses et des énergies sont indiqués dans les unités.',
+      },
       pendulum: {
         title: 'Pendule double',
         note: 'Deux masses échangent de l’énergie par les tiges. Le mouvement peut être complexe, mais l’énergie mécanique totale reste constante.',
@@ -657,6 +735,9 @@ async function startEnergyApp() {
     };
     const state = {model: 'oscillator', p: {}, t: 0, duration: 30, playing: false, simulation: null, last: null, frame: 0, dirty: false, readoutTime: -1};
     const glyphs = new Map(), units = new Map();
+    function energyValue(value) { return value / (DEFINITIONS[state.model].energyScale || 1); }
+    function energyUnit() { return DEFINITIONS[state.model].energyUnit || tex`\mathrm J`; }
+    function energyReadoutUnit() { return (DEFINITIONS[state.model].energyScale ? tex`\times` : '') + energyUnit(); }
     function math(el, value) {
       if (el.dataset.math === value) return;
       el.replaceChildren(MathJax.tex2svg(value, {display: false}));
@@ -693,6 +774,10 @@ async function startEnergyApp() {
         {symbol: 'U_1', value: sample.parts[1], color: COLORS.U},
         {symbol: 'K_2', value: sample.parts[2], color: COLORS.K2},
         {symbol: 'U_2', value: sample.parts[3], color: COLORS.U2},
+      ] : state.model === 'gravity' && $('detail').checked ? [
+        {symbol: 'K_1', value: sample.parts[0], color: COLORS.K},
+        {symbol: 'K_2', value: sample.parts[1], color: COLORS.K2},
+        {symbol: 'U', value: sample.U, color: COLORS.U},
       ] : [{symbol: 'K', value: sample.K, color: COLORS.K}, {symbol: 'U', value: sample.U, color: COLORS.U}];
       if (state.p.gamma > 0) parts.push({symbol: tex`E_{\mathrm{diss}}`, value: sample.D, color: COLORS.D});
       return parts;
@@ -709,7 +794,7 @@ async function startEnergyApp() {
     function makeParameters() {
       const definition = DEFINITIONS[state.model];
       $('parameters').replaceChildren();
-      for (const [key, title, symbol, min, max, step, unit] of definition.fields) {
+      for (const [key, title, symbol, min, max, step, unit, displayScale = 1] of definition.fields) {
         const root = document.createElement('div'); root.className = 'parameter';
         const row = document.createElement('div'); row.className = 'parameter-title';
         const label = document.createElement('label'); label.className = 'field-label'; label.htmlFor = `param-${key}`;
@@ -719,10 +804,10 @@ async function startEnergyApp() {
         const input = document.createElement('input'); input.type = 'range'; input.id = `param-${key}`;
         Object.assign(input, {min, max, step, value: state.p[key]});
         input.addEventListener('input', () => {
-          state.p[key] = Number(input.value); number(output, state.p[key], key.startsWith('theta') ? 0 : 2, unit);
+          state.p[key] = Number(input.value); number(output, state.p[key] / displayScale, key.startsWith('theta') ? 0 : 2, unit);
           $('example-select').value = 'custom'; scheduleRebuild();
         });
-        root.append(input, output); number(output, state.p[key], key.startsWith('theta') ? 0 : 2, unit);
+        root.append(input, output); number(output, state.p[key] / displayScale, key.startsWith('theta') ? 0 : 2, unit);
         $('parameters').append(root);
       }
     }
@@ -737,19 +822,22 @@ async function startEnergyApp() {
       $('scene-title').textContent = definition.title;
       $('example-select').replaceChildren(...definition.examples.map(([label], i) => new Option(label, String(i))));
       const custom = new Option('Réglage personnalisé', 'custom'); custom.disabled = true; $('example-select').append(custom);
-      $('detail-row').hidden = $('trail-row').hidden = state.model !== 'pendulum';
-      $('position-badge').hidden = state.model !== 'oscillator';
+      $('detail-row').hidden = !['pendulum', 'gravity'].includes(state.model);
+      $('trail-row').hidden = state.model === 'oscillator';
+      $('position-badge').hidden = state.model === 'pendulum';
+      math($('position-symbol'), state.model === 'simple-pendulum' ? tex`\theta=` : state.model === 'gravity' ? 'r=' : 'x=');
+      $('friction-row').hidden = state.model === 'gravity';
       setExample(0);
     }
     function updateFrictionInterface() {
-      const on = $('friction-toggle').checked, definition = DEFINITIONS[state.model];
+      const on = $('friction-toggle').checked && state.model !== 'gravity', definition = DEFINITIONS[state.model];
       state.p.gamma = on ? Number($('damping-slider').value) : 0;
       $('damping-controls').hidden = !on;
       $('dissipation-card').hidden = !on;
-      $('friction-badge').textContent = on ? 'Avec frottements' : 'Sans frottement';
+      $('friction-badge').textContent = state.model === 'gravity' ? 'Gravitation seule' : on ? 'Avec frottements' : 'Sans frottement';
       number($('damping-readout'), Number($('damping-slider').value), 2, tex`\mathrm{s^{-1}}`);
       $('model-note').textContent = on
-        ? (state.model === 'oscillator' ? 'La force de frottement freine la masse. L’énergie mécanique est progressivement dissipée.' : 'Les deux masses échangent de l’énergie et subissent un frottement. Leur énergie mécanique totale diminue.')
+        ? (state.model === 'pendulum' ? 'Les deux masses échangent de l’énergie et subissent un frottement. Leur énergie mécanique totale diminue.' : 'La force de frottement freine la masse. L’énergie mécanique est progressivement dissipée.')
         : definition.note;
       $('reference-note').textContent = definition.reference;
       $('conservation-note').textContent = on
@@ -759,6 +847,8 @@ async function startEnergyApp() {
       if (on) {
         equations = state.model === 'oscillator'
           ? [tex`U=\frac12 kx^2,\quad K=\frac12 mv_x^2`, tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot x+\gamma\dot x+\frac{k}{m}x=0`]
+          : state.model === 'simple-pendulum'
+          ? [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot\theta+\gamma\dot\theta+\frac{g}{\ell}\sin\theta=0`]
           : [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f,i}=-m_i\gamma\vec v_i`];
         equations = [...equations, tex`E=K+U`, tex`\frac{\mathrm dE}{\mathrm dt}=-2\gamma K`, tex`E_{\mathrm{diss}}=\int_0^t 2\gamma K(\tau)\,\mathrm d\tau`, tex`E+E_{\mathrm{diss}}=E(0)`];
       }
@@ -766,6 +856,7 @@ async function startEnergyApp() {
         const div = document.createElement('div'); div.className = 'equation'; math(div, eq); return div;
       }));
       math($('balance-symbol'), on ? tex`E+E_{\mathrm{diss}}=E(0)` : 'E=K+U');
+      $('balance-intro').textContent = state.model === 'gravity' ? 'Au-dessus de zéro : énergies positives ; au-dessous : négatives. ' : 'La hauteur totale représente ';
       math($('error-symbol'), on ? tex`\Delta E+E_{\mathrm{diss}}` : 'E(t)-E(0)');
     }
     function scheduleRebuild() {
@@ -779,9 +870,15 @@ async function startEnergyApp() {
       state.duration = Number($('duration').value);
       updateFrictionInterface();
       state.simulation = EnergyModels.simulate(state.model, state.p, state.duration);
+      const initial = state.simulation.samples[0];
+      if (state.model === 'gravity') {
+        state.gravityRange = state.simulation.samples.reduce((range, s) => ({
+          min: Math.min(range.min, s.U), max: Math.max(range.max, s.K), radius: Math.max(range.radius, s.r),
+        }), {min: 0, max: 0, radius: state.p.r0});
+      }
       $('time-slider').max = state.duration; $('history').setAttribute('aria-valuemax', state.duration);
       number($('duration-readout'), state.duration, 0, tex`\mathrm s`);
-      $('accuracy-note').textContent = state.simulation.maxError > 1e-5 * Math.max(1, state.simulation.samples[0].E) ? 'écart numérique à surveiller' : 'écart numérique';
+      $('accuracy-note').textContent = state.simulation.maxError > 1e-5 * Math.max(1, initial.K + Math.abs(initial.U)) ? 'écart numérique à surveiller' : 'écart numérique';
       updateKeys(); render();
     }
     function updateKeys() {
@@ -863,6 +960,76 @@ async function startEnergyApp() {
       ctx.fillStyle = COLORS.K; ctx.fillRect(massX - 15, rail - 15, 30, 30);
       label('scene-labels', 'mass', 'm', massX, rail - 29, COLORS.K);
     }
+    function drawSimplePendulum(sample) {
+      const {ctx, w, h} = surface('scene-canvas'), p = state.p;
+      const radius = Math.min((w - 110) / 2, (h - 130) / 2), scale = radius / p.l;
+      const origin = [w / 2 - 10, h / 2 + 8];
+      const point = (x, z) => [origin[0] + scale * x, origin[1] - scale * z];
+      const bob = point(sample.x, sample.z), bottom = origin[1] + radius;
+      const theta = Math.atan2(Math.sin(sample.theta), Math.cos(sample.theta));
+      if ($('trail').checked) {
+        const start = Math.max(0, Math.floor(state.t * 60) - 360), end = Math.floor(state.t * 60);
+        const points = state.simulation.samples.slice(start, end + 1).map(s => point(s.x, s.z)); points.push(bob);
+        line(ctx, points, '#c3d5e1', 1.5);
+      }
+      line(ctx, [[origin[0], origin[1]], [origin[0], bottom]], COLORS.grid, 1, [4, 5]);
+      line(ctx, [[origin[0] - radius - 10, bottom], [origin[0] + radius + 30, bottom]], COLORS.grid, 1);
+      if (bottom - bob[1] > 4) {
+        const hx = origin[0] + radius + 25;
+        line(ctx, [[bob[0], bob[1]], [hx, bob[1]]], COLORS.grid, 1, [3, 4]);
+        line(ctx, [[hx, bob[1]], [hx, bottom]], COLORS.U, 1.5);
+        for (const y of [bob[1], bottom]) line(ctx, [[hx - 4, y], [hx + 4, y]], COLORS.U, 1.5);
+        label('scene-labels', 'height', 'h', hx + 12, (bob[1] + bottom) / 2, COLORS.U);
+      }
+      if (Math.abs(theta) > .05) {
+        const arc = Array.from({length: 41}, (_, i) => {
+          const a = theta * i / 40; return [origin[0] + 26 * Math.sin(a), origin[1] + 26 * Math.cos(a)];
+        });
+        line(ctx, arc, COLORS.muted, 1.25);
+        // Place the symbol outside the sector for very small angles.
+        const labelAngle = Math.sign(theta) * Math.max(Math.abs(theta) / 2, .45);
+        label('scene-labels', 'theta', tex`\theta`, origin[0] + 39 * Math.sin(labelAngle), origin[1] + 39 * Math.cos(labelAngle), COLORS.muted);
+      }
+      line(ctx, [origin, bob], '#778da0', 3);
+      dot(ctx, ...origin, 4, COLORS.ink);
+      dot(ctx, ...bob, 7 + Math.sqrt(p.m) * 3, COLORS.K);
+      label('scene-labels', 'mass', 'm', bob[0] + (sample.x < 0 ? -19 : 19), bob[1] - 15, COLORS.K);
+      label('scene-labels', 'length', tex`\ell`, origin[0] + .62 * (bob[0] - origin[0]) - 13 * Math.cos(theta), origin[1] + .62 * (bob[1] - origin[1]) + 13 * Math.sin(theta), COLORS.muted);
+      label('scene-labels', 'origin', 'O', origin[0] - 14, origin[1] - 12, COLORS.muted);
+      label('scene-labels', 'potential-zero', 'U=0', origin[0] - .65 * radius, bottom + 17, COLORS.U);
+      const gx = w - 27, gy = h - 70;
+      line(ctx, [[gx, gy], [gx, gy + 27]], COLORS.muted, 2);
+      line(ctx, [[gx - 4, gy + 21], [gx, gy + 27], [gx + 4, gy + 21]], COLORS.muted, 2);
+      label('scene-labels', 'gravity', tex`\vec g`, gx - 13, gy + 12, COLORS.muted);
+    }
+    function drawGravity(sample) {
+      const {ctx, w, h} = surface('scene-canvas'), p = state.p;
+      const bound = state.simulation.samples[0].E < 0;
+      const separation = bound ? state.gravityRange.radius : Math.max(p.r0, sample.r);
+      const radius = separation * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
+      const scale = Math.min(w - 95, h - 110) / (2 * radius);
+      const origin = [w / 2, h / 2 + 8], point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
+      const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
+      if ($('trail').checked) {
+        if (bound) {
+          const preview = state.simulation.samples.filter((s, i) => i % 6 === 0);
+          line(ctx, preview.map(s => point(s.x1, s.z1)), '#e0e9f1', 1);
+          line(ctx, preview.map(s => point(s.x2, s.z2)), '#e0ede9', 1);
+        }
+        const end = Math.floor(state.t * 60), start = Math.max(0, end - 720);
+        const trail = state.simulation.samples.slice(start, end + 1).filter((s, i) => i % 3 === 0);
+        line(ctx, [...trail.map(s => point(s.x1, s.z1)), a], COLORS.K, 1.5);
+        line(ctx, [...trail.map(s => point(s.x2, s.z2)), b], COLORS.K2, 1.5);
+      }
+      line(ctx, [a, b], COLORS.grid, 1, [4, 4]);
+      line(ctx, [[origin[0]-5,origin[1]], [origin[0]+5,origin[1]]], COLORS.muted, 1.5);
+      line(ctx, [[origin[0],origin[1]-5], [origin[0],origin[1]+5]], COLORS.muted, 1.5);
+      dot(ctx, ...a, 5 + 2*Math.cbrt(p.m1/1e12), COLORS.K);
+      dot(ctx, ...b, 5 + 2*Math.cbrt(p.m2/1e12), COLORS.K2);
+      label('scene-labels', 'mass1', 'm_1', a[0], a[1] - 21, COLORS.K);
+      label('scene-labels', 'mass2', 'm_2', b[0], b[1] - 21, COLORS.K2);
+      label('scene-labels', 'barycenter', 'C', origin[0] + 13, origin[1] + 16, COLORS.muted);
+    }
     function drawPendulum(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
       const length = p.l1 + p.l2, scale = Math.min((w - 80) / (2 * length), (h - 75) / (2 * length));
@@ -887,13 +1054,15 @@ async function startEnergyApp() {
       label('scene-labels', 'gravity', tex`\vec g`, gx - 14, gy + 12, COLORS.muted);
     }
     function chartGeometry(w, h) {
-      const ymax = Math.max(.1, state.simulation.samples[0].E * 1.16);
+      const signed = state.model === 'gravity';
+      const ymin = signed ? state.gravityRange.min * 1.12 : 0;
+      const ymax = signed ? state.gravityRange.max * 1.12 : Math.max(.1, state.simulation.samples[0].E * 1.16);
       // Keep a separate header row for the unit, above every y-axis tick.
-      return {left: 66, right: w - 28, top: 48, bottom: h - 45, ymax};
+      return {left: 66, right: w - 28, top: 48, bottom: h - 45, ymin, ymax};
     }
     function drawHistory(sample) {
       const {ctx, w, h} = surface('history-canvas'), r = chartGeometry(w, h);
-      const X = t => r.left + t / state.duration * (r.right - r.left), Y = e => r.bottom - e / r.ymax * (r.bottom - r.top);
+      const X = t => r.left + t / state.duration * (r.right - r.left), Y = e => r.bottom - (e - r.ymin) / (r.ymax - r.ymin) * (r.bottom - r.top);
       hideLabels('history-labels');
       const nx = w < 500 ? 3 : 5;
       for (let i = 0; i <= nx; i++) {
@@ -902,20 +1071,22 @@ async function startEnergyApp() {
         label('history-labels', `x${i}`, t.toFixed(t % 1 ? 1 : 0), X(t), r.bottom + 17, COLORS.muted, true);
       }
       for (let i = 0; i <= 4; i++) {
-        const e = r.ymax * i / 4;
+        const e = r.ymin + (r.ymax - r.ymin) * i / 4;
         line(ctx, [[r.left, Y(e)], [r.right, Y(e)]], COLORS.grid, 1);
-        label('history-labels', `y${i}`, e.toFixed(r.ymax < 1 ? 2 : 1), r.left - 25, Y(e), COLORS.muted, true);
+        label('history-labels', `y${i}`, energyValue(e).toFixed(energyValue(r.ymax - r.ymin) < 1 ? 2 : 1), r.left - 25, Y(e), COLORS.muted, true);
       }
       label('history-labels', 'xunit', tex`t\,[\mathrm s]`, (r.left + r.right) / 2, h - 10);
-      label('history-labels', 'yunit', tex`E\,[\mathrm J]`, 36, 18);
+      label('history-labels', 'yunit', `E\\,[${energyUnit()}]`, state.model === 'gravity' ? 98 : 36, 18);
+      if (state.model === 'gravity') line(ctx, [[r.left,Y(0)], [r.right,Y(0)]], COLORS.muted, 1, [4, 4]);
       const stride = Math.max(1, Math.floor(state.simulation.samples.length / Math.max(200, w)));
       const samples = state.simulation.samples.filter((s, i) => i % stride === 0 && s.t < state.t);
       samples.push(sample);
       const parts = components(sample), stacked = $('stacked').checked;
-      let lower = samples.map(() => 0);
+      let positive = samples.map(() => 0), negative = samples.map(() => 0);
       for (let k = 0; k < parts.length; k++) {
         const values = samples.map(s => components(s)[k].value);
-        const upper = values.map((v, i) => v + (stacked ? lower[i] : 0));
+        const lower = values.map((v, i) => stacked ? (v < 0 ? negative[i] : positive[i]) : 0);
+        const upper = values.map((v, i) => v + lower[i]);
         const points = samples.map((s, i) => [X(s.t), Y(upper[i])]);
         if (stacked) {
           ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(...p) : ctx.moveTo(...p));
@@ -924,7 +1095,7 @@ async function startEnergyApp() {
         }
         line(ctx, points, parts[k].color, stacked ? 1 : 2);
         if (!stacked) dot(ctx, X(sample.t), Y(values[values.length - 1]), 3, parts[k].color);
-        lower = upper;
+        if (stacked) values.forEach((v, i) => { if (v < 0) negative[i] = upper[i]; else positive[i] = upper[i]; });
       }
       line(ctx, [[r.left, Y(state.simulation.samples[0].E)], [r.right, Y(state.simulation.samples[0].E)]], state.p.gamma > 0 ? COLORS.muted : COLORS.ink, 1.5, [6, 4]);
       if (state.p.gamma > 0) line(ctx, samples.map(s => [X(s.t), Y(s.E)]), COLORS.ink, 2);
@@ -940,28 +1111,49 @@ async function startEnergyApp() {
         state.readoutTime = state.t;
         number($('time-readout'), state.t, 2, tex`\mathrm s`); number($('scene-time'), state.t, 2, tex`\mathrm s`);
         if (state.model === 'oscillator') number($('position-readout'), sample.x, 2, tex`\mathrm m`);
-        number($('kinetic-readout'), sample.K, 3, tex`\mathrm J`);
-        number($('potential-readout'), sample.U, 3, tex`\mathrm J`);
-        number($('total-readout'), sample.E, 3, tex`\mathrm J`);
-        number($('dissipation-readout'), sample.D, 3, tex`\mathrm J`);
-        const error = sample.E + sample.D - E0;
-        number($('error-readout'), error, Math.abs(error) < .0000005 ? 0 : 6, tex`\mathrm J`);
+        if (state.model === 'simple-pendulum') number($('position-readout'), Math.atan2(Math.sin(sample.theta), Math.cos(sample.theta)) * 180 / Math.PI, 2, tex`{}^\circ`);
+        if (state.model === 'gravity') number($('position-readout'), sample.r, 2, tex`\mathrm m`);
+        number($('kinetic-readout'), energyValue(sample.K), 3, energyReadoutUnit());
+        number($('potential-readout'), energyValue(sample.U), 3, energyReadoutUnit());
+        number($('total-readout'), energyValue(sample.E), 3, energyReadoutUnit());
+        number($('dissipation-readout'), energyValue(sample.D), 3, energyReadoutUnit());
+        const error = energyValue(sample.E + sample.D - E0);
+        number($('error-readout'), error, Math.abs(error) < .0000005 ? 0 : 6, energyReadoutUnit());
         for (const [i, part] of components(sample).entries()) {
-          number($(`part-${i}`), part.value, 3, tex`\mathrm J`);
+          number($(`part-${i}`), energyValue(part.value), 3, energyReadoutUnit());
         }
       }
       const budget = sample.E + sample.D;
+      const signed = state.model === 'gravity';
+      $('energy-meter').dataset.signed = String(signed);
+      const extent = signed ? Math.max(state.gravityRange.max, -state.gravityRange.min) * 1.08 : 1;
+      let positive = 0, negative = 0;
       for (const [i, part] of components(sample).entries()) {
-        $(`segment-${i}`).style.height = `${budget > 1e-12 ? 100 * part.value / budget : 0}%`;
+        const segment = $(`segment-${i}`);
+        if (signed) {
+          const size = 50 * Math.abs(part.value) / extent;
+          segment.style.height = `${size}%`;
+          segment.style.top = `${part.value < 0 ? 50 + negative : 50 - positive - size}%`;
+          if (part.value < 0) negative += size; else positive += size;
+        } else {
+          segment.style.top = '';
+          segment.style.height = `${budget > 1e-12 ? 100 * part.value / budget : 0}%`;
+        }
       }
-      $('energy-stack').style.height = `${E0 > 1e-12 ? Math.min(100, 100 * budget / E0) : 0}%`;
+      $('energy-stack').style.height = `${signed ? 100 : E0 > 1e-12 ? Math.min(100, 100 * budget / E0) : 0}%`;
       const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J ; énergie dissipée ${sample.D.toFixed(3)} J.`);
       hideLabels('scene-labels');
-      if (state.model === 'oscillator') drawOscillator(sample); else drawPendulum(sample);
+      if (state.model === 'oscillator') drawOscillator(sample);
+      else if (state.model === 'simple-pendulum') drawSimplePendulum(sample);
+      else if (state.model === 'gravity') drawGravity(sample);
+      else drawPendulum(sample);
       drawHistory(sample);
-      $('observation').textContent = E0 < 1e-12 ? 'Le système reste au repos à l’équilibre : les énergies cinétique et potentielle sont nulles.'
+      $('observation').textContent = signed
+        ? (E0 < 0 ? 'L’énergie mécanique est négative : les deux corps restent liés. La somme des énergies cinétiques et du potentiel gravitationnel est conservée.' : 'L’énergie mécanique permet l’échappement : les deux corps s’éloignent indéfiniment. Le potentiel négatif tend vers zéro à grande distance.')
+        : E0 < 1e-12 ? 'Le système reste au repos à l’équilibre : les énergies cinétique et potentielle sont nulles.'
         : state.p.gamma > 0 ? 'Les frottements dissipent de l’énergie. La partie grise représente l’énergie transférée au milieu ; ajoutée à l’énergie mécanique restante, elle retrouve l’énergie initiale.'
         : state.model === 'pendulum' ? 'Chaque masse peut gagner ou perdre de l’énergie. Seule la somme des énergies des deux masses est conservée.'
+        : state.model === 'simple-pendulum' && E0 > 2 * state.p.m * state.p.g * state.p.l ? 'L’énergie permet de franchir le point le plus haut : le pendule effectue des tours complets. Il ralentit en montant et accélère en descendant.'
         : sample.K / E0 < .05 ? 'Près d’une extrémité, la masse ralentit : l’énergie est essentiellement potentielle.'
         : sample.U / E0 < .05 ? 'Près de l’équilibre, la vitesse est maximale : l’énergie est essentiellement cinétique.'
         : 'Pendant le mouvement, l’énergie cinétique et l’énergie potentielle se transforment l’une en l’autre.';
@@ -1032,7 +1224,9 @@ async function startEnergyApp() {
         <label class="field-label" for="model-select">Système</label>
         <select id="model-select">
           <option value="oscillator">Oscillateur harmonique</option>
+          <option value="simple-pendulum">Pendule simple</option>
           <option value="pendulum">Pendule double</option>
+          <option value="gravity">Deux corps gravitationnels</option>
         </select>
         <p id="model-note" class="microcopy"></p>
         <label class="field-label compact" for="example-select">Exemples</label>
@@ -1041,7 +1235,7 @@ async function startEnergyApp() {
       <section class="panel-section">
         <div class="section-heading-row"><h2>Paramètres physiques</h2><button id="reset-parameters" class="text-button" type="button">Réinitialiser</button></div>
         <div id="parameters"></div>
-        <label class="check-row friction-option"><input id="friction-toggle" type="checkbox" /><span>Avec frottements</span></label>
+        <label id="friction-row" class="check-row friction-option"><input id="friction-toggle" type="checkbox" /><span>Avec frottements</span></label>
         <div id="damping-controls" hidden>
           <label class="field-label" for="damping-slider">Amortissement <span data-tex="\gamma"></span></label>
           <input id="damping-slider" type="range" min="0.01" max="2" step="0.01" value="0.25" />
@@ -1067,7 +1261,7 @@ async function startEnergyApp() {
         <h2>Affichage</h2>
         <label class="check-row"><input id="stacked" type="checkbox" checked /><span>Empiler les énergies</span></label>
         <label id="detail-row" class="check-row"><input id="detail" type="checkbox" checked /><span>Détailler les deux masses</span></label>
-        <label id="trail-row" class="check-row"><input id="trail" type="checkbox" checked /><span>Trace du pendule</span></label>
+        <label id="trail-row" class="check-row"><input id="trail" type="checkbox" checked /><span>Traces du mouvement</span></label>
         <p class="microcopy">Cliquer ou faire glisser sur le graphique pour choisir l’instant.</p>
       </section>
       <section class="panel-section equation-section">
@@ -1087,16 +1281,16 @@ async function startEnergyApp() {
             <canvas id="scene-canvas" aria-hidden="true"></canvas>
             <div class="plot-labels" id="scene-labels" aria-hidden="true"></div>
             <div class="time-badge"><span data-tex="t="></span><span id="scene-time"></span></div>
-            <div id="position-badge"><span data-tex="x="></span><span id="position-readout"></span></div>
+            <div id="position-badge"><span id="position-symbol" data-tex="x="></span><span id="position-readout"></span></div>
           </div>
         </section>
         <section class="visual-card balance-card">
           <header class="card-heading"><h2>Répartition instantanée</h2></header>
           <div class="balance-content">
-            <div class="energy-meter" aria-hidden="true"><div id="energy-stack"></div></div>
+            <div id="energy-meter" class="energy-meter" aria-hidden="true"><div id="energy-stack"></div></div>
             <div id="energy-key"></div>
           </div>
-          <p class="balance-note microcopy">La hauteur totale représente <span id="balance-symbol" data-tex="E=K+U"></span>.</p>
+          <p class="balance-note microcopy"><span id="balance-intro">La hauteur totale représente </span><span id="balance-symbol" data-tex="E=K+U"></span>.</p>
         </section>
       </div>
       <section class="visual-card history-card">

@@ -58,9 +58,9 @@ const context = {
   console: {error(e) { reported.push(e); }},
 };
 function tick(time = 100) { const queue = frames.splice(0); queue.forEach(fn => fn(time)); }
-function checkHistoryAnnotations(withFriction = false) {
+function checkHistoryAnnotations(withFriction = false, gravity = false) {
   const labels = $('history-labels').children.filter(node => !node.hidden);
-  const title = labels.find(node => node.dataset.math === 'E\\,[\\mathrm J]');
+  const title = labels.find(node => node.dataset.math === (gravity ? 'E\\,[10^{12}\\,\\mathrm J]' : 'E\\,[\\mathrm J]'));
   const ticks = labels.filter(node => node.className.includes('tick') && parseFloat(node.style.left) === 41);
   assert(title && ticks.length === 5, 'energy title and all vertical ticks are present');
   assert(Math.min(...ticks.map(node => parseFloat(node.style.top))) - parseFloat(title.style.top) >= 30,
@@ -69,6 +69,10 @@ function checkHistoryAnnotations(withFriction = false) {
   assert.equal(lines.length, withFriction ? 2 : 1, 'energy curves use dedicated line samples');
   assert(lines[0].style.borderTop.includes(withFriction ? 'solid' : 'dashed'));
   if (withFriction) assert(lines[1].style.borderTop.includes('dashed'), 'initial energy reference remains dashed');
+  if (gravity) {
+    assert(ticks.some(node => parseFloat(node.dataset.math) < 0), 'negative gravitational potential fits on chart');
+    assert(ticks.some(node => parseFloat(node.dataset.math) > 0), 'positive kinetic energy fits on chart');
+  }
 }
 async function main() {
   vm.runInNewContext(source, context);
@@ -101,10 +105,21 @@ async function main() {
   assert.equal($('total-readout').dataset.number, '5.000|\\mathrm J');
   $('reset-parameters').click();
   assert.equal($('value-k').dataset.number, '4.00|\\mathrm{N\\,m^{-1}}');
-  for (const model of ['oscillator', 'pendulum']) {
+  for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
-    assert.equal($('position-badge').hidden, model !== 'oscillator');
+    assert.equal($('position-badge').hidden, model === 'pendulum');
     assert.equal($('detail-row').hidden, model !== 'pendulum');
+    assert.equal($('trail-row').hidden, model === 'oscillator');
+    if (model === 'simple-pendulum') {
+      assert.equal($('value-l').dataset.number, '1.20|\\mathrm m');
+      assert.equal($('value-theta0').dataset.number, '15|{}^\\circ');
+      assert.equal($('position-symbol').dataset.math, '\\theta=');
+      assert.equal($('position-readout').dataset.number, '15.00|{}^\\circ');
+      $('param-l').value = '2'; $('param-l').fire('input'); tick();
+      assert.equal($('value-l').dataset.number, '2.00|\\mathrm m');
+      assert.equal($('example-select').value, 'custom');
+      assert($('scene').attrs['aria-label'].startsWith('Pendule simple.'));
+    }
     for (const example of ['0', '1', '2', '3']) {
       $('example-select').value = example; $('example-select').fire('change');
       for (const time of ['0', '1.234', '29.999', '30']) {
@@ -133,7 +148,7 @@ async function main() {
   $('history').fire('keydown', {key: 'Home'}); assert.equal(Number($('time-slider').value), 0);
   $('history').fire('pointerdown', {clientX: 340, pointerId: 1});
   assert(Number($('time-slider').value) > 20 && Number($('time-slider').value) < 40);
-  for (const model of ['oscillator', 'pendulum']) {
+  for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
     $('friction-toggle').checked = true; $('friction-toggle').fire('change');
     assert(!$('damping-controls').hidden && !$('dissipation-card').hidden);
@@ -169,7 +184,51 @@ async function main() {
     $('time-slider').value = '20'; $('time-slider').fire('input');
     assert.equal(parseFloat($('dissipation-readout').dataset.number), 0);
   }
+  $('friction-toggle').checked = true;
+  $('model-select').value = 'gravity'; $('model-select').fire('change');
+  assert($('friction-row').hidden && $('damping-controls').hidden && $('dissipation-card').hidden, 'gravity is an isolated two-body system');
+  assert.equal($('friction-badge').textContent, 'Gravitation seule');
+  assert(!$('detail-row').hidden && !$('trail-row').hidden);
+  assert.equal($('position-symbol').dataset.math, 'r=');
+  assert.equal($('value-m1').dataset.number, '1.00|\\times10^{12}\\,\\mathrm{kg}', 'scaled mass rendered in LaTeX');
+  assert.equal($('position-readout').dataset.number, '10.00|\\mathrm m');
+  assert.equal($('total-readout').dataset.number, '-3.337|\\times10^{12}\\,\\mathrm J');
+  assert.equal($('potential-readout').dataset.number, '-6.674|\\times10^{12}\\,\\mathrm J');
+  assert.equal($('energy-meter').dataset.signed, 'true');
+  assert.equal($('energy-key').children.length, 3, 'kinetic parts and one shared potential');
+  assert(css.includes('.energy-meter[data-signed="true"]::after'), 'signed energy meter has a zero divider');
+  checkHistoryAnnotations(false, true);
+  $('param-m1').value = '2000000000000'; $('param-m1').fire('input'); tick();
+  assert.equal($('value-m1').dataset.number, '2.00|\\times10^{12}\\,\\mathrm{kg}');
+  assert.equal($('total-readout').dataset.number, '-6.674|\\times10^{12}\\,\\mathrm J');
+  for (const example of ['0','1','2','3']) {
+    $('example-select').value = example; $('example-select').fire('change');
+    for (const time of ['0', '.0034', '10.234', '60']) {
+      $('time-slider').value = time; $('time-slider').fire('input');
+      assert(parseFloat($('potential-readout').dataset.number) < 0, 'potential remains negative');
+      assert(parseFloat($('kinetic-readout').dataset.number) > 0, 'kinetic energy remains positive');
+      const total = parseFloat($('total-readout').dataset.number);
+      assert(example === '3' ? total > 0 : total < 0, 'bound and escaping energy signs');
+      assert.equal(parseFloat($('error-readout').dataset.number), 0, 'small scaled energy error');
+      for (let i = 0; i < 3; i++) {
+        const segment = $('segment-'+i), top = parseFloat(segment.style.top), height = parseFloat(segment.style.height);
+        assert(height >= 0 && top >= 0 && top+height <= 100, 'signed meter segment remains inside its bounds');
+        assert(i === 2 ? top >= 50 : top+height <= 50+1e-10, 'potential below zero, kinetic energies above');
+      }
+    }
+    $('detail').checked = false; $('detail').fire('change');
+    assert.equal($('energy-key').children.length, 2);
+    $('detail').checked = true; $('detail').fire('change');
+    $('stacked').checked = false; $('stacked').fire('change');
+    $('stacked').checked = true; $('stacked').fire('change');
+    width = 300; $('trail').fire('change'); checkHistoryAnnotations(false, true); width = 640;
+  }
+  $('model-select').value = 'simple-pendulum'; $('model-select').fire('change');
+  assert.equal($('energy-meter').dataset.signed, 'false', 'restore unsigned meter for pendulums');
+  assert(!$('friction-row').hidden && !$('damping-controls').hidden, 'preserve friction preference on returning to a pendulum');
+  assert.equal($('segment-0').style.top, '', 'clear signed positioning when changing model');
+  assert.equal($('position-readout').dataset.number, '15.00|{}^\\circ');
   assert.deepEqual(reported, []);
-  console.log('Energy UI controllers: separated axis title, centered long legend samples, MathJax styles, accessible nonduplicated math, looped spring geometry, initial TeX values, both modes, examples, sliders, playback, keyboard and chart seeking passed.');
+  console.log('Energy UI controllers: four systems, signed gravitational energies, scaled LaTeX units, separated axis title, centered legend, accessible math, springs, examples, friction, sliders, playback and chart seeking passed.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
