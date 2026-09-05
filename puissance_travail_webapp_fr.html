@@ -222,6 +222,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .equations { overflow-x: auto; color: #24324b; font-size: 0.83rem; }
 .equations p { margin: 0.45rem 0; }
 .equations mjx-container { margin: 0.45rem 0 !important; }
+.field-formula[hidden] { display: none; }
 .equations .equation-note {
   margin-top: 0.75rem;
   color: var(--muted);
@@ -391,7 +392,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .angle-readout::before { background: var(--force); }
 .theorem-readout::before { background: #52677f; }
 .readout-symbol { display: block; color: var(--muted); font-size: 0.78rem; }
-.readout-card strong { display: block; margin: 0.2rem 0 0.1rem; font-size: 1.08rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.readout-card strong { display: block; margin: 0.2rem 0 0.1rem; font-size: 0.94rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .readout-card strong.dynamic-math-output { display: inline-flex; }
 .readout-card small { display: block; overflow: hidden; color: var(--muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -449,7 +450,15 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       </header>
 
       <section class="panel-section">
-        <label class="field-label" for="scenario-select">Expérience</label>
+        <label class="field-label" for="force-field-select">Champ de force</label>
+        <select id="force-field-select">
+          <option value="cellular" selected>Tourbillons périodiques — vidéo</option>
+          <option value="periodic">Puits périodiques — conservatif</option>
+          <option value="central">Attraction centrale — conservatif</option>
+        </select>
+        <p id="force-field-note" class="microcopy block-note">Champ périodique non conservatif utilisé dans la vidéo.</p>
+
+        <label class="field-label compact" for="scenario-select">Expérience</label>
         <select id="scenario-select">
           <option value="positive" selected>Vidéo — travail positif</option>
           <option value="zero">Travail total nul</option>
@@ -563,7 +572,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           <label class="check-row">
             <input id="area-toggle" type="checkbox" checked />
             <span class="swatch swatch-work"></span>
-            <span>Aire du travail cumulé</span>
+            <span>Aire sous \(P(t)\)</span>
           </label>
         </div>
       </section>
@@ -571,10 +580,21 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       <section class="panel-section equation-section">
         <h2>Relations</h2>
         <div class="equations">
-          <p>\[\mathbf F(x,y)=F_0\!\left(\sin\frac{x}{L_0}\cos\frac{y}{L_0},-\cos\frac{x}{L_0}\sin\frac{y}{L_0}\right)\]</p>
+          <div class="field-formula" data-force-field="cellular">
+            <p>\[\mathbf F(x,y)=F_0\!\left(\sin\frac{x}{L_0}\cos\frac{y}{L_0},-\cos\frac{x}{L_0}\sin\frac{y}{L_0}\right)\]</p>
+            <p class="equation-note">Champ périodique non conservatif de la vidéo.</p>
+          </div>
+          <div class="field-formula" data-force-field="periodic" hidden>
+            <p>\[\mathbf F(x,y)=-F_0\!\left(\sin\frac{x-x_c}{L_0},\sin\frac{y-y_c}{L_0}\right)\]</p>
+            <p class="equation-note">Champ conservatif formant des puits périodiques autour du centre \(C\).</p>
+          </div>
+          <div class="field-formula" data-force-field="central" hidden>
+            <p>\[\mathbf F(x,y)=-F_0\frac{(x-x_c,\,y-y_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
+            <p class="equation-note">Champ central, attractif, conservatif et borné.</p>
+          </div>
           <p>\[P(t)=\mathbf F(t)\cdot\mathbf v(t)=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\]</p>
           <p>\[W_{A\to t}=\int_{t_A}^{t}P(\tau)\,\mathrm d\tau=K(t)-K_A\]</p>
-          <p class="equation-note">Ici \(L_0=1\,\mathrm m\). Le champ est non conservatif, mais le théorème reste valable car \(\mathbf F\) est la force résultante.</p>
+          <p class="equation-note">Ici \(L_0=1\,\mathrm m\) et \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\). Le théorème reste valable pour chaque choix car \(\mathbf F\) est la force résultante.</p>
         </div>
       </section>
 
@@ -627,8 +647,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <div class="chart-axis-label chart-axis-y" aria-hidden="true"><span class="tex-math">\(P=\mathbf F\cdot\mathbf v\,[\mathrm W]\)</span></div>
             <div class="chart-legend" aria-hidden="true">
               <span><i class="legend-line"></i>Puissance \(P(t)\)</span>
-              <span><i class="legend-positive"></i>Travail positif</span>
-              <span><i class="legend-negative"></i>Travail négatif</span>
+              <span><i class="legend-positive"></i>Aire positive</span>
+              <span><i class="legend-negative"></i>Aire négative</span>
             </div>
           </div>
         </section>
@@ -643,7 +663,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <article class="readout-card work-readout">
           <span class="readout-symbol">\(W_{A\to t}\)</span>
           <strong class="dynamic-math-output"><span id="work-readout" class="math-digits">0,000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
-          <small>aire algébrique</small>
+          <small>aire sous \(P(t)\)</small>
         </article>
         <article class="readout-card kinetic-readout">
           <span class="readout-symbol">\(\Delta K_{A\to t}\)</span>
@@ -657,7 +677,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         </article>
         <article class="readout-card theorem-readout">
           <span class="readout-symbol">\(W-\Delta K\)</span>
-          <strong class="dynamic-math-output"><span id="theorem-readout" class="math-digits">0,000000</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
+          <strong class="dynamic-math-output"><span id="theorem-readout" class="math-digits">0</span><span class="tex-math">\(\,\mathrm J\)</span></strong>
           <small>écart numérique</small>
         </article>
       </section>
@@ -691,8 +711,24 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     negative: "#cc4b68"
   });
 
+  const FIELD_TYPES = Object.freeze({
+    cellular: {
+      note: "Champ périodique non conservatif utilisé dans la vidéo.",
+      maxMagnitudeFactor: 1
+    },
+    periodic: {
+      note: "Champ conservatif : la particule oscille entre des puits périodiques.",
+      maxMagnitudeFactor: Math.SQRT2
+    },
+    central: {
+      note: "Champ conservatif, borné et dirigé vers le centre de la figure.",
+      maxMagnitudeFactor: 1
+    }
+  });
+
   const PRESETS = Object.freeze({
     positive: {
+      fieldId: "cellular",
       mass: 20,
       forceScale: 1,
       vx0: 0.2,
@@ -701,6 +737,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       note: "Comme dans la vidéo, le travail total est positif et la particule arrive plus rapide."
     },
     zero: {
+      fieldId: "cellular",
       mass: 20,
       forceScale: 1,
       vx0: 0.2,
@@ -709,6 +746,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       note: "Les aires positive et négative se compensent : la vitesse finale a la même norme qu’au départ."
     },
     negative: {
+      fieldId: "cellular",
       mass: 20,
       forceScale: 1,
       vx0: 0.2,
@@ -733,6 +771,9 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   const tickNumber = new Intl.NumberFormat("fr-BE", { maximumFractionDigits: 2 });
 
   const dom = {
+    forceField: document.getElementById("force-field-select"),
+    forceFieldNote: document.getElementById("force-field-note"),
+    fieldFormulaBlocks: Array.from(document.querySelectorAll("[data-force-field]")),
     scenario: document.getElementById("scenario-select"),
     scenarioNote: document.getElementById("scenario-note"),
     restoreParameters: document.getElementById("restore-parameters"),
@@ -846,12 +887,29 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   }
 
   function forceAt(x, y, parameters = state.parameters) {
-    const xReduced = x;
-    const yReduced = y;
+    const fieldId = parameters.fieldId || "cellular";
+    const amplitude = parameters.forceScale;
+    if (fieldId === "periodic") {
+      return {
+        x: -amplitude * Math.sin(x - PI),
+        y: -amplitude * Math.sin(y - 1.5 * PI)
+      };
+    }
+    if (fieldId === "central") {
+      const dx = x - PI;
+      const dy = y - 1.5 * PI;
+      const factor = -amplitude / Math.sqrt(1 + dx * dx + dy * dy);
+      return { x: factor * dx, y: factor * dy };
+    }
     return {
-      x: parameters.forceScale * Math.sin(xReduced) * Math.cos(yReduced),
-      y: -parameters.forceScale * Math.cos(xReduced) * Math.sin(yReduced)
+      x: amplitude * Math.sin(x) * Math.cos(y),
+      y: -amplitude * Math.cos(x) * Math.sin(y)
     };
+  }
+
+  function fieldReferenceMagnitude(parameters = state.parameters) {
+    const fieldType = FIELD_TYPES[parameters.fieldId] || FIELD_TYPES.cellular;
+    return Math.max(1e-9, parameters.forceScale * fieldType.maxMagnitudeFactor);
   }
 
   function derivative(vector, parameters) {
@@ -1015,37 +1073,43 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     if (!Number.isFinite(length) || length < 1.5) return;
     const color = options.color || COLORS.ink;
     const lineWidth = options.lineWidth || 2;
-    const headLength = options.headLength || 9;
-    const angle = Math.atan2(deltaY, deltaX);
+    const headLength = Math.min(options.headLength || 9, 0.65 * length);
     const endX = startX + deltaX;
     const endY = startY + deltaY;
+    const ux = deltaX / length;
+    const uy = deltaY / length;
+    const depth = headLength * Math.cos(Math.PI / 6);
+    const halfWidth = headLength * Math.sin(Math.PI / 6);
+    const overlap = Math.min(lineWidth, 0.2 * depth);
+    const baseX = endX - depth * ux;
+    const baseY = endY - depth * uy;
+    const shaftEndX = baseX + overlap * ux;
+    const shaftEndY = baseY + overlap * uy;
+    const leftX = baseX - halfWidth * uy;
+    const leftY = baseY + halfWidth * ux;
+    const rightX = baseX + halfWidth * uy;
+    const rightY = baseY - halfWidth * ux;
     context.save();
     context.lineCap = "round";
     context.lineJoin = "round";
     if (options.halo) {
       context.beginPath();
       context.moveTo(startX, startY);
-      context.lineTo(endX, endY);
+      context.lineTo(shaftEndX, shaftEndY);
       context.strokeStyle = "rgba(255,255,255,.82)";
       context.lineWidth = lineWidth + 3.5;
       context.stroke();
     }
     context.beginPath();
     context.moveTo(startX, startY);
-    context.lineTo(endX, endY);
+    context.lineTo(shaftEndX, shaftEndY);
     context.strokeStyle = color;
     context.lineWidth = lineWidth;
     context.stroke();
     context.beginPath();
     context.moveTo(endX, endY);
-    context.lineTo(
-      endX - headLength * Math.cos(angle - Math.PI / 6),
-      endY - headLength * Math.sin(angle - Math.PI / 6)
-    );
-    context.lineTo(
-      endX - headLength * Math.cos(angle + Math.PI / 6),
-      endY - headLength * Math.sin(angle + Math.PI / 6)
-    );
+    context.lineTo(leftX, leftY);
+    context.lineTo(rightX, rightY);
     context.closePath();
     context.fillStyle = color;
     context.fill();
@@ -1091,7 +1155,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
           const field = forceAt(x, y);
           const magnitude = Math.hypot(field.x, field.y);
           if (magnitude < 0.015) continue;
-          const relative = Math.min(1, magnitude / (Math.SQRT2 * state.parameters.forceScale));
+          const relative = Math.min(1, magnitude / fieldReferenceMagnitude());
           const arrowLength = 5 + 17 * relative * Math.min(1.4, state.parameters.forceScale);
           drawArrow(
             context,
@@ -1161,7 +1225,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     if (state.display.force) {
       const forceMagnitude = Math.hypot(sample.fx, sample.fy);
       const forceColor = viridis(
-        Math.min(1, forceMagnitude / (Math.SQRT2 * state.parameters.forceScale)),
+        Math.min(1, forceMagnitude / fieldReferenceMagnitude()),
         1
       );
       forceDeltaX = sample.fx * forceLength;
@@ -1409,7 +1473,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     setMathDigits(dom.workReadout, signed(sample.work));
     setMathDigits(dom.deltaKReadout, signed(deltaK));
     setMathDigits(dom.angleReadout, angle === null ? "—" : number2.format(angle));
-    setMathDigits(dom.theoremReadout, signed(theoremError, 6));
+    setMathDigits(dom.theoremReadout, Math.abs(theoremError) < 5e-6 ? "0" : signed(theoremError, 6));
     setMathDigits(dom.workResultDigits, signed(sample.work));
     updatePowerBadge(sample.power);
 
@@ -1440,6 +1504,16 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     setMathDigits(dom.durationOutput, number2.format(state.parameters.duration));
   }
 
+  function updateForceFieldInterface() {
+    const fieldId = FIELD_TYPES[state.parameters.fieldId] ? state.parameters.fieldId : "cellular";
+    state.parameters.fieldId = fieldId;
+    dom.forceField.value = fieldId;
+    dom.forceFieldNote.textContent = FIELD_TYPES[fieldId].note;
+    for (const block of dom.fieldFormulaBlocks) {
+      block.hidden = block.dataset.forceField !== fieldId;
+    }
+  }
+
   function updateScenarioConclusion() {
     const simulation = state.simulation;
     const finalWork = simulation.work[simulation.count];
@@ -1459,11 +1533,13 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     state.time = Math.min(state.time, state.parameters.duration);
     dom.time.max = String(state.parameters.duration);
     updateParameterOutputs();
+    updateForceFieldInterface();
     updateScenarioConclusion();
     render(true);
   }
 
   function setControlsFromParameters() {
+    dom.forceField.value = state.parameters.fieldId || "cellular";
     dom.mass.value = String(state.parameters.mass);
     dom.forceScale.value = String(state.parameters.forceScale);
     dom.vx.value = String(state.parameters.vx0);
@@ -1536,6 +1612,12 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   }
 
   function installInteractions() {
+    dom.forceField.addEventListener("change", () => {
+      state.parameters.fieldId = dom.forceField.value;
+      markCustom();
+      state.view = { centerX: PI, centerY: 1.5 * PI, zoom: 1 };
+      recompute();
+    });
     dom.scenario.addEventListener("change", () => applyPreset(dom.scenario.value));
     dom.restoreParameters.addEventListener("click", () => applyPreset("positive"));
     bindParameter(dom.mass, "mass");
@@ -1679,6 +1761,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     setControlsFromParameters();
     state.simulation = integrate(state.parameters);
     updateParameterOutputs();
+    updateForceFieldInterface();
     updateScenarioConclusion();
     updatePlayButton();
     installInteractions();
