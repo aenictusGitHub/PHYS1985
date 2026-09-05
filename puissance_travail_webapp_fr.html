@@ -392,7 +392,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .angle-readout::before { background: var(--force); }
 .theorem-readout::before { background: #52677f; }
 .readout-symbol { display: block; color: var(--muted); font-size: 0.78rem; }
-.readout-card strong { display: block; margin: 0.2rem 0 0.1rem; font-size: 0.94rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.readout-card strong { display: block; margin: 0.2rem 0 0.1rem; font-size: 0.86rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .readout-card strong.dynamic-math-output { display: inline-flex; }
 .readout-card small { display: block; overflow: hidden; color: var(--muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1119,6 +1119,26 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     element.style.top = `${y}px`;
   }
 
+  function positionVectorLabel(element, originX, originY, deltaX, deltaY, visible, width, height, side) {
+    const length = Math.hypot(deltaX, deltaY);
+    if (!visible || length <= 4) {
+      positionSceneLabel(element, 0, 0, false, width, height);
+      return;
+    }
+    const ux = deltaX / length;
+    const uy = deltaY / length;
+    const along = 16;
+    const normal = 10 * side;
+    positionSceneLabel(
+      element,
+      originX + deltaX + ux * along - uy * normal,
+      originY + deltaY + uy * along + ux * normal,
+      true,
+      width,
+      height
+    );
+  }
+
   function drawScene(sample) {
     const { context, width, height } = canvasContext(dom.sceneCanvas);
     const transform = viewTransform(width, height);
@@ -1231,7 +1251,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         currentPoint.y,
         forceDeltaX,
         forceDeltaY,
-        { color: forceColor, lineWidth: 2.6, headLength: 10, halo: true }
+        { color: forceColor, lineWidth: 2.6, headLength: 10 }
       );
       dom.sceneLabelForce.style.color = forceColor;
     }
@@ -1246,24 +1266,30 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         currentPoint.y,
         velocityDeltaX,
         velocityDeltaY,
-        { color: COLORS.velocity, lineWidth: 2.6, headLength: 10, halo: true }
+        { color: COLORS.velocity, lineWidth: 2.6, headLength: 10 }
       );
     }
-    positionSceneLabel(
+    positionVectorLabel(
       dom.sceneLabelForce,
-      currentPoint.x + forceDeltaX + 10,
-      currentPoint.y + forceDeltaY,
-      state.display.force && Math.hypot(forceDeltaX, forceDeltaY) > 4,
+      currentPoint.x,
+      currentPoint.y,
+      forceDeltaX,
+      forceDeltaY,
+      state.display.force,
       width,
-      height
+      height,
+      -1
     );
-    positionSceneLabel(
+    positionVectorLabel(
       dom.sceneLabelVelocity,
-      currentPoint.x + velocityDeltaX + 10,
-      currentPoint.y + velocityDeltaY,
-      state.display.velocity && Math.hypot(velocityDeltaX, velocityDeltaY) > 4,
+      currentPoint.x,
+      currentPoint.y,
+      velocityDeltaX,
+      velocityDeltaY,
+      state.display.velocity,
       width,
-      height
+      height,
+      1
     );
 
     context.save();
