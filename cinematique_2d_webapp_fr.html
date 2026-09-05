@@ -507,34 +507,34 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <label class="check-row">
             <input id="toggle-position" type="checkbox" />
             <span class="swatch swatch-position"></span>
-            <span>Position <span class="tex-math">\(\mathbf r(t)\)</span></span>
+            <span>Position <span class="tex-math">\(\vec r(t)\)</span></span>
           </label>
           <label class="check-row">
             <input id="toggle-velocity" type="checkbox" checked />
             <span class="swatch swatch-velocity"></span>
-            <span>Vitesse <span class="tex-math">\(\mathbf v(t)\)</span></span>
+            <span>Vitesse <span class="tex-math">\(\vec v(t)\)</span></span>
           </label>
           <label class="check-row">
             <input id="toggle-acceleration" type="checkbox" checked />
             <span class="swatch swatch-acceleration"></span>
-            <span>Accélération <span class="tex-math">\(\mathbf a(t)\)</span></span>
+            <span>Accélération <span class="tex-math">\(\vec a(t)\)</span></span>
           </label>
           <label class="check-row">
             <input id="toggle-tangential" type="checkbox" />
             <span class="swatch swatch-tangential"></span>
-            <span>Tangentielle <span class="tex-math">\(\mathbf a_{\mathrm t}(t)\)</span></span>
+            <span>Tangentielle <span class="tex-math">\(\vec a_{\mathrm t}(t)\)</span></span>
           </label>
           <label class="check-row">
             <input id="toggle-centripetal" type="checkbox" />
             <span class="swatch swatch-centripetal"></span>
-            <span>Centripète <span class="tex-math">\(\mathbf a_{\mathrm c}(t)\)</span></span>
+            <span>Centripète <span class="tex-math">\(\vec a_{\mathrm c}(t)\)</span></span>
           </label>
         </div>
 
         <div class="preset-grid" aria-label="Présélections de vecteurs">
           <button type="button" data-vector-preset="velocity">Vitesse</button>
           <button type="button" data-vector-preset="acceleration">Accélération</button>
-          <button type="button" data-vector-preset="decomposition">Décomposition de <span class="tex-math">\(\mathbf a\)</span></button>
+          <button type="button" data-vector-preset="decomposition">Décomposition de <span class="tex-math">\(\vec a\)</span></button>
           <button type="button" data-vector-preset="all">Tous</button>
         </div>
       </section>
@@ -1139,31 +1139,31 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   const VECTOR_META = Object.freeze({
     position: {
-      symbolTeX: String.raw`\mathbf r`,
+      symbolTeX: String.raw`\vec r`,
       unitTeX: String.raw`\mathrm m`,
       plainName: 'position',
       color: COLORS.position,
     },
     velocity: {
-      symbolTeX: String.raw`\mathbf v`,
+      symbolTeX: String.raw`\vec v`,
       unitTeX: String.raw`\mathrm{m\,s^{-1}}`,
       plainName: 'vitesse',
       color: COLORS.velocity,
     },
     acceleration: {
-      symbolTeX: String.raw`\mathbf a`,
+      symbolTeX: String.raw`\vec a`,
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
       plainName: 'accélération',
       color: COLORS.acceleration,
     },
     tangential: {
-      symbolTeX: String.raw`\mathbf a_{\mathrm t}`,
+      symbolTeX: String.raw`\vec a_{\mathrm t}`,
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
       plainName: 'accélération tangentielle',
       color: COLORS.tangential,
     },
     centripetal: {
-      symbolTeX: String.raw`\mathbf a_{\mathrm c}`,
+      symbolTeX: String.raw`\vec a_{\mathrm c}`,
       unitTeX: String.raw`\mathrm{m\,s^{-2}}`,
       plainName: 'accélération centripète',
       color: COLORS.centripetal,
