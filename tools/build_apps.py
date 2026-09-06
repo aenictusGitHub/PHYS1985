@@ -17,6 +17,7 @@ APPS = {
     "puissance_travail_webapp_fr": ("energy", "puissance_travail_webapp_fr_source"),
     "energie_mecanique_webapp_fr": ("conservation", "energie_mecanique_webapp_fr_source"),
     "potentiel_force_webapp_fr": ("potential", "potentiel_force_webapp_fr_source"),
+    "moment_cinetique_webapp_fr": ("angular", "moment_cinetique_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 
