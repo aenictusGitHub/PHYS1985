@@ -193,8 +193,15 @@ function checkGravityVelocityOptions() {
     width = viewport;
     for (const example of ['0','1','2','3']) {
       $('example-select').value = example; $('example-select').fire('change');
-      for (const time of ['0','.37','10.234','30']) {
+      const initialPoints = [0,1].map(i => [parseFloat($('mass-handle-'+i).style.left), parseFloat($('mass-handle-'+i).style.top)]);
+      for (const time of ['0','.37','10.234','30','60']) {
         $('time-slider').value = time; $('time-slider').fire('input');
+        const trails = ['#2775b6','#268576'].map(color => sceneStrokes.find(stroke => stroke.color === color && stroke.width === 1.5));
+        for (const [i, trail] of trails.entries()) {
+          assert.equal(trail.points.length, Math.floor(Number(time)*60)+2, 'trajectory retains every sample from t=0, including after twelve seconds');
+          if (example !== '3') assert.deepEqual(trail.points[0], initialPoints[i], 'bound trajectory still starts at initial body position');
+          assert.deepEqual(trail.points.at(-1), [parseFloat($('mass-handle-'+i).style.left), parseFloat($('mass-handle-'+i).style.top)], 'trajectory ends exactly at current body');
+        }
         const strokes = arrows();
         assert(strokes.every(parts => parts.length === 2), 'each body has one shaft and one head');
         const delta = strokes.map(parts => {
