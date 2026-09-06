@@ -121,12 +121,20 @@ function checkAnnotations(){
           assert.equal(label.className,'plot-label','ordinary label without light backing');
           assert(!source.includes('shellVInk')&&!read('style.css').includes('velocity-contrast-label'),'no special casing or label background');
           assert(!strokes.some(s=>s.width===5),'no contrasting double stroke');
-          near(Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]),.42*46*.25); // Same shell velocity scale.
+          near(Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]),.42*92*.25); // Doubled shell velocity scale.
         }
         if(model==='particle'){
           const length=Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]);
-          const expected=.42*Math.min(140,width*.42)*.25/.8;
-          near(length,expected);assert(length>.42*46*.25/.8*2,'particle velocity scale more than doubles');
+          const h=width<420?340:390,scale=Math.min(width*.32,h*.29)/1.2;
+          const expected=.42*Math.min(280,Math.sqrt((width/2-12)**2-(scale*.25)**2))*.25/.8;
+          near(length,expected);
+          assert(length>.42*Math.min(140,width*.42)*.25/.8,'particle velocity is larger than the previous version');
+        }
+        if(model==='stool'){
+          const p=models.definitions.stool,L=models.inertia(model,p.mass,p.base,p.r)*Math.abs(omega);
+          const previousScale=46/Math.max(...Array.from({length:101},(_,j)=>{const r=.25+.95*j/100;return L*r/models.inertia(model,p.mass,p.base,r);}));
+          const ratio=Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1])/(.42*previousScale*p.r*Math.abs(omega));
+          if(width===700)near(ratio,2);else assert(ratio>1.8&&ratio<=2,'stool velocities enlarged within narrow viewport');
         }
       }
       checkScene();
@@ -141,7 +149,7 @@ function checkAnnotations(){
       assert.equal($('scene-torque').hidden,torque===0);assert.equal(arrows.length,torque?2:0);
       if(torque){
         near(value('scene-torque-value'),torque);assert.equal($('scene-torque-value').children[0].tag,'svg');
-        near(arrows[0].points[0][0],arrows[0].points[1][0]);near(arrows[0].points[0][1]-arrows[0].points[1][1],18*torque);
+        near(arrows[0].points[0][0],arrows[0].points[1][0]);near(arrows[0].points[0][1]-arrows[0].points[1][1],36*torque);
         assert.deepEqual(arrows[0].points[1],arrows[1].points[1]);
       }
     }
@@ -151,14 +159,27 @@ function checkAnnotations(){
     for(const id of ['show-v','show-l']){$(id).checked=true;$(id).fire('change');}
     $('reset').click();
   }
-  // Largest particle velocities during a live contraction remain in frame.
-  for(const viewport of [240,700]){
-    width=viewport;$('model-select').value='particle';$('model-select').fire('change');
-    input('radius',1.2);input('omega-initial',4);$('play').click();tick(0);tick(50);input('scene-radius',.25);
-    for(let i=2;i<=240;i++){tick(i*50);checkScene();}
+  // Enlarged arrows stay in frame at all radii/phases and with signed torque.
+  // Their scale does not follow the current speed, radius or rotation angle.
+  for(const model of ['particle','stool','shell'])for(const viewport of [240,420,700])for(const torque of [-2,0,2]){
+    width=viewport;$('model-select').value=model;$('model-select').fire('change');
+    input('radius',1.2);input('omega-initial',4);input('duration',10);input('torque',torque);
+    $('play').click();tick(0);tick(50);
+    let fixedScale;
+    for(let i=2;i<=202;i++){
+      const r=.25+.95*((Math.floor(i/10)%11)/10);
+      tick(i*50);input('scene-radius',r*(model==='stool'?2:1));checkScene();
+      if(torque===0){
+        const shaft=plots.get('scene-canvas').strokes.find(s=>s.color==='#2775b6'&&s.width===2.5);
+        const [[ax,ay],[bx,by]]=shaft.points,p=models.definitions[model];
+        const speed=Math.abs(value('momentum-value'))*r/models.inertia(model,p.mass,p.base,r);
+        const scale=Math.hypot(bx-ax,(by-ay)/.42)/speed;
+        if(fixedScale===undefined)fixedScale=scale;else near(scale,fixedScale,1e-6);
+      }
+    }
     $('restart').click();
   }
-  console.log('Annotations: ordinary blue shell velocity without backing/casing, blue/green indexed velocities, enlarged particle scale, removal of omega arc, signed torque values/arrows and stable geometry passed.');
+  console.log('Annotations: ordinary blue shell velocity without backing/casing, blue/green indexed velocities, doubled velocity/torque scales, narrow viewport bounds, linear fixed scaling, signed torque values/arrows and stable geometry passed.');
 }
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(errors,[]);assert($('loading').hidden);assert.equal(frames.size,0,'no autoplay');

@@ -35,7 +35,7 @@ canvas { display: block; width: 100%; height: 100%; }
 .plot-labels { position: absolute; inset: 0; pointer-events: none; }
 .plot-label { position: absolute; transform: translate(-50%,-50%); white-space: nowrap; font-size: var(--text-formula); }
 .plot-label.tick { font-size: var(--text-tick); }
-.scene-torque { position: absolute; left: 48px; bottom: 14px; color: #b14866; font-size: var(--text-ui); pointer-events: none; }
+.scene-torque { position: absolute; left: 48px; bottom: 58px; color: #b14866; font-size: var(--text-ui); pointer-events: none; }
 .scene-torque[hidden] { display: none; }
 .scene-torque > span { display: block; }
 .scene-torque .torque-reading { display: flex; align-items: baseline; gap: .2rem; margin-top: .2rem; font-size: var(--text-formula); }
@@ -633,11 +633,19 @@ async function startRotationApp(){
       const angles=sim.model==='stool'?[s.theta,s.theta+Math.PI]:[s.theta];
       const Lbound=state.vectorBound,Lscale=110/Lbound;
       // Independent fixed units for linear velocity and angular momentum.
-      let maxV=0;for(let i=0;i<=100;i++){const r=RotationModels.minRadius+(RotationModels.maxRadius-RotationModels.minRadius)*i/100;maxV=Math.max(maxV,Lbound*r/RotationModels.inertia(sim.model,p.mass,p.base,r));}
-      // A larger, fixed linear scale makes the point-particle velocity readable.
-      // Its maximum still fits the viewport throughout contraction and rotation.
-      const velocityPixels=sim.model==='particle'?Math.min(140,w*.42):46;
-      const vScale=velocityPixels/Math.max(.2,maxV);
+      // Double the velocity scale, with a fixed fit limit for small viewports.
+      // The tip's unprojected radius is hypot(scale*r, vScale*v): bound it
+      // over every allowed radius, not the current phase or visible arrows.
+      const tipRadius=Math.min(cx-12,(cy-65)/.42,(h-24-cy)/.42);
+      let maxV=0,fitScale=Infinity;
+      for(let i=0;i<=100;i++){
+        const r=RotationModels.minRadius+(RotationModels.maxRadius-RotationModels.minRadius)*i/100;
+        const v=Lbound*r/RotationModels.inertia(sim.model,p.mass,p.base,r);
+        maxV=Math.max(maxV,v);
+        fitScale=Math.min(fitScale,Math.sqrt(Math.max(0,tipRadius**2-(scale*r)**2))/v);
+      }
+      const velocityPixels=sim.model==='particle'?280:92;
+      const vScale=Math.min(velocityPixels/Math.max(.2,maxV),fitScale);
       const velocityArrows=[];
       for(const [i,a] of angles.entries()){
         const pos=P(s.r*Math.cos(a),s.r*Math.sin(a));
@@ -667,8 +675,8 @@ async function startRotationApp(){
       const hasTorque=Math.abs(s.torque)>1e-12;
       $('scene-torque').hidden=!hasTorque;
       if(hasTorque){
-        // Separate torque scale: 18 pixels per N m, along the same +z direction.
-        arrow(ctx,[24,h-48],[24,h-48-18*s.torque],colors.torque,3);
+        // Separate doubled scale: 36 pixels per N m. Leave room for both signs.
+        arrow(ctx,[24,h-84],[24,h-84-36*s.torque],colors.torque,3);
         number($('scene-torque-value'),s.torque,2,tex`\mathrm{N\,m}`);
       }
       $('scene').setAttribute('aria-label',$('scene-title').textContent+'. Instant '+s.t.toFixed(2)+' s ; rayon '+s.r.toFixed(2)+' m ; vitesse angulaire '+s.omega.toFixed(3)+' rad/s ; moment cinétique '+s.L.toFixed(3)+' kg m²/s ; moment extérieur '+s.torque.toFixed(2)+' N m, selon l’axe Oz.');
