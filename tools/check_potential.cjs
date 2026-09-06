@@ -97,19 +97,38 @@ const context={document,window:{devicePixelRatio:1},console:{error:e=>errors.pus
 const tick=t=>{const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(t));};
 const value=id=>parseFloat($(id).dataset.number);
 const forceArrows=()=>plots.get('stage-canvas').strokes.filter(s=>s.color==='#7758a6'&&s.width===2.5);
+const arrowLength=shaft=>Math.abs(shaft.points[1][0]-shaft.points[0][0]);
+function checkArrowGeometry(F,model) {
+  const arrows=forceArrows(),factor=parseFloat($('force-scale-arrow').style.width)/value('force-scale-value');
+  assert(Number.isFinite(factor)&&factor>0,'positive finite force scale');
+  assert.equal(arrows.length,model==='pair'?4:2);
+  for(let i=0;i<arrows.length;i+=2) {
+    const [shaft,head]=arrows.slice(i,i+2);
+    near(arrowLength(shaft),factor*Math.abs(F),1e-8); // Linear length; no per-force saturation.
+    assert.deepEqual(shaft.points[1],head.points[1],'head at endpoint');
+    near(Math.sign(shaft.points[1][0]-shaft.points[0][0]),Math.sign(F)*(model==='pair'&&i===0?-1:1));
+    for(const stroke of [shaft,head])for(const [x] of stroke.points)assert(x>=15&&x<=width-15,'arrow stays in the scene');
+  }
+  if(model==='pair') {
+    near(arrowLength(arrows[0]),arrowLength(arrows[2]));
+    if(F<0)assert(arrows[0].points[1][0]+24<arrows[2].points[1][0],'attraction arrows remain distinct');
+  }
+  return factor;
+}
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(errors,[]);assert($('loading').hidden);
-  for(const model of ['wells','pair'])for(const viewport of [300,640]) {
+  for(const model of ['wells','pair'])for(const viewport of [240,300,640,1100]) {
     width=viewport;$('model-select').value=model;$('model-select').fire('change');
     assert.equal($('body-1').hidden,model!=='pair');
-    for(const q of [models.definitions[model].min,models.definitions[model].start,models.definitions[model].max]) {
+    let fixedFactor;
+    const d=models.definitions[model];
+    for(const q of [d.min,d.start,d.max,...Array.from({length:31},(_,i)=>d.min+(d.max-d.min)*(i+.37)/31)]) {
       $('position').value=q;$('position').fire('input');const s=models.evaluate(model,q);
       near(value('force-value'),s.F,.00051);near(value('potential-value'),s.U,.00051);near(value('slope-value'),-s.F,.00051);
-      const arrows=forceArrows();assert.equal(arrows.length,model==='pair'?4:2);
-      for(let i=0;i<arrows.length;i+=2){const [shaft,head]=arrows.slice(i,i+2);assert.deepEqual(shaft.points[1],head.points[1],'head at endpoint');near(Math.sign(shaft.points[1][0]-shaft.points[0][0]),Math.sign(s.F)*(model==='pair'&&i===0?-1:1));}
-      if(model==='pair')near(Math.abs(arrows[0].points[1][0]-arrows[0].points[0][0]),Math.abs(arrows[2].points[1][0]-arrows[2].points[0][0]));
-      for(const id of ['position-value','energy-value','length-value','potential-value','slope-value','force-value']) {
+      const factor=checkArrowGeometry(s.F,model);
+      if(fixedFactor===undefined)fixedFactor=factor;else near(factor,fixedFactor,1e-12);
+      for(const id of ['position-value','energy-value','length-value','potential-value','slope-value','force-value','force-scale-value']) {
         assert(!$(id).dataset.number.split('|')[0].includes(','),'decimal dots');assert.equal($(id).children.length,1);assert.equal($(id).children[0].tag,'svg','one shared numeric baseline');
       }
     }
@@ -118,6 +137,18 @@ async function checkUI(){
     $('restart').click();const old=value('force-value');
     $('energy-scale').value='2';$('energy-scale').fire('input');near(value('force-value'),old*2,.002);
     $('length-scale').value='2';$('length-scale').fire('input');near(value('force-value'),old,.002);near(value('position-value'),models.definitions[model].start*2,.001);
+    // Changing physical parameters may fit a new scale, but never individual
+    // positions. Test extremes, signs and a very small nonzero force as well.
+    for(const energy of [.2,4])for(const length of [.5,2]) {
+      $('energy-scale').value=energy;$('energy-scale').fire('input');
+      $('length-scale').value=length;$('length-scale').fire('input');
+      let scale;
+      for(const q of [d.min,d.max,d.start,...eq.map(e=>e.q+.0001)]) {
+        $('position').value=q;$('position').fire('input');
+        const next=checkArrowGeometry(models.evaluate(model,q,energy,length).F,model);
+        if(scale===undefined)scale=next;else near(next,scale,1e-10);
+      }
+    }
     $('reset').click();
     const probeBefore=value('position-value');
     $('body-0').fire('keydown',{key:'ArrowRight'});assert(model==='pair'?value('position-value')<probeBefore:value('position-value')>probeBefore);
@@ -135,7 +166,9 @@ async function checkUI(){
     for(const id of ['tangent','equilibria','forces']) {$(id).checked=false;$(id).fire('change');}
     assert.deepEqual([$('position-value').dataset.number,$('force-value').dataset.number,$('body-0').style.left],before,'display options leave the same physical configuration');
     assert.equal(forceArrows().length,0);
+    assert($('force-scale-key').hidden,'hide scale with force vectors');
     for(const id of ['tangent','equilibria','forces']) {$(id).checked=true;$(id).fire('change');}
+    assert(!$('force-scale-key').hidden);
     $('restart').click();$('play').click();tick(0);
     for(let i=1;i<=900;i++)tick(i*1000/60);
     assert.equal($('play').textContent,'Pause');assert.equal(frames.size,1);

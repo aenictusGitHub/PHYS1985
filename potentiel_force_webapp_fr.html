@@ -47,6 +47,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .readout-card strong, .readout-card small { display: block; }
 .readout-card small { color: var(--muted); }
 .stage-wrap { height: 150px; background: #fbfcfe; }
+.force-scale-key { position: absolute; top: .65rem; left: 1rem; display: flex; align-items: center; gap: .65rem; color: var(--muted); font-size: var(--text-ui); pointer-events: none; }
+.force-scale-key[hidden] { display: none; }
+#force-scale-arrow { display: block; height: 12px; width: 40px; overflow: visible; fill: none; stroke: #7758a6; stroke-width: 2; }
+#force-scale-value { font-size: var(--text-formula); }
 .phys-app .body-handle { position: absolute; width: 40px; height: 40px; min-height: 0; transform: translate(-50%,-50%); padding: 0; border-radius: 50%; border: 1px solid transparent; background: transparent; touch-action: none; cursor: ew-resize; }
 .phys-app .body-handle:hover, .phys-app .body-handle:focus-visible { border-color: var(--accent); background: transparent; }
 .stage-note { margin: 0; padding: .65rem 1rem .85rem; }
@@ -501,6 +505,7 @@ async function startPotentialApp() {
     const colors = {U:'#b5688b',tangent:'#bc8b3b',F:'#7758a6',stable:'#268576',unstable:'#b5687b',body:'#2775b6',body2:'#74c9b2',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
     const state = {model:'wells',q:.55,energy:1,length:1,playing:false,frame:0,last:null,direction:1,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(), units=new Map(), labels=new Map();
+    let arrowScaleCache=null;
     function math(el,value) {
       if (el.dataset.math === value) return;
       el.replaceChildren(MathJax.tex2svg(value,{display:false})); el.dataset.math=value;
@@ -572,8 +577,8 @@ async function startPotentialApp() {
         : 'La force est dirigée vers les potentiels décroissants. Un minimum est stable ; un maximum est instable. La courbe représente une énergie, pas la forme d’une piste.';
       $('stage-title').textContent=pair?'Attraction et répulsion':'Sens de la force dans l’espace';
       $('stage-note').textContent=pair
-        ? 'Faites glisser l’une des particules pour régler leur séparation. Les forces sont égales et opposées ; les flèches indiquent leur sens, sans échelle de longueur.'
-        : 'Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. Les flèches indiquent le sens des forces, sans échelle de longueur.';
+        ? 'Faites glisser l’une des particules pour régler leur séparation. Les forces sont égales et opposées. La longueur des flèches est proportionnelle à leur module ; l’échelle reste fixe pour les paramètres choisis.'
+        : 'Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. La longueur de la flèche est proportionnelle au module de la force ; l’échelle reste fixe pour les paramètres choisis.';
       $('body-1').hidden=!pair;
       $('body-0').setAttribute('aria-label',pair?'Déplacer la première particule pour changer la séparation':'Déplacer la particule');
       buildEquilibria(); render();
@@ -647,7 +652,31 @@ async function startPotentialApp() {
       plot.setAttribute('aria-valuemin',min*state.length);plot.setAttribute('aria-valuemax',max*state.length);
       plot.setAttribute('aria-valuenow',current.position);plot.setAttribute('aria-valuetext',current.position.toFixed(3)+' m ; '+key+' = '+current[key].toFixed(3)+(key==='U'?' J':' N'));
     }
-    function directionArrow(ctx,x,y,direction,length,name) {
+    function forceArrowScale(w) {
+      const key=[state.model,w,state.energy,state.length].join('|');
+      if (arrowScaleCache?.key===key) return arrowScaleCache.factor;
+      const {min,max}=definition(), pair=state.model==='pair', r=geometry(w,150);
+      let factor=Infinity;
+      // Fit the entire position range once, never normalize to the current
+      // force. Both particles share this one linear pixels-per-newton scale.
+      for (let i=0;i<=1000;i++) {
+        const q=min+(max-min)*i/1000, F=sample(q).F;
+        if (Math.abs(F)<1e-12) continue;
+        let room;
+        if (pair) {
+          const halfDistance=q*(w-90)/max/2;
+          room=F>0 ? w/2-halfDistance-28 : halfDistance-24;
+        } else {
+          const x=r.left+(q-min)/(max-min)*(r.right-r.left);
+          room=F>0 ? w-x-28 : x-28;
+        }
+        // Leave room at the edges and between opposing arrowheads. Do not
+        // impose a minimum length or clip individual forces: length = k |F|.
+        factor=Math.min(factor,.9*Math.min(160,Math.max(0,room))/Math.abs(F));
+      }
+      arrowScaleCache={key,factor};return factor;
+    }
+    function forceArrow(ctx,x,y,direction,length,name) {
       const end=x+direction*length,head=Math.min(7,length*.4);
       line(ctx,[[x,y],[end,y]],colors.F,2.5);
       line(ctx,[[end-direction*head,y-head*.55],[end,y],[end-direction*head,y+head*.55]],colors.F,2.5);
@@ -659,7 +688,14 @@ async function startPotentialApp() {
       const r=geometry(w,h), X=q=>r.left+(q-min)/(max-min)*(r.right-r.left), pair=state.model==='pair';
       const bodyRadius=10, scale=(w-90)/max;
       const centers=pair?[[w/2-state.q*scale/2,y],[w/2+state.q*scale/2,y]]:[[X(state.q),y]];
+      const forceScale=forceArrowScale(w);
       state.stage={w,h,scale,centers};
+      // A reference arrow makes rescaling after a parameter/viewport change
+      // explicit. Its label and drawn length represent exactly the same force.
+      const reference=Number((40/forceScale).toPrecision(2));
+      $('force-scale-arrow').style.width=reference*forceScale+'px';
+      number($('force-scale-value'),reference,reference<1?3:2,tex`\mathrm N`);
+      $('force-scale-key').hidden=!$('forces').checked;
       if (!pair) {
         line(ctx,[[r.left,y],[r.right,y]],colors.grid,1.5);
         label('stage-labels','axis','x',r.right+9,y+20);
@@ -677,8 +713,8 @@ async function startPotentialApp() {
           if (zero) label('stage-labels','zero'+i,(pair?tex`\vec F_`+(i+1):tex`\vec F`)+tex`=\vec 0`,x,y-26,colors.F);
           else {
             const direction=Math.sign(current.F)*(pair&&i===0?-1:1);
-            const length=pair?Math.min(38,(centers[1][0]-centers[0][0])/2-18):38;
-            directionArrow(ctx,x+direction*(bodyRadius+2),y,direction,length,pair?'force'+(i+1):'force');
+            const length=forceScale*Math.abs(current.F);
+            forceArrow(ctx,x+direction*(bodyRadius+2),y,direction,length,pair?'force'+(i+1):'force');
           }
         }
       }
@@ -798,7 +834,7 @@ async function startPotentialApp() {
         <p class="microcopy">Le balayage déplace le point de lecture ; il ne simule pas le mouvement d’une particule.</p>
         <label class="check-row"><input id="tangent" type="checkbox" checked />Montrer la tangente</label>
         <label class="check-row"><input id="equilibria" type="checkbox" checked />Repérer les équilibres</label>
-        <label class="check-row"><input id="forces" type="checkbox" checked />Montrer le sens des forces</label>
+        <label class="check-row"><input id="forces" type="checkbox" checked />Montrer les forces</label>
       </section>
       <section class="panel-section equation-section">
         <h2>Relations</h2>
@@ -829,10 +865,11 @@ async function startPotentialApp() {
         <header class="card-heading"><h2 id="stage-title">Sens de la force dans l’espace</h2><span id="state-badge" class="result-badge"></span></header>
         <div id="stage" class="stage-wrap" role="group" aria-label="Schéma des corps et du sens des forces">
           <canvas id="stage-canvas" aria-hidden="true"></canvas><div id="stage-labels" class="plot-labels" aria-hidden="true"></div>
+          <div id="force-scale-key" class="force-scale-key"><span>Échelle</span><svg id="force-scale-arrow" viewBox="0 0 40 12" preserveAspectRatio="none" aria-hidden="true"><path d="M0 6H40M34 2L40 6L34 10" /></svg><span id="force-scale-value"></span></div>
           <button id="body-0" class="body-handle" type="button" aria-label="Déplacer la particule" aria-describedby="stage-note"></button>
           <button id="body-1" class="body-handle" type="button" aria-label="Déplacer la deuxième particule" aria-describedby="stage-note" hidden></button>
         </div>
-        <p id="stage-note" class="microcopy stage-note">Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. Les flèches indiquent le sens des forces, sans échelle de longueur.</p>
+        <p id="stage-note" class="microcopy stage-note">Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. La longueur de la flèche est proportionnelle au module de la force ; l’échelle reste fixe pour les paramètres choisis.</p>
       </section>
       <p id="observation" class="observation"></p>
     </main>
