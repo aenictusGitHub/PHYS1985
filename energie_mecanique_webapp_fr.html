@@ -533,6 +533,7 @@ const EnergyModels = (() => {
     const K1 = .5 * p.m1 * f1 ** 2 * speed2, K2 = .5 * p.m2 * f2 ** 2 * speed2;
     const U = -G * p.m1 * p.m2 / r;
     return {t, y, r, x1: -f1*x, z1: -f1*z, x2: f2*x, z2: f2*z,
+      vx1: -f1*vx, vz1: -f1*vz, vx2: f2*vx, vz2: f2*vz,
       K: K1 + K2, U, D: 0, E: K1 + K2 + U, parts: [K1, K2, U]};
   }
   function gravityRhs(p, y) {
@@ -660,6 +661,28 @@ function oscillatorVelocityArrow(x, velocity, amplitude, maxSpeed, center, pixel
     tip: [[end - direction * head, y - head * .55], [end, y], [end - direction * head, y + head * .55]]};
 }
 
+function gravityVelocityScale(p, maxLength) {
+  const q2 = p.speedRatio ** 2;
+  const initialSpeed = p.speedRatio * Math.sqrt(EnergyModels.G * (p.m1 + p.m2) / p.r0);
+  // Maximum relative speed at periapsis, including unbound trajectories.
+  const maxSpeed = initialSpeed * (1 + Math.abs(q2 - 1)) / q2 * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
+  return maxLength / maxSpeed;
+}
+
+function velocityArrow2D(center, vx, vz, scale, bodyRadius, outward) {
+  const speed = Math.hypot(vx, vz);
+  if (speed < 1e-12) return null;
+  const u = [vx / speed, -vz / speed], normal = [-u[1], u[0]];
+  const start = center.map((value, i) => value + u[i] * (bodyRadius + 1));
+  const length = speed * scale, end = start.map((value, i) => value + u[i] * length);
+  const head = Math.min(7, length * .45);
+  const side = normal[0] * outward[0] + normal[1] * outward[1] < 0 ? -1 : 1;
+  return {start, end, length,
+    tip: [-1, 0, 1].map(sign => sign === 0 ? end : end.map((value, i) => value - u[i] * head + sign * normal[i] * head * .55)),
+    label: start.map((value, i) => value + u[i] * length * .55 + side * normal[i] * 20),
+    massLabel: center.map((value, i) => value - u[i] * (bodyRadius + 17))};
+}
+
 // The same file works when embedded in the standalone page or deferred in sources.
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startEnergyApp);
@@ -740,6 +763,7 @@ async function startEnergyApp() {
       },
       pendulum: {
         title: 'Pendule double',
+        defaultDuration: 10,
         note: 'Deux masses échangent de l’énergie par les tiges. Le mouvement peut être complexe, mais l’énergie mécanique totale reste constante.',
         defaults: {m1: 1, m2: 1, l1: 1.2, l2: 1, theta1: 120, theta2: -30, omega1: 0, omega2: 0, g: 9.81},
         fields: [
@@ -749,8 +773,8 @@ async function startEnergyApp() {
           ['l2', 'Deuxième longueur', '\\ell_2', .5, 2, .05, tex`\mathrm m`],
           ['theta1', 'Angle initial supérieur', '\\theta_{10}', -180, 180, 1, tex`{}^\circ`],
           ['theta2', 'Angle initial inférieur', '\\theta_{20}', -180, 180, 1, tex`{}^\circ`],
-          ['omega1', 'Vitesse angulaire initiale', '\\dot\theta_{10}', -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
-          ['omega2', 'Vitesse angulaire initiale', '\\dot\theta_{20}', -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
+          ['omega1', 'Vitesse angulaire initiale', tex`\dot{\theta}_{10}`, -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
+          ['omega2', 'Vitesse angulaire initiale', tex`\dot{\theta}_{20}`, -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
           ['g', 'Pesanteur', 'g', .5, 20, .01, tex`\mathrm{m\,s^{-2}}`],
         ],
         examples: [
@@ -854,12 +878,15 @@ async function startEnergyApp() {
       finishInitialDrag(false); state.initialGeometry = null;
       state.model = $('model-select').value;
       const definition = DEFINITIONS[state.model];
+      $('duration').value = definition.defaultDuration ?? 30;
       $('scene-title').textContent = definition.title;
       $('example-select').replaceChildren(...definition.examples.map(([label], i) => new Option(label, String(i))));
       const custom = new Option('Réglage personnalisé', 'custom'); custom.disabled = true; $('example-select').append(custom);
       $('detail-row').hidden = !['pendulum', 'gravity'].includes(state.model);
       $('trail-row').hidden = state.model === 'oscillator';
-      $('velocity-row').hidden = state.model !== 'oscillator';
+      $('velocity-row').hidden = !['oscillator', 'gravity'].includes(state.model);
+      $('velocity-label').textContent = state.model === 'gravity' ? 'Vitesses instantanées' : 'Vitesse instantanée';
+      math($('velocity-symbol'), state.model === 'gravity' ? tex`\vec v_1(t),\;\vec v_2(t)` : tex`\vec v(t)`);
       $('position-badge').hidden = state.model === 'pendulum';
       math($('position-symbol'), state.model === 'simple-pendulum' ? tex`\theta=` : state.model === 'gravity' ? 'r=' : 'x=');
       $('friction-row').hidden = state.model === 'gravity';
@@ -973,7 +1000,7 @@ async function startEnergyApp() {
       const saved = state.drag?.geometry || state.initialGeometry;
       // Keep the projection fixed through a gesture and subsequent playback.
       // A resize or an explicit parameter/example change starts a fresh view.
-      const same = saved && saved.model === state.model && saved.w === w && saved.h === h;
+      const same = saved && saved.model === state.model && saved.w === w && saved.h === h && saved.velocity === geometry.velocity;
       state.sceneGeometry = same ? saved : {model: state.model, w, h, ...geometry};
       return state.sceneGeometry;
     }
@@ -1070,12 +1097,13 @@ async function startEnergyApp() {
     }
     function drawGravity(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
+      const showVelocity = $('velocity-toggle').checked, vectorInset = showVelocity ? 80 : 0;
       const bound = state.simulation.samples[0].E < 0;
       const separation = Math.max(20, bound ? state.gravityRange.radius : sample.r);
       const radius = separation * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
-      const camera = sceneGeometry(w, h, {scale: Math.min(w - 95, h - 110) / (2 * radius), origin: [w / 2, h / 2 + 8]});
+      const camera = sceneGeometry(w, h, {scale: Math.min(w - 95 - vectorInset, h - 110 - vectorInset) / (2 * radius), origin: [w / 2, h / 2 + 8], velocity: showVelocity});
       const visibleRadius = sample.r * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
-      const scale = state.t > 0 ? Math.min(camera.scale, Math.min(w - 65, h - 85) / (2 * visibleRadius)) : camera.scale;
+      const scale = state.t > 0 ? Math.min(camera.scale, Math.min(w - 65 - vectorInset, h - 85 - vectorInset) / (2 * visibleRadius)) : camera.scale;
       const {origin} = camera, point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
       const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
       state.massPositions = [a, b];
@@ -1093,10 +1121,21 @@ async function startEnergyApp() {
       line(ctx, [a, b], COLORS.grid, 1, [4, 4]);
       line(ctx, [[origin[0]-5,origin[1]], [origin[0]+5,origin[1]]], COLORS.muted, 1.5);
       line(ctx, [[origin[0],origin[1]-5], [origin[0],origin[1]+5]], COLORS.muted, 1.5);
-      dot(ctx, ...a, 5 + 2*Math.cbrt(p.m1/1e12), COLORS.K);
-      dot(ctx, ...b, 5 + 2*Math.cbrt(p.m2/1e12), COLORS.K2);
-      label('scene-labels', 'mass1', 'm_1', a[0], a[1] - 21, COLORS.K);
-      label('scene-labels', 'mass2', 'm_2', b[0], b[1] - 21, COLORS.K2);
+      const velocityScale = gravityVelocityScale(p, Math.min(40, w * .12));
+      for (const [i, body, color, mass] of [[1, a, COLORS.K, p.m1], [2, b, COLORS.K2, p.m2]]) {
+        const bodyRadius = 5 + 2 * Math.cbrt(mass / 1e12);
+        dot(ctx, ...body, bodyRadius, color);
+        const arrow = showVelocity && velocityArrow2D(body, sample[`vx${i}`], sample[`vz${i}`], velocityScale,
+          bodyRadius, [body[0] - origin[0], body[1] - origin[1]]);
+        if (arrow) {
+          line(ctx, [arrow.start, arrow.end], color, 2.5);
+          line(ctx, arrow.tip, color, 2.5);
+          label('scene-labels', `velocity${i}`, tex`\vec v_${i}(t)`,
+            Math.max(25, Math.min(w - 25, arrow.label[0])), Math.max(65, Math.min(h - 45, arrow.label[1])), color);
+        }
+        const massLabel = arrow ? arrow.massLabel : [body[0], body[1] - 21];
+        label('scene-labels', `mass${i}`, `m_${i}`, ...massLabel, color);
+      }
       label('scene-labels', 'barycenter', 'C', origin[0] + 13, origin[1] + 16, COLORS.muted);
     }
     function drawPendulum(sample) {
@@ -1215,6 +1254,8 @@ async function startEnergyApp() {
       const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J ; énergie dissipée ${sample.D.toFixed(3)} J.`);
       scene.dataset.velocity = String(state.model === 'oscillator' && $('velocity-toggle').checked);
       if (scene.dataset.velocity === 'true') scene.setAttribute('aria-label', scene.getAttribute('aria-label') + ` Vitesse horizontale ${sample.v.toFixed(3)} m/s.`);
+      if (state.model === 'gravity' && $('velocity-toggle').checked) scene.setAttribute('aria-label', scene.getAttribute('aria-label') +
+        ` Vitesses dans le référentiel du centre de masse : premier corps (${sample.vx1.toFixed(3)}, ${sample.vz1.toFixed(3)}) m/s ; deuxième corps (${sample.vx2.toFixed(3)}, ${sample.vz2.toFixed(3)}) m/s.`);
       hideLabels('scene-labels');
       if (state.model === 'oscillator') drawOscillator(sample);
       else if (state.model === 'simple-pendulum') drawSimplePendulum(sample);
@@ -1449,7 +1490,7 @@ async function startEnergyApp() {
         <label class="check-row"><input id="stacked" type="checkbox" checked /><span>Empiler les énergies</span></label>
         <label id="detail-row" class="check-row"><input id="detail" type="checkbox" checked /><span>Détailler les deux masses</span></label>
         <label id="trail-row" class="check-row"><input id="trail" type="checkbox" checked /><span>Traces du mouvement</span></label>
-        <label id="velocity-row" class="check-row"><input id="velocity-toggle" type="checkbox" /><span>Vitesse instantanée <span data-tex="\vec v(t)"></span></span></label>
+        <label id="velocity-row" class="check-row"><input id="velocity-toggle" type="checkbox" /><span><span id="velocity-label">Vitesse instantanée</span> <span id="velocity-symbol" data-tex="\vec v(t)"></span></span></label>
         <p class="microcopy">Cliquer ou faire glisser sur le graphique pour choisir l’instant.</p>
       </section>
       <section class="panel-section equation-section">

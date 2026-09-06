@@ -60,7 +60,7 @@ $('model-select').value = 'oscillator'; $('playback-speed').value = '1';
 const document = {readyState: 'complete', createElement: tag => new Element(tag), getElementById: $, querySelectorAll: () => [], addEventListener() {}};
 const context = {
   document, window: {devicePixelRatio: 1},
-  MathJax: {startup: {promise: Promise.resolve(), document: {updateDocument() { mathStylesInstalled = true; }}}, tex2svg(text) { assert(!text.includes('NaN')); const node = new Element('math'); node.dataset.tex = text; return node; }},
+  MathJax: {startup: {promise: Promise.resolve(), document: {updateDocument() { mathStylesInstalled = true; }}}, tex2svg(text) { assert(!text.includes('NaN')); assert(!/[\x00-\x1f]/.test(text), 'TeX commands must not become JavaScript control characters'); const node = new Element('math'); node.dataset.tex = text; return node; }},
   Option: function(text, value) { const node = new Element('option'); node.value = value; node.textContent = text; return node; },
   ResizeObserver: class { observe() {} },
   requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
@@ -158,6 +158,52 @@ function checkOscillatorVisualOptions() {
   assert.equal($('play').textContent, 'Pause', 'display toggle preserves playback');
   $('restart').click();
 }
+function checkGravityVelocityOptions() {
+  const arrows = () => ['#2775b6', '#268576'].map(color => sceneStrokes.filter(stroke => stroke.color === color && stroke.width === 2.5));
+  const labels = () => $('scene-labels').children.filter(node => !node.hidden && node.dataset.math?.startsWith('\\vec v_'));
+  assert(!$('velocity-row').hidden && !$('velocity-toggle').checked);
+  assert.equal($('velocity-label').textContent, 'Vitesses instantanées');
+  assert.equal($('velocity-symbol').dataset.math, '\\vec v_1(t),\\;\\vec v_2(t)');
+  $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+  for (const viewport of [300,640]) {
+    width = viewport;
+    for (const example of ['0','1','2','3']) {
+      $('example-select').value = example; $('example-select').fire('change');
+      for (const time of ['0','.37','10.234','30']) {
+        $('time-slider').value = time; $('time-slider').fire('input');
+        const strokes = arrows();
+        assert(strokes.every(parts => parts.length === 2), 'each body has one shaft and one head');
+        const delta = strokes.map(parts => {
+          assert.deepEqual(parts[0].points[1], parts[1].points[1], 'head at shaft endpoint');
+          return parts[0].points[1].map((v,i) => v - parts[0].points[0][i]);
+        });
+        const lengths = delta.map(v => Math.hypot(...v));
+        const ratio = Number($('param-m2').value) / Number($('param-m1').value);
+        assert(Math.abs(lengths[0]/lengths[1] - ratio) < 1e-10, 'common scale preserves inverse-mass velocity ratio');
+        assert(delta[0][0]*delta[1][0] + delta[0][1]*delta[1][1] < 0, 'barycentric velocities point in opposite directions');
+        assert(Math.abs(delta[0][0]*delta[1][1] - delta[0][1]*delta[1][0]) < 1e-9);
+        assert(lengths.every(length => length > 0 && length <= Math.min(40,width*.12) + 1e-6), 'periapsis reference bounds both lengths');
+        if (time === '0') assert(delta[0][1] > 0 && delta[1][1] < 0, 'vertical projection has correct sign');
+        assert.equal(labels().length, 2, 'two LaTeX velocity labels');
+        assert.equal($('scene').dataset.velocity, 'false', 'gravity does not acquire the oscillator extra band');
+        const before = $('total-readout').dataset.number;
+        $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+        assert(arrows().every(parts => parts.length === 0) && labels().length === 0);
+        $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+        assert.equal(Number($('time-slider').value), Number(time));
+        assert.equal($('total-readout').dataset.number, before, 'toggling does not change energy');
+      }
+    }
+  }
+  $('reset-parameters').click();
+  $('mass-handle-1').fire('keydown', {key:'ArrowRight'});
+  assert(Number($('param-r0').value) > 10, 'initial mass editing uses the velocity view projection');
+  assert.equal(Number($('time-slider').value), 0);
+  $('play').click(); tick(2000); tick(2100);
+  $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+  assert.equal($('play').textContent, 'Pause');
+  $('restart').click(); $('reset-parameters').click();
+}
 async function main() {
   vm.runInNewContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
@@ -192,6 +238,24 @@ async function main() {
   assert.equal($('value-k').dataset.number, '4.00|\\mathrm{N\\,m^{-1}}');
   for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
+    const defaultDuration = model === 'pendulum' ? 10 : 30;
+    assert.equal(Number($('duration').value), defaultDuration, 'model-specific default duration');
+    assert.equal($('duration-readout').dataset.number, `${defaultDuration}|\\mathrm s`);
+    assert.equal(Number($('time-slider').max), defaultDuration);
+    assert.equal(Number($('history').attrs['aria-valuemax']), defaultDuration);
+    $('history').fire('keydown', {key: 'End'});
+    assert.equal(Number($('time-slider').value), defaultDuration, 'simulation ends at default duration');
+    $('history').fire('keydown', {key: 'Home'});
+    if (model === 'pendulum') {
+      const symbols = $('parameters').children.map(root => root.children[0].children[0].children[1].dataset.math);
+      assert(symbols.includes('\\dot{\\theta}_{10}') && symbols.includes('\\dot{\\theta}_{20}'), 'both initial angular velocities have proper dotted theta symbols');
+      $('duration').value = '25'; $('duration').fire('input'); tick();
+      $('example-select').value = '1'; $('example-select').fire('change');
+      $('param-omega1').value = '.2'; $('param-omega1').fire('input'); tick();
+      assert.equal(Number($('time-slider').max), 25, 'explicit duration survives example and parameter changes');
+      $('model-select').fire('change');
+      assert.equal(Number($('time-slider').max), 10, 'selecting the double pendulum restores its default');
+    }
     assert.equal($('position-badge').hidden, model === 'pendulum');
     assert.equal($('detail-row').hidden, model !== 'pendulum');
     assert.equal($('trail-row').hidden, model === 'oscillator');
@@ -209,7 +273,7 @@ async function main() {
     }
     for (const example of ['0', '1', '2', '3']) {
       $('example-select').value = example; $('example-select').fire('change');
-      for (const time of ['0', '1.234', '29.999', '30']) {
+      for (const time of ['0', '1.234', String(defaultDuration - .001), String(defaultDuration)]) {
         $('time-slider').value = time; $('time-slider').fire('input');
         for (const id of ['kinetic-readout', 'potential-readout', 'total-readout', 'error-readout']) {
           assert($(id).dataset.number && !$(id).dataset.number.includes(','), 'decimal dot and TeX value');
@@ -237,6 +301,7 @@ async function main() {
   assert(Number($('time-slider').value) > 20 && Number($('time-slider').value) < 40);
   for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
+    $('duration').value = '60'; $('duration').fire('input'); tick();
     $('friction-toggle').checked = true; $('friction-toggle').fire('change');
     assert(!$('damping-controls').hidden && !$('dissipation-card').hidden);
     assert.equal($('friction-badge').textContent, 'Avec frottements');
@@ -273,9 +338,11 @@ async function main() {
   }
   $('friction-toggle').checked = true;
   $('model-select').value = 'gravity'; $('model-select').fire('change');
+  assert.equal(Number($('duration').value), 30, 'gravity keeps its original default');
+  $('duration').value = '60'; $('duration').fire('input'); tick();
   assert($('friction-row').hidden && $('damping-controls').hidden && $('dissipation-card').hidden, 'gravity is an isolated two-body system');
   assert.equal($('friction-badge').textContent, 'Gravitation seule');
-  assert($('velocity-row').hidden, 'oscillator velocity control is absent for gravity');
+  assert(!$('velocity-row').hidden, 'velocity option is available for gravity');
   assert(!$('detail-row').hidden && !$('trail-row').hidden);
   assert.equal($('position-symbol').dataset.math, 'r=');
   assert.equal($('value-m1').dataset.number, '1.00|\\times10^{12}\\,\\mathrm{kg}', 'scaled mass rendered in LaTeX');
@@ -286,6 +353,7 @@ async function main() {
   assert.equal($('energy-key').children.length, 3, 'kinetic parts and one shared potential');
   assert(css.includes('.energy-meter[data-signed="true"]::after'), 'signed energy meter has a zero divider');
   checkHistoryAnnotations(false, true);
+  checkGravityVelocityOptions();
   $('param-m1').value = '2000000000000'; $('param-m1').fire('input'); tick();
   assert.equal($('value-m1').dataset.number, '2.00|\\times10^{12}\\,\\mathrm{kg}');
   assert.equal($('total-readout').dataset.number, '-6.674|\\times10^{12}\\,\\mathrm J');

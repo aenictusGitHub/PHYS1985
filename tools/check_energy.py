@@ -76,11 +76,22 @@ for (const p of [gravity, {...gravity, speedRatio: .65}, {...gravity, m1: 5e12, 
     near(s.parts.reduce((a,b)=>a+b,0), s.E, reference*1e-14, 'pair potential counted once');
     near((p.m1*s.x1+p.m2*s.x2)/totalMass, 0, 1e-12, 'fixed barycenter x');
     near((p.m1*s.z1+p.m2*s.z2)/totalMass, 0, 1e-12, 'fixed barycenter z');
+    near((p.m1*s.vx1+p.m2*s.vx2)/totalMass, 0, 1e-12, 'zero total horizontal momentum');
+    near((p.m1*s.vz1+p.m2*s.vz2)/totalMass, 0, 1e-12, 'zero total vertical momentum');
+    near(s.vx2-s.vx1, s.y[2], 1e-12, 'relative horizontal velocity');
+    near(s.vz2-s.vz1, s.y[3], 1e-12, 'relative vertical velocity');
+    near(.5*p.m1*(s.vx1*s.vx1+s.vz1*s.vz1), s.parts[0], reference*1e-14, 'first velocity matches kinetic energy');
+    near(.5*p.m2*(s.vx2*s.vx2+s.vz2*s.vz2), s.parts[1], reference*1e-14, 'second velocity matches kinetic energy');
     near(Math.hypot(s.x2-s.x1,s.z2-s.z1), s.r, 1e-10, 'relative separation');
     near(s.y[0]*s.y[3]-s.y[1]*s.y[2], angular0, 1e-7*Math.abs(angular0), 'angular momentum conservation');
     near(s.U, -EnergyModels.G*p.m1*p.m2/s.r, reference*1e-14, 'unsoftened Newtonian potential');
   }
   for (const t of [.0034,1.2345,26.54321,59.999,60]) near(sim.at(t).E,initial.E,reference*1e-7,'gravitational off-grid energy');
+  const t = 1.2345, dt = 1e-5, before = sim.at(t-dt), after = sim.at(t+dt), current = sim.at(t);
+  for (const i of [1,2]) {
+    near((after['x'+i]-before['x'+i])/(2*dt), current['vx'+i], 1e-6, 'body horizontal velocity is position derivative');
+    near((after['z'+i]-before['z'+i])/(2*dt), current['vz'+i], 1e-6, 'body vertical velocity is position derivative');
+  }
   const q2 = p.speedRatio*p.speedRatio, semiMajor = p.r0/(2-q2);
   if (q2 < 2) assert(initial.E < 0, 'bound orbits have negative energy');
   else assert(initial.E > 0 && sim.at(60).r > p.r0*2, 'unbound orbit escapes');
