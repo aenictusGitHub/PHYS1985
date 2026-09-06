@@ -11,15 +11,17 @@ const html = read('index.html'), source = read('app.js'), css = read('style.css'
 const nodes = new Map(), frames = [], reported = [];
 let width = 640;
 let mathStylesInstalled = false;
-let canvasId = '', strokePoints = [];
-const sceneStrokes = [];
+let canvasId = '', strokePoints = [], circle = null;
+const sceneStrokes = [], sceneFills = [];
 const ctx = new Proxy({}, {get(target, key) {
   if (key in target) return target[key];
   return (...args) => {
     for (const a of args.flat()) if (typeof a === 'number') assert(Number.isFinite(a), 'canvas finite coordinate');
-    if (key === 'beginPath') strokePoints = [];
+    if (key === 'beginPath') { strokePoints = []; circle = null; }
+    if (key === 'arc') circle = [...args];
     if (key === 'moveTo' || key === 'lineTo') strokePoints.push([...args]);
-    if (key === 'clearRect' && canvasId === 'scene-canvas') sceneStrokes.length = 0;
+    if (key === 'clearRect' && canvasId === 'scene-canvas') { sceneStrokes.length = 0; sceneFills.length = 0; }
+    if (key === 'fill' && canvasId === 'scene-canvas' && circle) sceneFills.push({circle, color: target.fillStyle});
     if (key === 'stroke' && canvasId === 'scene-canvas') sceneStrokes.push({points: strokePoints, color: target.strokeStyle, width: target.lineWidth});
   };
 }});
@@ -159,7 +161,7 @@ function checkOscillatorVisualOptions() {
   $('restart').click();
 }
 function checkGravityVelocityOptions() {
-  const arrows = () => ['#2775b6', '#268576'].map(color => sceneStrokes.filter(stroke => stroke.color === color && stroke.width === 2.5));
+  const arrows = () => ['#2775b6', '#499e88'].map(color => sceneStrokes.filter(stroke => stroke.color === color && stroke.width === 2.5));
   const labels = () => $('scene-labels').children.filter(node => !node.hidden && node.dataset.math?.startsWith('\\vec v_'));
   const sceneLayout = () => ({
     bounds: $('scene-canvas').getBoundingClientRect(),
@@ -168,7 +170,7 @@ function checkGravityVelocityOptions() {
     // Separation line and barycenter axes must be unaffected by both options.
     structure: JSON.stringify(sceneStrokes.filter(stroke => ['#dce4ec','#607185'].includes(stroke.color))),
   });
-  const trajectories = () => JSON.stringify(sceneStrokes.filter(stroke => ['#e0e9f1','#e0ede9'].includes(stroke.color) || (['#2775b6','#268576'].includes(stroke.color) && stroke.width === 1.5)));
+  const trajectories = () => JSON.stringify(sceneStrokes.filter(stroke => ['#e0e9f1','#e0ede9'].includes(stroke.color) || (['#2775b6','#499e88'].includes(stroke.color) && stroke.width === 1.5)));
   const verifyOverlays = () => {
     const before = sceneLayout(), paths = trajectories(), vectors = JSON.stringify(arrows());
     $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
@@ -196,7 +198,7 @@ function checkGravityVelocityOptions() {
       const initialPoints = [0,1].map(i => [parseFloat($('mass-handle-'+i).style.left), parseFloat($('mass-handle-'+i).style.top)]);
       for (const time of ['0','.37','10.234','30','60']) {
         $('time-slider').value = time; $('time-slider').fire('input');
-        const trails = ['#2775b6','#268576'].map(color => sceneStrokes.find(stroke => stroke.color === color && stroke.width === 1.5));
+        const trails = ['#2775b6','#499e88'].map(color => sceneStrokes.find(stroke => stroke.color === color && stroke.width === 1.5));
         for (const [i, trail] of trails.entries()) {
           assert.equal(trail.points.length, Math.floor(Number(time)*60)+2, 'trajectory retains every sample from t=0, including after twelve seconds');
           if (example !== '3') assert.deepEqual(trail.points[0], initialPoints[i], 'bound trajectory still starts at initial body position');
@@ -279,6 +281,7 @@ async function main() {
     assert.equal(Number($('time-slider').value), defaultDuration, 'simulation ends at default duration');
     $('history').fire('keydown', {key: 'Home'});
     if (model === 'pendulum') {
+      checkSecondBodyColor();
       const symbols = $('parameters').children.map(root => root.children[0].children[0].children[1].dataset.math);
       assert(symbols.includes('\\dot{\\theta}_{10}') && symbols.includes('\\dot{\\theta}_{20}'), 'both initial angular velocities have proper dotted theta symbols');
       $('duration').value = '25'; $('duration').fire('input'); tick();
@@ -374,6 +377,7 @@ async function main() {
   $('duration').value = '60'; $('duration').fire('input'); tick();
   assert($('friction-row').hidden && $('damping-controls').hidden && $('dissipation-card').hidden, 'gravity is an isolated two-body system');
   assert.equal($('friction-badge').textContent, 'Gravitation seule');
+  checkSecondBodyColor();
   assert(!$('velocity-row').hidden, 'velocity option is available for gravity');
   assert(!$('detail-row').hidden && !$('trail-row').hidden);
   assert.equal($('position-symbol').dataset.math, 'r=');
@@ -419,6 +423,16 @@ async function main() {
   checkInitialDragging();
   assert.deepEqual(reported, []);
   console.log('Energy UI controllers: mouse/touch and keyboard initial-position editing for all four systems, constraints, preview/commit/cancel, playback locks, signed energies, LaTeX, examples, friction and chart seeking passed.');
+}
+function checkSecondBodyColor() {
+  const body = sceneFills.find(fill => fill.color === '#74c9b2');
+  assert(body, 'second body is filled with light turquoise');
+  assert.equal(body.circle[0], parseFloat($('mass-handle-1').style.left));
+  assert.equal(body.circle[1], parseFloat($('mass-handle-1').style.top));
+  assert(sceneStrokes.some(stroke => stroke.color === '#499e88' && stroke.width === 1.25), 'thin darker outline keeps the pale mass visible');
+  const massLabel = $('scene-labels').children.find(node => !node.hidden && node.dataset.math === 'm_2');
+  assert.equal(massLabel.style.color, '#237a68', 'mathematical label retains darker readable ink');
+  assert(sceneFills.some(fill => fill.color === '#2775b6'), 'first body stays blue');
 }
 function checkInitialDragging() {
   const near = (a,b) => assert(Math.abs(a-b) < 1e-7, `${a} vs ${b}`);

@@ -695,7 +695,7 @@ async function startEnergyApp() {
   try {
     await MathJax.startup.promise;
     const tex = String.raw;
-    const COLORS = {K: '#2775b6', U: '#b5688b', E: '#268576', K2: '#268576', U2: '#bc8b3b', D: '#a0acb9', ink: '#233449', muted: '#607185', grid: '#dce4ec'};
+    const COLORS = {K: '#2775b6', U: '#b5688b', E: '#268576', K2: '#499e88', body2: '#74c9b2', body2Ink: '#237a68', U2: '#bc8b3b', D: '#a0acb9', ink: '#233449', muted: '#607185', grid: '#dce4ec'};
     const DEFINITIONS = {
       oscillator: {
         title: 'Oscillateur harmonique',
@@ -995,7 +995,10 @@ async function startEnergyApp() {
       ctx.beginPath(); ctx.moveTo(...points[0]); for (let i = 1; i < points.length; i++) ctx.lineTo(...points[i]);
       ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash); ctx.stroke(); ctx.setLineDash([]);
     }
-    function dot(ctx, x, y, radius, color) { ctx.beginPath(); ctx.arc(x, y, radius, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); }
+    function dot(ctx, x, y, radius, color, outline = null) {
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill();
+      if (outline) { ctx.strokeStyle = outline; ctx.lineWidth = 1.25; ctx.stroke(); }
+    }
     function sceneGeometry(w, h, geometry) {
       const saved = state.drag?.geometry || state.initialGeometry;
       // Keep the projection fixed through a gesture and subsequent playback.
@@ -1127,7 +1130,8 @@ async function startEnergyApp() {
       const velocityScale = gravityVelocityScale(p, Math.min(40, w * .12));
       for (const [i, body, color, mass] of [[1, a, COLORS.K, p.m1], [2, b, COLORS.K2, p.m2]]) {
         const bodyRadius = 5 + 2 * Math.cbrt(mass / 1e12);
-        dot(ctx, ...body, bodyRadius, color);
+        const labelColor = i === 2 ? COLORS.body2Ink : color;
+        dot(ctx, ...body, bodyRadius, i === 2 ? COLORS.body2 : color, i === 2 ? color : null);
         // Compute annotation anchors independently of visibility, so mass
         // labels do not jump when velocity arrows are shown or hidden.
         const arrow = velocityArrow2D(body, sample[`vx${i}`], sample[`vz${i}`], velocityScale,
@@ -1136,10 +1140,10 @@ async function startEnergyApp() {
           line(ctx, [arrow.start, arrow.end], color, 2.5);
           line(ctx, arrow.tip, color, 2.5);
           label('scene-labels', `velocity${i}`, tex`\vec v_${i}(t)`,
-            Math.max(25, Math.min(w - 25, arrow.label[0])), Math.max(65, Math.min(h - 45, arrow.label[1])), color);
+            Math.max(25, Math.min(w - 25, arrow.label[0])), Math.max(65, Math.min(h - 45, arrow.label[1])), labelColor);
         }
         const massLabel = arrow ? arrow.massLabel : [body[0], body[1] - 21];
-        label('scene-labels', `mass${i}`, `m_${i}`, ...massLabel, color);
+        label('scene-labels', `mass${i}`, `m_${i}`, ...massLabel, labelColor);
       }
       label('scene-labels', 'barycenter', 'C', origin[0] + 13, origin[1] + 16, COLORS.muted);
     }
@@ -1159,9 +1163,9 @@ async function startEnergyApp() {
       line(ctx, [origin, a, b], '#778da0', 3);
       dot(ctx, ...origin, 4, COLORS.ink);
       dot(ctx, ...a, 7 + Math.sqrt(p.m1) * 3, COLORS.K);
-      dot(ctx, ...b, 7 + Math.sqrt(p.m2) * 3, COLORS.K2);
+      dot(ctx, ...b, 7 + Math.sqrt(p.m2) * 3, COLORS.body2, COLORS.K2);
       label('scene-labels', 'mass1', 'm_1', a[0] + 22, a[1] - 16, COLORS.K);
-      label('scene-labels', 'mass2', 'm_2', b[0] + 22, b[1] + 17, COLORS.K2);
+      label('scene-labels', 'mass2', 'm_2', b[0] + 22, b[1] + 17, COLORS.body2Ink);
       label('scene-labels', 'origin', 'O', origin[0] - 14, origin[1] - 12, COLORS.muted);
       const gx = w - 30, gy = h - 64;
       line(ctx, [[gx, gy], [gx, gy + 27]], COLORS.muted, 2);
