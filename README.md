@@ -114,6 +114,7 @@ Application inspirée de `Ivariable.mp4`, `Tabouret tournant.mp4` et
 - Moment extérieur signé, réglable en direct : accélération, freinage et inversion. Bilan entre variation de moment cinétique et impulsion angulaire.
 - Valeurs instantanées de l’inertie, de la vitesse angulaire, du moment cinétique et de l’énergie de rotation. Graphe sélectionnable, historique complet et reprise depuis un instant passé.
 - Vecteurs LaTeX, vitesse tangentielle optionnelle, repère fixe et rayon initial en pointillé. Le déplacement radial est imposé et son énergie cinétique n’est pas incluse dans l’énergie de rotation.
+- Vitesses du tabouret notées `v_1` et `v_2`, bleue et verte ; vitesse dorée contrastée sur la sphère ; échelle amplifiée pour le point matériel. Le moment extérieur non nul apparaît dans la scène par une flèche rose parallèle à l’axe et sa valeur signée, indépendamment du sens de rotation.
 
 Tests des modèles, des commandes et de la lecture : `node tools/check_angular.cjs`.
 L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules avec MathJax réel.

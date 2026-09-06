@@ -35,6 +35,11 @@ canvas { display: block; width: 100%; height: 100%; }
 .plot-labels { position: absolute; inset: 0; pointer-events: none; }
 .plot-label { position: absolute; transform: translate(-50%,-50%); white-space: nowrap; font-size: var(--text-formula); }
 .plot-label.tick { font-size: var(--text-tick); }
+.velocity-contrast-label { padding: .1rem .25rem; border-radius: .2rem; background: #fff9ed; }
+.scene-torque { position: absolute; left: 48px; bottom: 14px; color: #b14866; font-size: var(--text-ui); pointer-events: none; }
+.scene-torque[hidden] { display: none; }
+.scene-torque > span { display: block; }
+.scene-torque .torque-reading { display: flex; align-items: baseline; gap: .2rem; margin-top: .2rem; font-size: var(--text-formula); }
 .scene-note { margin: 0; padding: .65rem 1rem .85rem; border-top: 1px solid var(--line); }
 .phys-app[data-app="angular"] .readout-panel { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .7rem; margin: .85rem 0; }
 .readout-card { border-top: 2px solid var(--card-color) !important; }
@@ -529,7 +534,7 @@ async function startRotationApp(){
   const $=id=>document.getElementById(id),tex=String.raw;
   try {
     await MathJax.startup.promise;
-    const colors={body:'#2775b6',body2:'#74c9b2',v:'#2775b6',L:'#7758a6',I:'#bc8b3b',r:'#d9683b',K:'#b5688b',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
+    const colors={body:'#2775b6',body2:'#74c9b2',v:'#2775b6',v2:'#237a68',shellV:'#f5ba46',shellVInk:'#74430a',torque:'#b14866',L:'#7758a6',I:'#bc8b3b',r:'#d9683b',K:'#b5688b',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
     const state={sim:new RotationModels.Simulation(),playing:false,frame:0,last:null,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(),units=new Map(),labels=new Map();
     function math(el,value){if(el.dataset.math===value)return;el.replaceChildren(MathJax.tex2svg(value,{display:false}));el.dataset.math=value;}
@@ -567,7 +572,9 @@ async function startRotationApp(){
       live.min=factor*RotationModels.minRadius;live.max=factor*RotationModels.maxRadius;live.step=factor*.01;
       $('scene-radius-name').textContent=sim.model==='stool'?'Distance entre les masses':sim.model==='shell'?'Rayon de la sphère':'Distance à l’axe';
       math($('scene-radius-symbol'),sim.model==='stool'?tex`d=2r`:'r');
-      $('live-radius-help').textContent=sim.model==='shell'?'Déplacer ce curseur ou faire glisser le point bleu pour changer le rayon, même pendant la rotation.':'Déplacer ce curseur ou faire glisser une masse vers l’axe ou vers l’extérieur, même pendant la rotation.';
+      $('live-radius-help').textContent=sim.model==='shell'?'Déplacer ce curseur ou faire glisser le point repère sur la sphère pour changer le rayon, même pendant la rotation.':'Déplacer ce curseur ou faire glisser une masse vers l’axe ou vers l’extérieur, même pendant la rotation.';
+      $('velocity-name').textContent=sim.model==='stool'?'Vitesses tangentielles':'Vitesse tangentielle';
+      math($('velocity-symbol'),sim.model==='stool'?tex`\vec v_1,\;\vec v_2`:tex`\vec v`);
       $('scene-title').textContent=sim.model==='stool'?'Tabouret tournant':sim.model==='shell'?'Sphère rétractable':'Point matériel en rotation';
       $('model-note').textContent=sim.model==='stool'?'Deux haltères sont rapprochés symétriquement du corps. Le tabouret et le corps sont représentés par une inertie fixe, les haltères par deux masses ponctuelles.':sim.model==='shell'?'La structure rétractable de la vidéo est idéalisée par une coquille sphérique mince et uniforme, de masse constante.':'Une masse ponctuelle décrit un cercle dans un plan perpendiculaire à l’axe fixe. Faire varier sa distance à l’axe change le moment d’inertie.';
       math($('inertia-formula'),sim.model==='stool'?tex`I_z=I_0+2mr^2`:sim.model==='shell'?tex`I_z=\frac23 mr^2`:tex`I_z=mr^2,\quad\vec L_O=\vec r\times m\vec v`);
@@ -628,29 +635,46 @@ async function startRotationApp(){
       const Lbound=state.vectorBound,Lscale=110/Lbound;
       // Independent fixed units for linear velocity and angular momentum.
       let maxV=0;for(let i=0;i<=100;i++){const r=RotationModels.minRadius+(RotationModels.maxRadius-RotationModels.minRadius)*i/100;maxV=Math.max(maxV,Lbound*r/RotationModels.inertia(sim.model,p.mass,p.base,r));}
-      const vScale=46/Math.max(.2,maxV);
+      // A larger, fixed linear scale makes the point-particle velocity readable.
+      // Its maximum still fits the viewport throughout contraction and rotation.
+      const velocityPixels=sim.model==='particle'?Math.min(140,w*.42):46;
+      const vScale=velocityPixels/Math.max(.2,maxV);
+      const velocityArrows=[];
       for(const [i,a] of angles.entries()){
         const pos=P(s.r*Math.cos(a),s.r*Math.sin(a));
         line(ctx,[[cx,cy],pos],sim.model==='stool'?'#93a7b8':colors.r,sim.model==='stool'?4:1.8);
         if(i===0)label('scene-labels','radius','r',(cx+pos[0])/2-8,(cy+pos[1])/2+15,colors.r);
         if(sim.model==='shell')dot(ctx,...pos,5.5,colors.ink);
         else sphere(ctx,...pos,10,i+1);
-        if(sim.model!=='shell')label('scene-labels','mass'+i,'m',pos[0],pos[1]+22,i?'#237a68':colors.body);
+        if(sim.model!=='shell')label('scene-labels','mass'+i,sim.model==='stool'?'m_'+(i+1):'m',pos[0],pos[1]+22,i?colors.v2:colors.body);
         if($('show-v').checked&&Math.abs(s.omega)>1e-9){
           const vx=-s.r*s.omega*Math.sin(a),vy=s.r*s.omega*Math.cos(a),tip=[pos[0]+vScale*vx,pos[1]-.42*vScale*vy];
-          arrow(ctx,pos,tip,colors.v);const dx=tip[0]-pos[0],dy=tip[1]-pos[1],length=Math.hypot(dx,dy);
-          label('scene-labels','velocity'+i,tex`\vec v_\theta`,tip[0]+12*dy/length,tip[1]-12*dx/length,colors.v);
+          velocityArrows.push({i,pos,tip});
         }
+      }
+      // Draw vectors after all bodies and the mesh, so they remain in front.
+      for(const {i,pos,tip}of velocityArrows){
+        const shell=sim.model==='shell',color=shell?colors.shellV:i?colors.v2:colors.v;
+        if(shell)arrow(ctx,pos,tip,colors.shellVInk,5);
+        arrow(ctx,pos,tip,color,shell?3:2.5);
+        const dx=tip[0]-pos[0],dy=tip[1]-pos[1],length=Math.hypot(dx,dy);
+        const el=label('scene-labels','velocity'+i,sim.model==='stool'?tex`\vec v_${i+1}`:tex`\vec v`,
+          Math.max(25,Math.min(w-25,tip[0]+16*dy/length)),Math.max(65,Math.min(h-90,tip[1]-16*dx/length)),shell?colors.shellVInk:color);
+        if(shell)el.className+=' velocity-contrast-label';
       }
       dot(ctx,cx,cy,3.5,colors.ink);label('scene-labels','origin','O',cx+15,cy+16,colors.muted);
       if($('show-l').checked){if(Math.abs(s.L)<1e-9)label('scene-labels','L',tex`\vec L_O=\vec 0`,cx+48,cy-50,colors.L);else{
         const length=Math.abs(s.L)*Lscale,tip=[cx,cy-Math.sign(s.L)*length];arrow(ctx,[cx,cy],tip,colors.L,3);
         label('scene-labels','L',tex`\vec L_O`,cx+24,tip[1]-Math.sign(s.L)*8,colors.L);
       }}
-      const direction=s.omega>=0?1:-1,arc=Array.from({length:33},(_,i)=>{const a=direction*(.2+i*.035);return [48+24*Math.cos(a),h-30-12*Math.sin(a)];});
-      if(Math.abs(s.omega)>1e-9){line(ctx,arc,colors.muted,1.5);arrow(ctx,arc[29],arc[32],colors.muted,1.5);}
-      label('scene-labels','omega',tex`\omega`,30,h-33,colors.v);
-      $('scene').setAttribute('aria-label',$('scene-title').textContent+'. Instant '+s.t.toFixed(2)+' s ; rayon '+s.r.toFixed(2)+' m ; vitesse angulaire '+s.omega.toFixed(3)+' rad/s ; moment cinétique '+s.L.toFixed(3)+' kg m²/s.');
+      const hasTorque=Math.abs(s.torque)>1e-12;
+      $('scene-torque').hidden=!hasTorque;
+      if(hasTorque){
+        // Separate torque scale: 18 pixels per N m, along the same +z direction.
+        arrow(ctx,[24,h-48],[24,h-48-18*s.torque],colors.torque,3);
+        number($('scene-torque-value'),s.torque,2,tex`\mathrm{N\,m}`);
+      }
+      $('scene').setAttribute('aria-label',$('scene-title').textContent+'. Instant '+s.t.toFixed(2)+' s ; rayon '+s.r.toFixed(2)+' m ; vitesse angulaire '+s.omega.toFixed(3)+' rad/s ; moment cinétique '+s.L.toFixed(3)+' kg m²/s ; moment extérieur '+s.torque.toFixed(2)+' N m, selon l’axe Oz.');
     }
     function chartGeometry(w,h){return {left:70,right:Math.max(90,w-24),top:40,bottom:h-44};}
     function drawHistory(s){
@@ -764,7 +788,7 @@ async function startRotationApp(){
         <div class="transport-row"><button id="play" type="button" class="primary-button" aria-pressed="false">Lire</button><button id="restart" type="button">Recommencer</button><select id="speed" aria-label="Vitesse de lecture"><option value="0.25">Très lent</option><option value="0.5">Lent</option><option value="1" selected>Normal</option></select></div>
         <label class="field-label compact" for="duration">Durée</label><input id="duration" type="range" min="10" max="60" step="5" value="20" /><output id="duration-value" for="duration"></output>
         <label class="check-row"><input id="show-l" type="checkbox" checked />Moment cinétique <span data-tex="\vec L_O"></span></label>
-        <label class="check-row"><input id="show-v" type="checkbox" checked />Vitesse tangentielle <span data-tex="\vec v_\theta"></span></label>
+        <label class="check-row"><input id="show-v" type="checkbox" checked /><span id="velocity-name">Vitesses tangentielles</span> <span id="velocity-symbol"></span></label>
         <label class="check-row"><input id="show-radius" type="checkbox" checked />Rayon initial en pointillé</label>
       </section>
       <section class="panel-section equation-section">
@@ -783,13 +807,14 @@ async function startRotationApp(){
         <div id="scene" class="scene-wrap" role="img" aria-label="Rotation autour de l’axe vertical fixe">
           <canvas id="scene-canvas" aria-hidden="true"></canvas><div id="scene-labels" class="plot-labels" aria-hidden="true"></div>
           <div class="time-badge"><span data-tex="t="></span><span id="time-value"></span></div>
+          <div id="scene-torque" class="scene-torque" hidden><span>Moment extérieur</span><span class="torque-reading"><span data-tex="\tau_z^{\mathrm{ext}}="></span><span id="scene-torque-value"></span></span></div>
         </div>
         <div class="live-radius-control">
           <div class="live-radius-heading"><label class="field-label" for="scene-radius"><span id="scene-radius-name">Distance entre les masses</span> <span id="scene-radius-symbol"></span></label><output id="scene-radius-value" for="scene-radius"></output></div>
           <input id="scene-radius" type="range" min="0.5" max="2.4" step="0.02" value="1.6" aria-describedby="live-radius-help" />
           <p id="live-radius-help" class="microcopy">Déplacer ce curseur ou faire glisser une masse vers l’axe ou vers l’extérieur, même pendant la rotation.</p>
         </div>
-        <p class="scene-note microcopy">Vue en perspective ; sens positif : antihoraire vu du côté <span data-tex="+z"></span>. Les flèches de vitesse représentent la composante tangentielle, pas le déplacement radial.</p>
+        <p class="scene-note microcopy">Vue en perspective ; sens positif : antihoraire vu du côté <span data-tex="+z"></span>. Les flèches de vitesse représentent la composante tangentielle, pas le déplacement radial. Lorsqu’il est non nul, le moment extérieur est représenté par une flèche rose parallèle à <span data-tex="Oz"></span>, avec une échelle distincte.</p>
       </section>
       <section class="readout-panel" aria-label="Grandeurs instantanées">
         <article class="readout-card" style="--card-color:#bc8b3b"><span data-tex="I_z(t)"></span><strong id="inertia-value"></strong><small>moment d’inertie</small></article>

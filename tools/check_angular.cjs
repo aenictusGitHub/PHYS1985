@@ -87,8 +87,73 @@ function checkScene(){
   const L=strokes.filter(s=>s.color==='#7758a6'&&s.width===3);
   if(Math.abs(value('momentum-value'))>.01&&$('show-l').checked){assert.equal(L.length,2);assert.deepEqual(L[0].points[1],L[1].points[1],'L arrowhead at endpoint');assert.equal(Math.sign(L[0].points[0][1]-L[0].points[1][1]),Math.sign(value('momentum-value')));}
 }
+function checkAnnotations(){
+  assert(!source.includes('vec v_\\theta')&&!html.includes('vec v_\\theta'),'no theta subscripts on velocity labels');
+  for(const model of ['particle','stool','shell'])for(const viewport of [240,700]){
+    width=viewport;$('model-select').value=model;$('model-select').fire('change');
+    const visibleLabels=()=>$('scene-labels').children.filter(el=>!el.hidden);
+    assert(!visibleLabels().some(el=>el.dataset.math==='\\omega'),'ambiguous corner omega is removed');
+    assert.equal($('velocity-symbol').dataset.math,model==='stool'?'\\vec v_1,\\;\\vec v_2':'\\vec v');
+    for(const omega of [-2,0,2]){
+      input('omega-initial',omega);
+      const strokes=plots.get('scene-canvas').strokes;
+      const bodies=plots.get('scene-canvas').circles.filter(c=>c[2]===(model==='shell'?5.5:10));
+      const colors=model==='shell'?['#f5ba46']:model==='stool'?['#2775b6','#237a68']:['#2775b6'];
+      for(const [i,color]of colors.entries()){
+        const arrows=strokes.filter(s=>s.color===color&&s.width===(model==='shell'?3:2.5));
+        assert.equal(arrows.length,omega?2:0,'shaft and head, no fabricated zero velocity');
+        if(!omega)continue;
+        assert.deepEqual(arrows[0].points[0],bodies[i].slice(0,2),'velocity originates at the matching body');
+        assert.deepEqual(arrows[0].points[1],arrows[1].points[1],'head meets endpoint');
+        assert.equal(Math.sign(arrows[0].points[0][1]-arrows[0].points[1][1]),Math.sign(omega)*(i?-1:1),'correct tangential direction');
+        const symbol=model==='stool'?'\\vec v_'+(i+1):'\\vec v';
+        const label=visibleLabels().find(el=>el.dataset.math===symbol);assert(label,'matching LaTeX label');
+        assert.equal(label.style.color,model==='shell'?'#74430a':color);
+        if(model==='shell'){
+          assert(label.className.includes('velocity-contrast-label'),'readable label over sphere shading');
+          const casing=strokes.filter(s=>s.color==='#74430a'&&s.width===5);
+          assert.equal(casing.length,2);assert.deepEqual(casing.map(s=>s.points),arrows.map(s=>s.points),'contrasting casing preserves vector geometry');
+        }
+        if(model==='particle'){
+          const length=Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]);
+          const expected=.42*Math.min(140,width*.42)*.25/.8;
+          near(length,expected);assert(length>.42*46*.25/.8*2,'particle velocity scale more than doubles');
+        }
+      }
+      checkScene();
+    }
+    // Torque direction is independent of the current sense of rotation.
+    input('omega-initial',2);
+    const geometry=JSON.stringify(plots.get('scene-canvas').circles);
+    for(const torque of [-2,-.1,0,.1,2]){
+      input('torque',torque);checkScene();
+      assert.equal(JSON.stringify(plots.get('scene-canvas').circles),geometry,'torque annotation does not move the scene');
+      const arrows=plots.get('scene-canvas').strokes.filter(s=>s.color==='#b14866'&&s.width===3);
+      assert.equal($('scene-torque').hidden,torque===0);assert.equal(arrows.length,torque?2:0);
+      if(torque){
+        near(value('scene-torque-value'),torque);assert.equal($('scene-torque-value').children[0].tag,'svg');
+        near(arrows[0].points[0][0],arrows[0].points[1][0]);near(arrows[0].points[0][1]-arrows[0].points[1][1],18*torque);
+        assert.deepEqual(arrows[0].points[1],arrows[1].points[1]);
+      }
+    }
+    for(const id of ['show-v','show-l']){$(id).checked=false;$(id).fire('change');}
+    assert(!$('scene-torque').hidden,'torque remains explicit when other vectors are hidden');
+    $('zero-torque').click();assert($('scene-torque').hidden);
+    for(const id of ['show-v','show-l']){$(id).checked=true;$(id).fire('change');}
+    $('reset').click();
+  }
+  // Largest particle velocities during a live contraction remain in frame.
+  for(const viewport of [240,700]){
+    width=viewport;$('model-select').value='particle';$('model-select').fire('change');
+    input('radius',1.2);input('omega-initial',4);$('play').click();tick(0);tick(50);input('scene-radius',.25);
+    for(let i=2;i<=240;i++){tick(i*50);checkScene();}
+    $('restart').click();
+  }
+  console.log('Annotations: contrasting shell velocity, blue/green indexed velocities, enlarged particle scale, removal of omega arc, signed torque values/arrows and stable geometry passed.');
+}
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(errors,[]);assert($('loading').hidden);assert.equal(frames.size,0,'no autoplay');
+  checkAnnotations();
   for(const model of ['particle','stool','shell'])for(const viewport of [240,700]){
     width=viewport;$('model-select').value=model;$('model-select').fire('change');const p=models.definitions[model];
     near(value('radius-value'),p.r);near(value('momentum-value'),models.inertia(model,p.mass,p.base,p.r)*p.omega,.00051);assert.equal($('base-control').hidden,model!=='stool');
