@@ -11,10 +11,16 @@ const html = read('index.html'), source = read('app.js'), css = read('style.css'
 const nodes = new Map(), frames = [], reported = [];
 let width = 640;
 let mathStylesInstalled = false;
+let canvasId = '', strokePoints = [];
+const sceneStrokes = [];
 const ctx = new Proxy({}, {get(target, key) {
   if (key in target) return target[key];
   return (...args) => {
     for (const a of args.flat()) if (typeof a === 'number') assert(Number.isFinite(a), 'canvas finite coordinate');
+    if (key === 'beginPath') strokePoints = [];
+    if (key === 'moveTo' || key === 'lineTo') strokePoints.push([...args]);
+    if (key === 'clearRect' && canvasId === 'scene-canvas') sceneStrokes.length = 0;
+    if (key === 'stroke' && canvasId === 'scene-canvas') sceneStrokes.push({points: strokePoints, color: target.strokeStyle, width: target.lineWidth});
   };
 }});
 class Element {
@@ -27,6 +33,7 @@ class Element {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   setAttribute(key, value) { this.attrs[key] = String(value); }
+  getAttribute(key) { return this.attrs[key]; }
   addEventListener(key, fn) { this.events[key] = fn; }
   fire(key, event = {}) { this.events[key]?.({target: this, preventDefault() {}, ...event}); }
   click() { this.fire('click'); }
@@ -36,8 +43,8 @@ class Element {
     if (deep) result.children = this.children.map(c => typeof c === 'string' ? c : c.cloneNode(true));
     return result;
   }
-  getBoundingClientRect() { return {width, height: this.id?.startsWith('scene') ? 330 : 280, left: this.id === 'scene-canvas' ? 25 : 0, top: this.id === 'scene-canvas' ? 110 : 0}; }
-  getContext() { return ctx; }
+  getBoundingClientRect() { return {width, height: this.id?.startsWith('scene') ? ($('scene').dataset.velocity === 'true' ? 390 : 330) : 280, left: this.id === 'scene-canvas' ? 25 : 0, top: this.id === 'scene-canvas' ? 110 : 0}; }
+  getContext() { canvasId = this.id; return ctx; }
   setPointerCapture(id) { this.pointer = id; }
   hasPointerCapture(id) { return this.pointer === id; }
   releasePointerCapture(id) { this.pointer = undefined; this.fire('lostpointercapture', {pointerId: id}); }
@@ -76,6 +83,81 @@ function checkHistoryAnnotations(withFriction = false, gravity = false) {
     assert(ticks.some(node => parseFloat(node.dataset.math) > 0), 'positive kinetic energy fits on chart');
   }
 }
+function checkOscillatorVisualOptions() {
+  const run = code => vm.runInNewContext(code, context);
+  assert.equal(run('springColor(100,100)'), 'rgb(96, 113, 133)', 'neutral equilibrium tint');
+  const compression = run('springColor(0,100)'), extension = run('springColor(200,100)');
+  assert.notEqual(compression, extension);
+  assert.equal(run('springColor(400,200)'), extension, 'tint follows relative length, not screen size');
+  assert.equal(run('springColor(500,100)'), extension, 'extension color stays restrained');
+  let previous;
+  for (let length = 0; length <= 200; length++) {
+    const channels = run(`springColor(${length},100)`).match(/\d+/g).map(Number);
+    assert(channels.every(channel => channel >= 71 && channel <= 145), 'subtle palette');
+    if (previous) assert(channels.every((c,i) => Math.abs(c-previous[i]) <= 1), 'continuous color progression');
+    previous = channels;
+  }
+  for (const w of [300,640,1200]) for (const A of [.2,1,2,13]) {
+    const center = (w + 16) / 2, ppm = (w-72)/(2*Math.max(2.15,A*1.12)), maxSpeed = 2*A;
+    let scale;
+    for (let i = 0; i <= 100; i++) {
+      const angle = i*2*Math.PI/100, x = A*Math.cos(angle), v = -maxSpeed*Math.sin(angle);
+      const arrow = run(`oscillatorVelocityArrow(${x},${v},${A},${maxSpeed},${center},${ppm},${w},288)`);
+      assert(arrow.start >= 12-1e-9 && arrow.start <= w-12+1e-9 && arrow.end >= 12-1e-9 && arrow.end <= w-12+1e-9, 'vector remains inside scene');
+      if (Math.abs(v) > 1e-8) {
+        assert.equal(Math.sign(arrow.delta), Math.sign(v), 'instantaneous direction');
+        if (scale !== undefined) assert(Math.abs(arrow.delta/v-scale) < 1e-10, 'fixed linear velocity scale');
+        scale = arrow.delta/v;
+      }
+      assert.equal(arrow.tip[1][0], arrow.end, 'arrowhead is at shaft endpoint');
+    }
+  }
+  assert(run('oscillatorVelocityArrow(0,0,0,0,328,100,640,288)').zero, 'rest has no invented direction');
+  assert(run('oscillatorVelocityArrow(0,5,3,6,328,114,640,288)').delta > 0, 'a fixed drag view never erases nonzero velocity');
+  const visibleVelocity = () => $('scene-labels').children.find(node => !node.hidden && node.dataset.math?.includes('\\vec v'));
+  const velocityStrokes = () => sceneStrokes.filter(stroke => stroke.color === '#bc8b3b' && stroke.width === 2.5);
+  assert(!$('velocity-toggle').checked && !$('velocity-row').hidden && !visibleVelocity(), 'optional velocity starts hidden');
+  $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+  assert.equal(visibleVelocity().dataset.math, '\\vec v=\\vec 0');
+  assert.equal(velocityStrokes().length, 0, 'zero velocity has no arrow');
+  assert.equal($('scene').dataset.velocity, 'true');
+  assert.equal(parseFloat($('mass-handle-0').style.top), 338, 'dedicated vector band leaves mechanical layout clear');
+  for (const friction of [false,true]) {
+    $('friction-toggle').checked = friction; $('friction-toggle').fire('change');
+    for (const t of [.2,.785398,2.35619]) {
+      $('time-slider').value = String(t); $('time-slider').fire('input');
+      assert.equal(visibleVelocity().dataset.math, '\\vec v(t)');
+      assert($('scene').attrs['aria-label'].includes('Vitesse horizontale'));
+      const strokes = velocityStrokes();
+      assert.equal(strokes.length, 2, 'canvas draws both shaft and head without a white outline');
+      const displayedV = Number(/Vitesse horizontale ([\d.-]+)/.exec($('scene').attrs['aria-label'])[1]);
+      assert.equal(Math.sign(strokes[0].points[1][0] - strokes[0].points[0][0]), Math.sign(displayedV));
+      assert.deepEqual(strokes[0].points[1], strokes[1].points[1], 'canvas arrowhead meets shaft');
+      const before = $('total-readout').dataset.number;
+      $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+      assert(!visibleVelocity());
+      assert.equal(velocityStrokes().length, 0);
+      $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+      assert.equal(Number($('time-slider').value), t, 'toggling never rewinds');
+      assert.equal($('total-readout').dataset.number, before, 'visual options leave physics unchanged');
+    }
+  }
+  $('friction-toggle').checked = false; $('friction-toggle').fire('change');
+  const springStroke = () => sceneStrokes.find(stroke => stroke.color.startsWith('rgb('));
+  const warmSpring = springStroke().color;
+  $('time-slider').value = String(Math.PI/2); $('time-slider').fire('input');
+  assert.notEqual(springStroke().color, warmSpring, 'actual coil tint changes with length');
+  assert(springStroke().points.length > 500, 'tint is applied to smooth spires');
+  $('restart').click();
+  $('mass-handle-0').fire('keydown', {key:'ArrowLeft'});
+  assert(Number($('param-x0').value) < 1 && Number($('time-slider').value) === 0, 'initial editing still works in expanded velocity view');
+  assert.equal(parseFloat($('mass-handle-0').style.top), 338);
+  $('reset-parameters').click();
+  $('play').click(); tick(1000); tick(1100);
+  $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+  assert.equal($('play').textContent, 'Pause', 'display toggle preserves playback');
+  $('restart').click();
+}
 async function main() {
   vm.runInNewContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
@@ -100,6 +182,7 @@ async function main() {
   }
   assert.equal($('value-m').dataset.number, '1.00|\\mathrm{kg}', 'initial values are TeX');
   assert.equal($('total-readout').dataset.number, '2.000|\\mathrm J');
+  checkOscillatorVisualOptions();
   $('time-slider').value = '.785398'; $('time-slider').fire('input');
   assert($('kinetic-readout').dataset.number.startsWith('2.000|'));
   $('param-k').value = '10'; $('param-k').fire('input'); tick();
@@ -112,6 +195,8 @@ async function main() {
     assert.equal($('position-badge').hidden, model === 'pendulum');
     assert.equal($('detail-row').hidden, model !== 'pendulum');
     assert.equal($('trail-row').hidden, model === 'oscillator');
+    assert.equal($('velocity-row').hidden, model !== 'oscillator');
+    assert.equal($('scene').dataset.velocity, 'false');
     if (model === 'simple-pendulum') {
       assert.equal($('value-l').dataset.number, '1.20|\\mathrm m');
       assert.equal($('value-theta0').dataset.number, '15|{}^\\circ');
@@ -190,6 +275,7 @@ async function main() {
   $('model-select').value = 'gravity'; $('model-select').fire('change');
   assert($('friction-row').hidden && $('damping-controls').hidden && $('dissipation-card').hidden, 'gravity is an isolated two-body system');
   assert.equal($('friction-badge').textContent, 'Gravitation seule');
+  assert($('velocity-row').hidden, 'oscillator velocity control is absent for gravity');
   assert(!$('detail-row').hidden && !$('trail-row').hidden);
   assert.equal($('position-symbol').dataset.math, 'r=');
   assert.equal($('value-m1').dataset.number, '1.00|\\times10^{12}\\,\\mathrm{kg}', 'scaled mass rendered in LaTeX');

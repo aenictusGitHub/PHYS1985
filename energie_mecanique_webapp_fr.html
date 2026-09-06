@@ -45,6 +45,7 @@ button, select, input { font: inherit; }
 .result-badge { white-space: nowrap; }
 .plot-wrap { position: relative; width: 100%; }
 #scene { height: 330px; background: #fbfcfe; }
+.phys-app #scene[data-velocity="true"] { height: 390px; }
 canvas { display: block; width: 100%; height: 100%; }
 .plot-labels { position: absolute; inset: 0; pointer-events: none; }
 .phys-app .mass-handle { position: absolute; width: 40px; height: 40px; min-height: 0; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; box-shadow: none; transform: translate(-50%, -50%); cursor: grab; touch-action: none; user-select: none; z-index: 2; }
@@ -638,6 +639,27 @@ function coilSpringPoints(start, end, centerY) {
   return points;
 }
 
+// Length relative to equilibrium: a restrained slate-blue / slate-warm tint.
+function springColor(length, equilibriumLength) {
+  const strain = Math.max(-1, Math.min(1, (length - equilibriumLength) / Math.max(1, equilibriumLength)));
+  const neutral = [96, 113, 133], target = strain < 0 ? [71, 112, 145] : [136, 110, 108];
+  return `rgb(${neutral.map((channel, i) => Math.round(channel + Math.abs(strain) * (target[i] - channel))).join(', ')})`;
+}
+
+// One fixed scale per experiment. The energy envelope leaves room for the arrow.
+// A fixed drag view may crop the future trajectory; retain a nonzero scale then.
+function oscillatorVelocityArrow(x, velocity, amplitude, maxSpeed, center, pixelsPerMetre, width, y) {
+  const radius = Math.max(0, Math.min(center - 12, width - 12 - center));
+  const maxLength = Math.min(90, Math.sqrt(Math.max((radius * .2) ** 2, radius ** 2 - (amplitude * pixelsPerMetre) ** 2)));
+  const delta = maxSpeed > 0 ? velocity / maxSpeed * maxLength : 0;
+  const start = center + x * pixelsPerMetre, end = start + delta;
+  const head = Math.min(8, Math.abs(delta) * .45), direction = Math.sign(delta);
+  return {start, end, y, delta, head,
+    labelX: Math.max(28, Math.min(width - 28, (start + end) / 2)),
+    zero: Math.abs(velocity) <= 1e-10 * Math.max(1, maxSpeed),
+    tip: [[end - direction * head, y - head * .55], [end, y], [end - direction * head, y + head * .55]]};
+}
+
 // The same file works when embedded in the standalone page or deferred in sources.
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startEnergyApp);
@@ -837,6 +859,7 @@ async function startEnergyApp() {
       const custom = new Option('Réglage personnalisé', 'custom'); custom.disabled = true; $('example-select').append(custom);
       $('detail-row').hidden = !['pendulum', 'gravity'].includes(state.model);
       $('trail-row').hidden = state.model === 'oscillator';
+      $('velocity-row').hidden = state.model !== 'oscillator';
       $('position-badge').hidden = state.model === 'pendulum';
       math($('position-symbol'), state.model === 'simple-pendulum' ? tex`\theta=` : state.model === 'gravity' ? 'r=' : 'x=');
       $('friction-row').hidden = state.model === 'gravity';
@@ -956,11 +979,12 @@ async function startEnergyApp() {
     }
     function drawOscillator(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
+      const showVelocity = $('velocity-toggle').checked;
       const initial = state.simulation.samples[0], A = Math.sqrt(2 * initial.E / p.k);
       const initialRange = Math.max(2.15, A * 1.12);
       const {range} = sceneGeometry(w, h, {range: initialRange});
       const yMax = Math.max(.1, initial.E * 1.4, .55 * p.k * range ** 2);
-      const left = 44, right = w - 28, top = 70, bottom = h * .65;
+      const left = 44, right = w - 28, top = 70, bottom = (h - (showVelocity ? 60 : 0)) * .65;
       const X = x => (left + right) / 2 + x / range * (right - left) / 2;
       const Y = u => bottom - u / yMax * (bottom - top);
       line(ctx, [[left, bottom], [right, bottom]], COLORS.grid, 1);
@@ -984,10 +1008,21 @@ async function startEnergyApp() {
       line(ctx, [[anchor, rail + 20], [w - 20, rail + 20]], COLORS.grid, 1);
       line(ctx, [[X(0), rail - 25], [X(0), rail + 20]], COLORS.grid, 1, [3, 3]);
       ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      line(ctx, coilSpringPoints(anchor, massX - 15, rail), COLORS.muted, 2);
+      line(ctx, coilSpringPoints(anchor, massX - 15, rail), springColor(massX - 15 - anchor, X(0) - 15 - anchor), 2);
       ctx.restore();
       ctx.fillStyle = COLORS.K; ctx.fillRect(massX - 15, rail - 15, 30, 30);
       label('scene-labels', 'mass', 'm', massX, rail - 29, COLORS.K);
+      if (showVelocity) {
+        const arrow = oscillatorVelocityArrow(sample.x, sample.v, A, Math.sqrt(2 * initial.E / p.m),
+          X(0), (right - left) / (2 * range), w, rail - 50);
+        // A light guide associates the translated vector with the moving mass.
+        line(ctx, [[massX, rail - 40], [massX, arrow.y]], COLORS.grid, 1, [2, 3]);
+        if (!arrow.zero && Math.abs(arrow.delta) >= .1) {
+          line(ctx, [[arrow.start, arrow.y], [arrow.end, arrow.y]], COLORS.U2, 2.5);
+          line(ctx, arrow.tip, COLORS.U2, 2.5);
+        }
+        label('scene-labels', 'velocity', arrow.zero ? tex`\vec v=\vec 0` : tex`\vec v(t)`, arrow.labelX, arrow.y - 22, COLORS.U2);
+      }
       state.massPositions = [[massX, rail]];
     }
     function drawSimplePendulum(sample) {
@@ -1178,6 +1213,8 @@ async function startEnergyApp() {
       }
       $('energy-stack').style.height = `${signed ? 100 : E0 > 1e-12 ? Math.min(100, 100 * budget / E0) : 0}%`;
       const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J ; énergie dissipée ${sample.D.toFixed(3)} J.`);
+      scene.dataset.velocity = String(state.model === 'oscillator' && $('velocity-toggle').checked);
+      if (scene.dataset.velocity === 'true') scene.setAttribute('aria-label', scene.getAttribute('aria-label') + ` Vitesse horizontale ${sample.v.toFixed(3)} m/s.`);
       hideLabels('scene-labels');
       if (state.model === 'oscillator') drawOscillator(sample);
       else if (state.model === 'simple-pendulum') drawSimplePendulum(sample);
@@ -1328,7 +1365,7 @@ async function startEnergyApp() {
     $('time-slider').addEventListener('input', () => { setPlaying(false); setTime(Number($('time-slider').value)); });
     $('duration').addEventListener('input', () => { number($('duration-readout'), Number($('duration').value), 0, tex`\mathrm s`); scheduleRebuild(); });
     $('detail').addEventListener('change', () => { updateKeys(); render(); });
-    for (const id of ['stacked', 'trail']) $(id).addEventListener('change', render);
+    for (const id of ['stacked', 'trail', 'velocity-toggle']) $(id).addEventListener('change', render);
     function seek(event) {
       const rect = $('history').getBoundingClientRect(), r = chartGeometry(rect.width, rect.height);
       setPlaying(false); setTime((event.clientX - rect.left - r.left) / (r.right - r.left) * state.duration);
@@ -1412,6 +1449,7 @@ async function startEnergyApp() {
         <label class="check-row"><input id="stacked" type="checkbox" checked /><span>Empiler les énergies</span></label>
         <label id="detail-row" class="check-row"><input id="detail" type="checkbox" checked /><span>Détailler les deux masses</span></label>
         <label id="trail-row" class="check-row"><input id="trail" type="checkbox" checked /><span>Traces du mouvement</span></label>
+        <label id="velocity-row" class="check-row"><input id="velocity-toggle" type="checkbox" /><span>Vitesse instantanée <span data-tex="\vec v(t)"></span></span></label>
         <p class="microcopy">Cliquer ou faire glisser sur le graphique pour choisir l’instant.</p>
       </section>
       <section class="panel-section equation-section">
