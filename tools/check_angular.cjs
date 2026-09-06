@@ -38,13 +38,14 @@ console.log('Angular physics: three inertias, conservation, contraction, rotatio
 let width=700,frameId=0,typesetCount=0;
 const nodes=new Map(),frames=new Map(),errors=[],docEvents={},plots=new Map();
 function canvasContext(id){
-  let points=[];const strokes=[],circles=[];
+  let points=[],circle=null;const strokes=[],circles=[],fills=[];
   const context=new Proxy({}, {get(target,key){if(key in target)return target[key];return (...args)=>{
     for(const n of args.flat())if(typeof n==='number')assert(Number.isFinite(n),'finite canvas coordinate');
     if(key==='createRadialGradient')return {type:'radial',args,stops:[],addColorStop(offset,color){this.stops.push([offset,color]);}};
-    if(key==='clearRect'){strokes.length=0;circles.length=0;}if(key==='beginPath')points=[];
-    if(key==='moveTo'||key==='lineTo')points.push([...args]);if(key==='arc')circles.push([...args]);if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth});
-  };}});plots.set(id,{context,strokes,circles});return context;
+    if(key==='clearRect'){strokes.length=0;circles.length=0;fills.length=0;}if(key==='beginPath'){points=[];circle=null;}
+    if(key==='moveTo'||key==='lineTo')points.push([...args]);if(key==='arc'){circle=[...args];circles.push(circle);}if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth});
+    if(key==='fill')fills.push({circle,color:target.fillStyle});
+  };}});plots.set(id,{context,strokes,circles,fills});return context;
 }
 class Element{
   constructor(tag='span'){this.tag=tag;this.children=[];this.dataset={};this.style={};this.attrs={};this.events={};this.classList={add(){}};this.value='';this.hidden=false;this.checked=false;}
@@ -94,13 +95,20 @@ function checkAnnotations(){
     const visibleLabels=()=>$('scene-labels').children.filter(el=>!el.hidden);
     assert(!visibleLabels().some(el=>el.dataset.math==='\\omega'),'ambiguous corner omega is removed');
     assert.equal($('velocity-symbol').dataset.math,model==='stool'?'\\vec v_1,\\;\\vec v_2':'\\vec v');
+    if(model==='shell'){
+      const fill=plots.get('scene-canvas').fills.find(f=>f.color?.type==='radial');
+      assert(fill,'shell relief is retained');
+      assert.deepEqual(fill.color.stops,[[0,'#fcfdff'],[.3,'#f1f3f6'],[.7,'#e2e7ee'],[1,'#cdd5df']],'pearl-gray shell palette');
+      const luminance=hex=>hex.match(/[a-f\d]{2}/gi).map(n=>parseInt(n,16)/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4).reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
+      for(const [,color]of fill.color.stops)assert((luminance(color)+.05)/(luminance('#2775b6')+.05)>3,'blue vector contrasts with every shell shade');
+    }
     for(const omega of [-2,0,2]){
       input('omega-initial',omega);
       const strokes=plots.get('scene-canvas').strokes;
       const bodies=plots.get('scene-canvas').circles.filter(c=>c[2]===(model==='shell'?5.5:10));
-      const colors=model==='shell'?['#f5ba46']:model==='stool'?['#2775b6','#237a68']:['#2775b6'];
+      const colors=model==='stool'?['#2775b6','#237a68']:['#2775b6'];
       for(const [i,color]of colors.entries()){
-        const arrows=strokes.filter(s=>s.color===color&&s.width===(model==='shell'?3:2.5));
+        const arrows=strokes.filter(s=>s.color===color&&s.width===2.5);
         assert.equal(arrows.length,omega?2:0,'shaft and head, no fabricated zero velocity');
         if(!omega)continue;
         assert.deepEqual(arrows[0].points[0],bodies[i].slice(0,2),'velocity originates at the matching body');
@@ -108,11 +116,12 @@ function checkAnnotations(){
         assert.equal(Math.sign(arrows[0].points[0][1]-arrows[0].points[1][1]),Math.sign(omega)*(i?-1:1),'correct tangential direction');
         const symbol=model==='stool'?'\\vec v_'+(i+1):'\\vec v';
         const label=visibleLabels().find(el=>el.dataset.math===symbol);assert(label,'matching LaTeX label');
-        assert.equal(label.style.color,model==='shell'?'#74430a':color);
+        assert.equal(label.style.color,color);
         if(model==='shell'){
-          assert(label.className.includes('velocity-contrast-label'),'readable label over sphere shading');
-          const casing=strokes.filter(s=>s.color==='#74430a'&&s.width===5);
-          assert.equal(casing.length,2);assert.deepEqual(casing.map(s=>s.points),arrows.map(s=>s.points),'contrasting casing preserves vector geometry');
+          assert.equal(label.className,'plot-label','ordinary label without light backing');
+          assert(!source.includes('shellVInk')&&!read('style.css').includes('velocity-contrast-label'),'no special casing or label background');
+          assert(!strokes.some(s=>s.width===5),'no contrasting double stroke');
+          near(Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]),.42*46*.25); // Same shell velocity scale.
         }
         if(model==='particle'){
           const length=Math.abs(arrows[0].points[1][1]-arrows[0].points[0][1]);
@@ -149,7 +158,7 @@ function checkAnnotations(){
     for(let i=2;i<=240;i++){tick(i*50);checkScene();}
     $('restart').click();
   }
-  console.log('Annotations: contrasting shell velocity, blue/green indexed velocities, enlarged particle scale, removal of omega arc, signed torque values/arrows and stable geometry passed.');
+  console.log('Annotations: ordinary blue shell velocity without backing/casing, blue/green indexed velocities, enlarged particle scale, removal of omega arc, signed torque values/arrows and stable geometry passed.');
 }
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(errors,[]);assert($('loading').hidden);assert.equal(frames.size,0,'no autoplay');

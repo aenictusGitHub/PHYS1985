@@ -4,15 +4,13 @@ const {execFileSync} = require('node:child_process');
 const path = require('node:path');
 const vm = require('node:vm');
 const apps = ['collisions', 'energie_mecanique', 'moment_cinetique'];
-let reference;
 for (const app of apps) {
   const name = app + '_webapp_fr';
   const source = execFileSync('unzip', ['-p', path.join(__dirname, '..', name + '.zip'), name + '_source/app.js'], {encoding:'utf8'});
-  const helper = source.match(/function (?:sphere|body)\(ctx,x,y,r,index\)\{[\s\S]*?\n    \}/)?.[0];
+  const helper = source.match(/function (?:sphere|body)\(ctx,x,y,r,index(?:,palette=null,outline=null)?\)\{[\s\S]*?\n    \}/)?.[0];
   assert(helper, 'dedicated sphere renderer in ' + app);
-  const normalized = helper.replace(/function (?:sphere|body)/, 'function sphere').replace(/\s+/g, '');
-  if (reference) assert.equal(normalized, reference, app + ' uses exactly the Collisions relief');
-  reference = normalized;
+  // Compare actual paint operations: an optional shell palette may differ,
+  // but default blue/mint bodies keep the same relief across applications.
   const draw = vm.runInNewContext('(' + helper + ')');
   for (const index of [1,2]) for (const r of [2,5.5,10,24,120]) {
     const x=137,y=85, operations=[], gradients=[], stack=[];

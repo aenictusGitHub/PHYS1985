@@ -57,7 +57,7 @@ Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/Ma
 
 Les sept applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
 
-Énergie mécanique, Moment cinétique et Collisions utilisent le même relief pour leurs corps sphériques : dégradé radial bleu ou vert clair, reflet supérieur gauche et ombre légère. Le relief est purement graphique et ne change pas les modèles physiques. Les marqueurs des graphes restent plats. `node tools/check_spheres.cjs` vérifie la cohérence des trois versions empaquetées.
+Énergie mécanique, Moment cinétique et Collisions utilisent le même relief pour leurs corps sphériques : dégradé radial, reflet supérieur gauche et ombre légère. Les masses sont bleues ou vert clair ; la coquille rétractable est gris perle pour contraster avec sa vitesse bleue. Le relief est purement graphique et ne change pas les modèles physiques. Les marqueurs des graphes restent plats. `node tools/check_spheres.cjs` vérifie la cohérence des trois versions empaquetées.
 
 Pour reconstruire les sept applications à partir de leurs archives sources après une modification du thème :
 
@@ -114,7 +114,7 @@ Application inspirée de `Ivariable.mp4`, `Tabouret tournant.mp4` et
 - Moment extérieur signé, réglable en direct : accélération, freinage et inversion. Bilan entre variation de moment cinétique et impulsion angulaire.
 - Valeurs instantanées de l’inertie, de la vitesse angulaire, du moment cinétique et de l’énergie de rotation. Graphe sélectionnable, historique complet et reprise depuis un instant passé.
 - Vecteurs LaTeX, vitesse tangentielle optionnelle, repère fixe et rayon initial en pointillé. Le déplacement radial est imposé et son énergie cinétique n’est pas incluse dans l’énergie de rotation.
-- Vitesses du tabouret notées `v_1` et `v_2`, bleue et verte ; vitesse dorée contrastée sur la sphère ; échelle amplifiée pour le point matériel. Le moment extérieur non nul apparaît dans la scène par une flèche rose parallèle à l’axe et sa valeur signée, indépendamment du sens de rotation.
+- Vitesses du tabouret notées `v_1` et `v_2`, bleue et verte ; flèche bleue simple sur la sphère gris perle, sans fond derrière le symbole ; échelle amplifiée pour le point matériel. Le moment extérieur non nul apparaît dans la scène par une flèche rose parallèle à l’axe et sa valeur signée, indépendamment du sens de rotation.
 
 Tests des modèles, des commandes et de la lecture : `node tools/check_angular.cjs`.
 L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules avec MathJax réel.
