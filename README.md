@@ -8,6 +8,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - [Cinématique 3D](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html)
 - [Travail et puissance](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html)
 - [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html)
+- [Énergie potentielle et force](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html)
 
 ## QR codes
 
@@ -17,6 +18,12 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 
 Énergie mécanique : [QR code PNG](qr-codes/energie_mecanique.png) · [QR code SVG](qr-codes/energie_mecanique.svg).
 
+### Énergie potentielle et force
+
+[![QR code vers Énergie potentielle et force](qr-codes/potentiel_force.png)](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html)
+
+[QR code PNG](qr-codes/potentiel_force.png) · [QR code SVG](qr-codes/potentiel_force.svg).
+
 ## Fichiers
 
 - `cinematique_2d_webapp_fr.html` et `cinematique_3d_webapp_fr.html` : versions autonomes prêtes à ouvrir ;
@@ -24,6 +31,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - `puissance_travail_webapp_fr.html` : animation autonome sur le travail et la puissance ;
 - `puissance_travail_webapp_fr.zip` : archive contenant ses sources séparées ;
 - `energie_mecanique_webapp_fr.html` et `energie_mecanique_webapp_fr.zip` : animation autonome sur l’énergie et archive de ses sources ;
+- `potentiel_force_webapp_fr.html` et `potentiel_force_webapp_fr.zip` : animation autonome reliant potentiel et force, et archive de ses sources ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
@@ -31,9 +39,9 @@ Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/Ma
 
 ## Présentation commune
 
-Les quatre applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
+Les cinq applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
 
-Pour reconstruire les quatre applications à partir de leurs archives sources après une modification du thème :
+Pour reconstruire les cinq applications à partir de leurs archives sources après une modification du thème :
 
 ```sh
 python3 tools/build_apps.py
@@ -59,6 +67,23 @@ Cette nouvelle application s’inspire des échanges d’énergie présentés da
 Tests analytiques, références orbitales de Kepler, énergie et moment cinétique, contraintes des tiges, équilibre et navigation temporelle : `python3 tools/check_energy.py`. La variable optionnelle `PHYS1985_NODE` permet de spécifier le chemin de Node.js.
 
 Tests unitaires des commandes (avec un adaptateur DOM/canvas minimal, sans navigateur) : `node tools/check_energy_ui.cjs`.
+
+## Énergie potentielle et force
+
+Cette application s’inspire de `Potential Energy Force.mp4`, sans redistribuer la vidéo.
+Deux exemples : un double puits asymétrique original, puis une paire de particules
+avec un [potentiel de Lennard–Jones](https://docs.lammps.org/pair_lj.html) non tronqué.
+Les échelles choisies sont pédagogiques, pas celles d’un atome particulier.
+
+- Courbes du potentiel et de la composante de force avec le même axe horizontal.
+- Point de lecture et tangente déplaçables, choix direct des équilibres stables ou instables.
+- Sens des forces sur un axe réel ou sur les deux corps, avec forces égales et opposées.
+- Échelles d’énergie et de longueur réglables ; valeurs et unités LaTeX avec décimales à point.
+- Exploration par curseur, souris, toucher ou clavier. Le balayage automatique explore les positions ; ce n’est pas une simulation de mouvement.
+
+Vérifications des dérivées analytiques, équilibres, commandes, flèches et balayage :
+`node tools/check_potential.cjs`. La variable optionnelle `PHYS1985_MATHJAX_ROOT`
+permet aussi de vérifier les formules avec une installation de mathjax-full.
 
 ## Sauvegarde avant harmonisation
 
