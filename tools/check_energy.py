@@ -62,6 +62,25 @@ for (const gamma of [0,.7]) {
 }
 console.log('Simple pendulum: small-angle limit, nonlinear oscillations, full rotations, rigid rod, energy, dissipation and off-grid scrubbing passed.');
 const gravity = {m1: 1e12, m2: 1e12, r0: 10, speedRatio: 1};
+// Regression: RAF accumulation can land a few ulps after a 60 Hz sample.
+// The accepted tiny remainder must not trip the minimum integration step guard.
+for (const [model, p] of [['gravity',gravity], ['pendulum',pendulum],
+  ['simple-pendulum',simple], ['oscillator',{...oscillator,gamma:.25}]]) {
+  const sim = EnergyModels.simulate(model,p,30);
+  for (let i = 0; i < 1800; i++) {
+    for (const offset of [0,1e-13,-1e-13,1e-10,1e-9,5e-9]) {
+      const s = sim.at(i/60+offset), base = sim.samples[i];
+      assert(s.y.every(Number.isFinite), 'finite state at near-grid instant');
+      for (let j=0; j<s.y.length; j++) near(s.y[j],base.y[j],2e-5*Math.max(1,Math.abs(base.y[j])), 'continuous near-grid state');
+    }
+  }
+  let t = 0;
+  for (let frame = 0; frame < 1800; frame++) {
+    t += 1/60;
+    assert(Number.isFinite(sim.at(t).E), 'accumulated clock advances for 30 seconds');
+  }
+}
+console.log('Near-grid instants and accumulated 60 Hz playback passed for all numerical models.');
 let gravityError = 0;
 for (const p of [gravity, {...gravity, speedRatio: .65}, {...gravity, m1: 5e12, m2: .2e12},
   {...gravity, speedRatio: 1.6}, {...gravity, m1: 5e12, m2: 5e12, r0: 6, speedRatio: .5},

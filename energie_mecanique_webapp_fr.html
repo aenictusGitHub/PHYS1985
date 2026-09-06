@@ -80,10 +80,8 @@ canvas { display: block; width: 100%; height: 100%; }
 .readout-card strong, .readout-card small { display: block; }
 .readout-card small { color: var(--muted); }
 .observation { margin: .85rem .25rem .25rem; color: var(--muted); font-size: var(--text-ui); line-height: 1.6; }
-.number { white-space: nowrap; display: inline-flex; align-items: baseline; font-weight: 400; }
-.number-glyph { display: inline-block; }
-.number-unit { margin-left: .2em; }
-.number mjx-container { margin: 0 !important; }
+.number { white-space: nowrap; display: inline-block; font-weight: 400; }
+.number > svg { overflow: visible; }
 #loading { font-size: var(--text-ui); color: var(--muted); }
 @container energy-view (max-width: 640px) {
   .energy-layout { grid-template-columns: minmax(0,1fr); }
@@ -603,7 +601,9 @@ const EnergyModels = (() => {
           elapsed += h;
         }
         h *= Math.max(.2, Math.min(2, .85 * Math.pow(1e-11 / Math.max(error, 1e-30), .2)));
-        if (h < 1e-9) throw new Error('Le calcul demande un pas de temps trop petit.');
+        // A tiny final remainder is valid (notably after floating-point clock
+        // accumulation). Only reject a tiny step when its error is too large.
+        if (error > 1e-11 && h < 1e-9) throw new Error('Le calcul demande un pas de temps trop petit.');
       }
       return next;
     };
@@ -799,7 +799,14 @@ async function startEnergyApp() {
       el.dataset.math = value;
     }
     for (const el of document.querySelectorAll('[data-tex]')) math(el, el.dataset.tex);
-    for (const char of '0123456789.-') glyphs.set(char, MathJax.tex2svg(char, {display: false}));
+    function numericPart(value) {
+      const svg = MathJax.tex2svg(value, {display: false}).querySelector('svg');
+      const [x, y, width, height] = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+      return {svg, x, y, width, height, exPerUnit: parseFloat(svg.getAttribute('width')) / width};
+    }
+    for (const char of '0123456789.-') glyphs.set(char, numericPart(char));
+    const numericTop = Math.min(...[...glyphs.values()].map(part => part.y));
+    const numericBottom = Math.max(...[...glyphs.values()].map(part => part.y + part.height));
     // tex2svg creates both the visible SVG and accessible MathML, but does not
     // install page styles itself. Install them before showing any math output.
     MathJax.startup.document.updateDocument();
@@ -810,18 +817,33 @@ async function startEnergyApp() {
       const key = `${string}|${unit}`;
       if (el.dataset.number === key) return;
       el.classList.add('number');
-      const nodes = [...string].map(char => {
-        const span = document.createElement('span');
-        span.className = 'number-glyph'; span.setAttribute('aria-hidden', 'true');
-        span.append(glyphs.get(char).cloneNode(true)); return span;
-      });
+      // Assemble cached LaTeX paths in ONE SVG: all digits, the decimal point,
+      // and the unit share y=0, without per-glyph HTML/flex baselines (Safari).
+      // Keep the same vertical extent as digits change, and never typeset a
+      // whole changing number on each animation frame.
+      const parts = [...string].map(char => glyphs.get(char));
       if (unit) {
-        if (!units.has(unit)) units.set(unit, MathJax.tex2svg(unit, {display: false}));
-        const span = document.createElement('span'); span.className = 'number-unit'; span.setAttribute('aria-hidden', 'true');
-        span.append(units.get(unit).cloneNode(true)); nodes.push(span);
+        if (!units.has(unit)) units.set(unit, numericPart(unit));
+        parts.push(units.get(unit));
       }
-      el.replaceChildren(...nodes); el.dataset.number = key;
-      el.setAttribute('aria-label', string + (unit ? ' ' + unit.replace(/\\mathrm|[{}]/g, '').replace(/\\,/g, ' ') : ''));
+      const svg = parts[0].svg.cloneNode(false), exPerUnit = glyphs.get('0').exPerUnit;
+      let width = 0, top = numericTop, bottom = numericBottom;
+      for (const [i, part] of parts.entries()) {
+        if (i === string.length) width += 1000 / 6; // LaTeX thin space before the unit.
+        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        group.setAttribute('transform', `translate(${width - part.x},0)`);
+        group.append(...[...part.svg.children].map(child => child.cloneNode(true)));
+        svg.append(group); width += part.width;
+        top = Math.min(top, part.y); bottom = Math.max(bottom, part.y + part.height);
+      }
+      svg.setAttribute('viewBox', `0 ${top} ${width} ${bottom - top}`);
+      svg.setAttribute('width', `${width * exPerUnit}ex`);
+      svg.setAttribute('height', `${(bottom - top) * exPerUnit}ex`);
+      svg.style.verticalAlign = `${-bottom * exPerUnit}ex`;
+      const description = string + (unit ? ' ' + unit.replace(/\\mathrm|[{}]/g, '').replace(/\\,/g, ' ').trim() : '');
+      svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', description);
+      el.replaceChildren(svg); el.dataset.number = key;
+      el.setAttribute('aria-label', description);
     }
     function components(sample) {
       const parts = state.model === 'pendulum' && $('detail').checked ? [

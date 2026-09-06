@@ -10,7 +10,7 @@ const read = name => execFileSync('unzip', ['-p', zip, 'energie_mecanique_webapp
 const html = read('index.html'), source = read('app.js'), css = read('style.css');
 const nodes = new Map(), frames = [], reported = [];
 let width = 640;
-let mathStylesInstalled = false;
+let mathStylesInstalled = false, typesetCount = 0;
 let canvasId = '', strokePoints = [], circle = null;
 const sceneStrokes = [], sceneFills = [];
 const ctx = new Proxy({}, {get(target, key) {
@@ -36,12 +36,14 @@ class Element {
   replaceChildren(...children) { this.children = children; }
   setAttribute(key, value) { this.attrs[key] = String(value); }
   getAttribute(key) { return this.attrs[key]; }
+  querySelector(tag) { return this.children.find(child => child.tag === tag); }
   addEventListener(key, fn) { this.events[key] = fn; }
   fire(key, event = {}) { this.events[key]?.({target: this, preventDefault() {}, ...event}); }
   click() { this.fire('click'); }
   closest() { return null; }
   cloneNode(deep) {
     const result = new Element(this.tag); result.dataset = {...this.dataset}; result.className = this.className;
+    result.attrs = {...this.attrs}; result.style = {...this.style};
     if (deep) result.children = this.children.map(c => typeof c === 'string' ? c : c.cloneNode(true));
     return result;
   }
@@ -59,16 +61,83 @@ for (const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
 }
 const $ = id => { assert(nodes.has(id), 'missing element ' + id); return nodes.get(id); };
 $('model-select').value = 'oscillator'; $('playback-speed').value = '1';
-const document = {readyState: 'complete', createElement: tag => new Element(tag), getElementById: $, querySelectorAll: () => [], addEventListener() {}};
+const document = {readyState: 'complete', createElement: tag => new Element(tag), createElementNS: (ns, tag) => new Element(tag), getElementById: $, querySelectorAll: () => [], addEventListener() {}};
+function typeset(text) {
+  typesetCount++;
+  assert(!text.includes('NaN'));
+  assert(!/[\x00-\x1f]/.test(text), 'TeX commands must not become JavaScript control characters');
+  const node = new Element('math'); node.dataset.tex = text;
+  // Distinct TeX ink extents: the decimal/minus are not as tall as a digit,
+  // and superscript units are taller. The renderer must retain baseline y=0.
+  const svg = new Element('svg'), group = new Element('g'); group.dataset.tex = text;
+  const top = text === '.' ? -120 : text === '-' ? -270 : text.includes('^') ? -950 : -650;
+  const bottom = text === '0' ? 22 : text === '8' ? 12 : text.includes('kg') ? 200 : 0;
+  const width = text === '.' ? 278 : text.length === 1 ? 500 : 1800;
+  svg.setAttribute('viewBox', `0 ${top} ${width} ${bottom-top}`);
+  svg.setAttribute('width', `${width/1000*2.262}ex`);
+  group.setAttribute('transform', 'scale(1,-1)'); svg.append(group); node.append(svg);
+  return node;
+}
 const context = {
   document, window: {devicePixelRatio: 1},
-  MathJax: {startup: {promise: Promise.resolve(), document: {updateDocument() { mathStylesInstalled = true; }}}, tex2svg(text) { assert(!text.includes('NaN')); assert(!/[\x00-\x1f]/.test(text), 'TeX commands must not become JavaScript control characters'); const node = new Element('math'); node.dataset.tex = text; return node; }},
+  MathJax: {startup: {promise: Promise.resolve(), document: {updateDocument() { mathStylesInstalled = true; }}}, tex2svg: typeset},
   Option: function(text, value) { const node = new Element('option'); node.value = value; node.textContent = text; return node; },
   ResizeObserver: class { observe() {} },
   requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
   console: {error(e) { reported.push(e); }},
 };
 function tick(time = 100) { const queue = frames.splice(0); queue.forEach(fn => fn(time)); }
+function checkNumericBaseline() {
+  const el = $('time-readout');
+  let extent;
+  for (const t of [0, 1.11, 5.42, 10.83, 18.98, 30]) {
+    $('time-slider').value = String(t); $('time-slider').fire('input');
+    assert.equal(el.children.length, 1, 'number and unit form one SVG, not separate flex items');
+    const svg = el.children[0]; assert.equal(svg.tag, 'svg');
+    const [x, top, width, height] = svg.getAttribute('viewBox').split(' ').map(Number);
+    assert(width > 0 && height > 0);
+    assert.equal(svg.getAttribute('aria-label'), `${t.toFixed(2)} s`);
+    assert.equal(svg.getAttribute('role'), 'img', 'combined TeX remains accessible');
+    assert.equal(svg.children.map(g => g.children[0].dataset.tex).join(''), t.toFixed(2)+'\\mathrm s');
+    assert(svg.children.every(g => /^translate\([\d.e+-]+,0\)$/.test(g.getAttribute('transform'))), 'all glyphs and units share baseline zero');
+    const current = [top,height,svg.style.verticalAlign];
+    if (extent) assert.deepEqual(current, extent, 'digits never change the vertical extent');
+    extent = current;
+    assert(Math.abs(parseFloat(svg.style.verticalAlign) + (top+height)*2.262/1000) < 1e-12);
+  }
+  const count = typesetCount;
+  $('time-slider').value = '12.34'; $('time-slider').fire('input');
+  assert.equal(typesetCount, count, 'changing numbers reuses cached LaTeX paths without re-typesetting');
+  $('restart').click();
+}
+
+function checkContinuousPlayback() {
+  $('model-select').value = 'gravity'; $('model-select').fire('change');
+  $('stacked').checked = true; $('detail').checked = true; $('detail').fire('change');
+  $('trail').checked = true; $('velocity-toggle').checked = true;
+  $('loop').checked = false;
+  for (const hz of [60, 59.94, 120]) {
+    $('restart').click(); tick(0); $('play').click(); tick(1000);
+    for (let i = 1; i <= Math.ceil(30*hz)+1; i++) tick(1000+i*1000/hz);
+    assert.equal(Number($('time-slider').value), 30, `full playback at ${hz} Hz crosses the old freeze`);
+    assert.equal($('play').textContent, 'Lire', 'playback ends normally, not with a frozen Pause button');
+    assert.equal($('time-readout').dataset.number, '30.00|\\mathrm s');
+    assert.equal(frames.length, 0);
+  }
+  // An actual RAF interval landing just after a sampled instant (rounded 5.42).
+  $('time-slider').value = String(325/60-.05); $('time-slider').fire('input');
+  $('play').click(); tick(0); tick(50+1e-10);
+  assert.equal($('play').textContent, 'Pause'); assert.equal(frames.length, 1);
+  tick(100); assert(Number($('time-slider').value) > 5.46);
+  $('restart').click(); tick();
+  $('loop').checked = true; $('time-slider').value = '29.99'; $('time-slider').fire('input');
+  $('play').click(); tick(1000); tick(1050);
+  assert(Number($('time-slider').value) < .1 && frames.length === 1, 'loop continues across the end');
+  $('restart').click(); tick(); $('loop').checked = false;
+  $('model-select').value = 'oscillator'; $('model-select').fire('change');
+  $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+  assert.deepEqual(reported, []);
+}
 function checkHistoryAnnotations(withFriction = false, gravity = false) {
   const labels = $('history-labels').children.filter(node => !node.hidden);
   const title = labels.find(node => node.dataset.math === (gravity ? 'E\\,[10^{12}\\,\\mathrm J]' : 'E\\,[\\mathrm J]'));
@@ -262,6 +331,8 @@ async function main() {
   }
   assert.equal($('value-m').dataset.number, '1.00|\\mathrm{kg}', 'initial values are TeX');
   assert.equal($('total-readout').dataset.number, '2.000|\\mathrm J');
+  checkNumericBaseline();
+  checkContinuousPlayback();
   checkOscillatorVisualOptions();
   $('time-slider').value = '.785398'; $('time-slider').fire('input');
   assert($('kinetic-readout').dataset.number.startsWith('2.000|'));
