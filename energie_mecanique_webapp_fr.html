@@ -47,6 +47,11 @@ button, select, input { font: inherit; }
 #scene { height: 330px; background: #fbfcfe; }
 canvas { display: block; width: 100%; height: 100%; }
 .plot-labels { position: absolute; inset: 0; pointer-events: none; }
+.phys-app .mass-handle { position: absolute; width: 40px; height: 40px; min-height: 0; padding: 0; border: 1px solid transparent; border-radius: 50%; background: transparent; box-shadow: none; transform: translate(-50%, -50%); cursor: grab; touch-action: none; user-select: none; z-index: 2; }
+.phys-app .mass-handle:hover, .phys-app .mass-handle:focus-visible { background: transparent; border-color: var(--accent); outline: 2px solid transparent; }
+.phys-app .mass-handle:focus-visible { outline-color: var(--accent); outline-offset: 2px; }
+.phys-app .mass-handle[data-dragging="true"] { cursor: grabbing; border-color: var(--accent); }
+.position-hint { margin: 0; padding: .5rem 1rem .75rem; }
 .plot-label { position: absolute; white-space: nowrap; font-size: var(--text-formula); transform: translate(-50%, -50%); }
 .plot-label.tick { font-size: var(--text-tick); color: var(--muted); }
 .time-badge { position: absolute; display: flex; gap: .25rem; align-items: baseline; }
@@ -574,9 +579,11 @@ const EnergyModels = (() => {
     }
     const evaluate = {oscillator: oscillatorState, 'simple-pendulum': simplePendulum, gravity, pendulum}[model];
     const derivative = {oscillator: oscillatorRhs, 'simple-pendulum': simplePendulumRhs, gravity: gravityRhs, pendulum: rhs}[model];
+    const phi = (p.phi0 || 0) * Math.PI / 180;
+    const orbitalSpeed = model === 'gravity' ? p.speedRatio * Math.sqrt(G * (p.m1 + p.m2) / p.r0) : 0;
     let y = model === 'oscillator' ? [p.x0, p.v0, 0]
       : model === 'simple-pendulum' ? [p.theta0 * Math.PI / 180, p.omega0, 0]
-      : model === 'gravity' ? [p.r0, 0, 0, p.speedRatio * Math.sqrt(G * (p.m1 + p.m2) / p.r0)]
+      : model === 'gravity' ? [p.r0 * Math.cos(phi), p.r0 * Math.sin(phi), -orbitalSpeed * Math.sin(phi), orbitalSpeed * Math.cos(phi)]
       : [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2, 0];
     const advance = (initial, dt) => {
       // Step doubling controls local error even for extreme mass ratios. The
@@ -671,7 +678,7 @@ async function startEnergyApp() {
         fields: [
           ['m', 'Masse', 'm', .2, 5, .1, tex`\mathrm{kg}`],
           ['l', 'Longueur', tex`\ell`, .5, 2.5, .05, tex`\mathrm m`],
-          ['theta0', 'Angle initial', tex`\theta_0`, -170, 170, 1, tex`{}^\circ`],
+          ['theta0', 'Angle initial', tex`\theta_0`, -180, 180, 1, tex`{}^\circ`],
           ['omega0', 'Vitesse angulaire initiale', tex`\dot\theta_0`, -8, 8, .1, tex`\mathrm{rad\,s^{-1}}`],
           ['g', 'Pesanteur', 'g', .5, 20, .01, tex`\mathrm{m\,s^{-2}}`],
         ],
@@ -687,12 +694,13 @@ async function startEnergyApp() {
       gravity: {
         title: 'Deux corps gravitationnels',
         note: 'Deux masses s’attirent suivant la loi de gravitation universelle et se déplacent autour de leur centre de masse. L’énergie potentielle de la paire est négative, avec son zéro à l’infini.',
-        defaults: {m1: 1e12, m2: 1e12, r0: 10, speedRatio: 1},
+        defaults: {m1: 1e12, m2: 1e12, r0: 10, speedRatio: 1, phi0: 0},
         energyScale: 1e12, energyUnit: tex`10^{12}\,\mathrm J`,
         fields: [
           ['m1', 'Premier corps', 'm_1', .2e12, 5e12, .1e12, tex`\times10^{12}\,\mathrm{kg}`, 1e12],
           ['m2', 'Deuxième corps', 'm_2', .2e12, 5e12, .1e12, tex`\times10^{12}\,\mathrm{kg}`, 1e12],
           ['r0', 'Séparation initiale', 'r_0', 6, 20, .1, tex`\mathrm m`],
+          ['phi0', 'Orientation initiale', tex`\varphi_0`, -180, 180, 1, tex`{}^\circ`],
           ['speedRatio', 'Vitesse relative initiale', tex`v_0/v_{\mathrm{circ}}`, .5, 1.8, .01, ''],
         ],
         examples: [
@@ -706,7 +714,7 @@ async function startEnergyApp() {
           tex`K=\frac12m_1\lvert\vec v_1\rvert^2+\frac12m_2\lvert\vec v_2\rvert^2`,
           tex`E=K+U=\mathrm{constante}`, tex`v_{\mathrm{circ}}=\sqrt{\frac{G(m_1+m_2)}{r_0}}`,
           tex`G=6.67430\times10^{-11}\,\mathrm{m^3\,kg^{-1}\,s^{-2}}`],
-        reference: 'Masses ponctuelles, sans collision ni frottement ; leur taille dessinée est symbolique. Le centre de masse est immobile. La vitesse relative initiale est perpendiculaire à la séparation. Le potentiel appartient à la paire et n’est compté qu’une fois. Les facteurs d’échelle des masses et des énergies sont indiqués dans les unités.',
+        reference: 'Masses ponctuelles, sans collision ni frottement ; leur taille dessinée est symbolique. Le centre de masse est immobile. L’orientation initiale est mesurée depuis l’horizontale. La vitesse relative initiale est perpendiculaire à la séparation. Le potentiel appartient à la paire et n’est compté qu’une fois. Les facteurs d’échelle des masses et des énergies sont indiqués dans les unités.',
       },
       pendulum: {
         title: 'Pendule double',
@@ -717,8 +725,8 @@ async function startEnergyApp() {
           ['m2', 'Masse inférieure', 'm_2', .2, 5, .1, tex`\mathrm{kg}`],
           ['l1', 'Première longueur', '\\ell_1', .5, 2, .05, tex`\mathrm m`],
           ['l2', 'Deuxième longueur', '\\ell_2', .5, 2, .05, tex`\mathrm m`],
-          ['theta1', 'Angle initial supérieur', '\\theta_{10}', -170, 170, 1, tex`{}^\circ`],
-          ['theta2', 'Angle initial inférieur', '\\theta_{20}', -170, 170, 1, tex`{}^\circ`],
+          ['theta1', 'Angle initial supérieur', '\\theta_{10}', -180, 180, 1, tex`{}^\circ`],
+          ['theta2', 'Angle initial inférieur', '\\theta_{20}', -180, 180, 1, tex`{}^\circ`],
           ['omega1', 'Vitesse angulaire initiale', '\\dot\theta_{10}', -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
           ['omega2', 'Vitesse angulaire initiale', '\\dot\theta_{20}', -3, 3, .1, tex`\mathrm{rad\,s^{-1}}`],
           ['g', 'Pesanteur', 'g', .5, 20, .01, tex`\mathrm{m\,s^{-2}}`],
@@ -734,6 +742,7 @@ async function startEnergyApp() {
       },
     };
     const state = {model: 'oscillator', p: {}, t: 0, duration: 30, playing: false, simulation: null, last: null, frame: 0, dirty: false, readoutTime: -1};
+    Object.assign(state, {drag: null, initialGeometry: null, sceneGeometry: null, massPositions: []});
     const glyphs = new Map(), units = new Map();
     function energyValue(value) { return value / (DEFINITIONS[state.model].energyScale || 1); }
     function energyUnit() { return DEFINITIONS[state.model].energyUnit || tex`\mathrm J`; }
@@ -786,9 +795,11 @@ async function startEnergyApp() {
       state.playing = value; state.last = null;
       $('play').textContent = value ? 'Pause' : 'Lire';
       $('play').setAttribute('aria-pressed', String(value));
+      updateMassHandles();
       if (value && !state.frame) state.frame = requestAnimationFrame(frame);
     }
     function setTime(value) {
+      finishInitialDrag(true);
       state.t = Math.max(0, Math.min(state.duration, value)); render();
     }
     function makeParameters() {
@@ -812,11 +823,13 @@ async function startEnergyApp() {
       }
     }
     function setExample(index) {
+      finishInitialDrag(false); state.initialGeometry = null;
       const definition = DEFINITIONS[state.model];
       state.p = {...definition.defaults, ...definition.examples[index][1]};
       $('example-select').value = String(index); makeParameters(); rebuild();
     }
     function setModel() {
+      finishInitialDrag(false); state.initialGeometry = null;
       state.model = $('model-select').value;
       const definition = DEFINITIONS[state.model];
       $('scene-title').textContent = definition.title;
@@ -860,16 +873,21 @@ async function startEnergyApp() {
       math($('error-symbol'), on ? tex`\Delta E+E_{\mathrm{diss}}` : 'E(t)-E(0)');
     }
     function scheduleRebuild() {
+      finishInitialDrag(false); state.initialGeometry = null;
       setPlaying(false);
       if (state.dirty) return;
       state.dirty = true;
       requestAnimationFrame(() => { state.dirty = false; rebuild(); });
     }
-    function rebuild() {
+    function rebuild(preview = false) {
+      const previewOnly = preview === true;
+      if (!previewOnly) finishInitialDrag(false);
       setPlaying(false); state.t = 0;
       state.duration = Number($('duration').value);
-      updateFrictionInterface();
-      state.simulation = EnergyModels.simulate(state.model, state.p, state.duration);
+      if (!previewOnly) updateFrictionInterface();
+      // While dragging, update only the initial state. Integrate the complete
+      // experiment once on release so mouse/touch input stays responsive.
+      state.simulation = EnergyModels.simulate(state.model, state.p, previewOnly ? 0 : state.duration);
       const initial = state.simulation.samples[0];
       if (state.model === 'gravity') {
         state.gravityRange = state.simulation.samples.reduce((range, s) => ({
@@ -879,7 +897,8 @@ async function startEnergyApp() {
       $('time-slider').max = state.duration; $('history').setAttribute('aria-valuemax', state.duration);
       number($('duration-readout'), state.duration, 0, tex`\mathrm s`);
       $('accuracy-note').textContent = state.simulation.maxError > 1e-5 * Math.max(1, initial.K + Math.abs(initial.U)) ? 'écart numérique à surveiller' : 'écart numérique';
-      updateKeys(); render();
+      if (!previewOnly) updateKeys();
+      render();
     }
     function updateKeys() {
       const parts = components(state.simulation.at(state.t));
@@ -927,10 +946,20 @@ async function startEnergyApp() {
       ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash); ctx.stroke(); ctx.setLineDash([]);
     }
     function dot(ctx, x, y, radius, color) { ctx.beginPath(); ctx.arc(x, y, radius, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); }
+    function sceneGeometry(w, h, geometry) {
+      const saved = state.drag?.geometry || state.initialGeometry;
+      // Keep the projection fixed through a gesture and subsequent playback.
+      // A resize or an explicit parameter/example change starts a fresh view.
+      const same = saved && saved.model === state.model && saved.w === w && saved.h === h;
+      state.sceneGeometry = same ? saved : {model: state.model, w, h, ...geometry};
+      return state.sceneGeometry;
+    }
     function drawOscillator(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
       const initial = state.simulation.samples[0], A = Math.sqrt(2 * initial.E / p.k);
-      const range = Math.max(.25, A * 1.12), yMax = Math.max(.1, initial.E * 1.4, .55 * p.k * range ** 2);
+      const initialRange = Math.max(2.15, A * 1.12);
+      const {range} = sceneGeometry(w, h, {range: initialRange});
+      const yMax = Math.max(.1, initial.E * 1.4, .55 * p.k * range ** 2);
       const left = 44, right = w - 28, top = 70, bottom = h * .65;
       const X = x => (left + right) / 2 + x / range * (right - left) / 2;
       const Y = u => bottom - u / yMax * (bottom - top);
@@ -959,13 +988,15 @@ async function startEnergyApp() {
       ctx.restore();
       ctx.fillStyle = COLORS.K; ctx.fillRect(massX - 15, rail - 15, 30, 30);
       label('scene-labels', 'mass', 'm', massX, rail - 29, COLORS.K);
+      state.massPositions = [[massX, rail]];
     }
     function drawSimplePendulum(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
-      const radius = Math.min((w - 110) / 2, (h - 130) / 2), scale = radius / p.l;
-      const origin = [w / 2 - 10, h / 2 + 8];
+      const radius = Math.min((w - 110) / 2, (h - 130) / 2);
+      const {scale, origin} = sceneGeometry(w, h, {scale: radius / p.l, origin: [w / 2 - 10, h / 2 + 8]});
       const point = (x, z) => [origin[0] + scale * x, origin[1] - scale * z];
       const bob = point(sample.x, sample.z), bottom = origin[1] + radius;
+      state.massPositions = [bob];
       const theta = Math.atan2(Math.sin(sample.theta), Math.cos(sample.theta));
       if ($('trail').checked) {
         const start = Math.max(0, Math.floor(state.t * 60) - 360), end = Math.floor(state.t * 60);
@@ -1005,11 +1036,14 @@ async function startEnergyApp() {
     function drawGravity(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
       const bound = state.simulation.samples[0].E < 0;
-      const separation = bound ? state.gravityRange.radius : Math.max(p.r0, sample.r);
+      const separation = Math.max(20, bound ? state.gravityRange.radius : sample.r);
       const radius = separation * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
-      const scale = Math.min(w - 95, h - 110) / (2 * radius);
-      const origin = [w / 2, h / 2 + 8], point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
+      const camera = sceneGeometry(w, h, {scale: Math.min(w - 95, h - 110) / (2 * radius), origin: [w / 2, h / 2 + 8]});
+      const visibleRadius = sample.r * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
+      const scale = state.t > 0 ? Math.min(camera.scale, Math.min(w - 65, h - 85) / (2 * visibleRadius)) : camera.scale;
+      const {origin} = camera, point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
       const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
+      state.massPositions = [a, b];
       if ($('trail').checked) {
         if (bound) {
           const preview = state.simulation.samples.filter((s, i) => i % 6 === 0);
@@ -1032,9 +1066,11 @@ async function startEnergyApp() {
     }
     function drawPendulum(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
-      const length = p.l1 + p.l2, scale = Math.min((w - 80) / (2 * length), (h - 75) / (2 * length));
-      const origin = [w / 2, h / 2 + 20], point = (x, z) => [origin[0] + scale * x, origin[1] - scale * z];
+      const length = p.l1 + p.l2;
+      const {scale, origin} = sceneGeometry(w, h, {scale: Math.min((w - 80) / (2 * length), (h - 75) / (2 * length)), origin: [w / 2, h / 2 + 20]});
+      const point = (x, z) => [origin[0] + scale * x, origin[1] - scale * z];
       const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
+      state.massPositions = [a, b];
       if ($('trail').checked) {
         const start = Math.max(0, Math.floor(state.t * 60) - 360), end = Math.floor(state.t * 60);
         const points = state.simulation.samples.slice(start, end + 1).map(s => point(s.x2, s.z2)); points.push(b);
@@ -1147,6 +1183,7 @@ async function startEnergyApp() {
       else if (state.model === 'simple-pendulum') drawSimplePendulum(sample);
       else if (state.model === 'gravity') drawGravity(sample);
       else drawPendulum(sample);
+      updateMassHandles();
       drawHistory(sample);
       $('observation').textContent = signed
         ? (E0 < 0 ? 'L’énergie mécanique est négative : les deux corps restent liés. La somme des énergies cinétiques et du potentiel gravitationnel est conservée.' : 'L’énergie mécanique permet l’échappement : les deux corps s’éloignent indéfiniment. Le potentiel négatif tend vers zéro à grande distance.')
@@ -1157,6 +1194,115 @@ async function startEnergyApp() {
         : sample.K / E0 < .05 ? 'Près d’une extrémité, la masse ralentit : l’énergie est essentiellement potentielle.'
         : sample.U / E0 < .05 ? 'Près de l’équilibre, la vitesse est maximale : l’énergie est essentiellement cinétique.'
         : 'Pendant le mouvement, l’énergie cinétique et l’énergie potentielle se transforment l’une en l’autre.';
+    }
+    function canEditInitialPosition() { return !state.playing && state.t === 0 && !state.dirty; }
+    function updateMassHandles() {
+      const editable = canEditInitialPosition();
+      for (let i = 0; i < 2; i++) {
+        const handle = $(`mass-handle-${i}`), position = state.massPositions[i];
+        handle.hidden = !editable || !position; handle.disabled = !editable;
+        handle.dataset.dragging = String(state.drag?.index === i);
+        if (position) { handle.style.left = `${position[0]}px`; handle.style.top = `${position[1]}px`; }
+        const name = state.massPositions.length === 1 ? 'Masse' : i === 0 ? 'Première masse' : 'Deuxième masse';
+        handle.setAttribute('aria-label', name + ' : faire glisser pour choisir la position initiale, ou utiliser les touches fléchées.');
+      }
+      $('initial-position-hint').textContent = editable
+        ? (state.model === 'gravity' ? 'Avant de lire, faites glisser une masse : séparation et orientation changent autour du centre de masse.' : 'Avant de lire, faites glisser la masse ou les masses pour choisir leur position initiale.')
+        : 'Recommencer permet de déplacer les masses à leur position initiale.';
+    }
+    function syncInitialParameters() {
+      for (const [key, , , , , , unit, displayScale = 1] of DEFINITIONS[state.model].fields) {
+        $(`param-${key}`).value = state.p[key];
+        number($(`value-${key}`), state.p[key] / displayScale, key.startsWith('theta') ? 0 : 2, unit);
+      }
+    }
+    function initialParameter(key, value) {
+      const [, , , min, max, step] = DEFINITIONS[state.model].fields.find(field => field[0] === key);
+      const snapped = min + Math.round((value - min) / step) * step;
+      state.p[key] = Number(Math.max(min, Math.min(max, snapped)).toFixed(8));
+    }
+    function moveInitialMass(index, screenX, screenY, geometry) {
+      if (state.model === 'oscillator') {
+        const left = 44, right = geometry.w - 28;
+        initialParameter('x0', (screenX - (left + right) / 2) * 2 * geometry.range / (right - left));
+      } else {
+        let x = (screenX - geometry.origin[0]) / geometry.scale;
+        let z = (geometry.origin[1] - screenY) / geometry.scale;
+        if (state.model === 'gravity') {
+          const factor = index === 0 ? -state.p.m2 / (state.p.m1 + state.p.m2) : state.p.m1 / (state.p.m1 + state.p.m2);
+          x /= factor; z /= factor;
+          initialParameter('r0', Math.hypot(x, z));
+          if (Math.hypot(x, z) > 1e-8) initialParameter('phi0', Math.atan2(z, x) * 180 / Math.PI);
+        } else {
+          if (state.model === 'pendulum' && index === 1) {
+            const a = state.p.theta1 * Math.PI / 180;
+            x -= state.p.l1 * Math.sin(a); z += state.p.l1 * Math.cos(a);
+          }
+          if (Math.hypot(x, z) < 1e-8) return;
+          initialParameter(state.model === 'simple-pendulum' ? 'theta0' : index === 0 ? 'theta1' : 'theta2', Math.atan2(x, -z) * 180 / Math.PI);
+        }
+      }
+      if (state.drag) state.drag.changed = true;
+      $('example-select').value = 'custom'; syncInitialParameters(); rebuild(true);
+    }
+    function finishInitialDrag(commit) {
+      const drag = state.drag;
+      if (!drag) return;
+      state.drag = null;
+      const handle = $(`mass-handle-${drag.index}`);
+      if (handle.hasPointerCapture(drag.pointerId)) handle.releasePointerCapture(drag.pointerId);
+      if (!drag.changed) state.initialGeometry = drag.previousView;
+      if (commit && drag.changed) rebuild();
+      else updateMassHandles();
+    }
+    function cancelInitialDrag() {
+      if (!state.drag) return;
+      const drag = state.drag;
+      state.p = {...drag.parameters}; state.initialGeometry = drag.previousView;
+      $('example-select').value = drag.example;
+      finishInitialDrag(false); syncInitialParameters(); rebuild();
+    }
+    for (let index = 0; index < 2; index++) {
+      const handle = $(`mass-handle-${index}`);
+      handle.addEventListener('pointerdown', event => {
+        if (!canEditInitialPosition() || state.drag || event.isPrimary === false || (event.button !== undefined && event.button !== 0)) return;
+        const position = state.massPositions[index];
+        if (!position) return;
+        event.preventDefault();
+        const rect = $('scene-canvas').getBoundingClientRect();
+        state.drag = {index, pointerId: event.pointerId, geometry: state.sceneGeometry, parameters: {...state.p},
+          previousView: state.initialGeometry, example: $('example-select').value, changed: false,
+          offsetX: event.clientX - rect.left - position[0], offsetY: event.clientY - rect.top - position[1]};
+        state.initialGeometry = state.sceneGeometry;
+        handle.focus({preventScroll: true}); handle.setPointerCapture(event.pointerId); updateMassHandles();
+      });
+      const move = event => {
+        const drag = state.drag;
+        if (!drag || drag.index !== index || drag.pointerId !== event.pointerId) return;
+        if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+        event.preventDefault();
+        const rect = $('scene-canvas').getBoundingClientRect();
+        moveInitialMass(index, event.clientX - rect.left - drag.offsetX, event.clientY - rect.top - drag.offsetY, drag.geometry);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', event => {
+        if (state.drag?.index !== index || state.drag.pointerId !== event.pointerId) return;
+        // A click without a move must not round or otherwise alter parameters.
+        if (state.drag.changed) move(event);
+        finishInitialDrag(true);
+      });
+      for (const name of ['pointercancel', 'lostpointercapture']) handle.addEventListener(name, event => {
+        if (state.drag?.index === index && state.drag.pointerId === event.pointerId) cancelInitialDrag();
+      });
+      handle.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && state.drag) { event.preventDefault(); cancelInitialDrag(); return; }
+        const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[event.key];
+        if (!direction || !canEditInitialPosition() || state.drag) return;
+        event.preventDefault();
+        const point = state.massPositions[index], step = event.shiftKey ? 15 : 5;
+        state.initialGeometry = state.sceneGeometry;
+        moveInitialMass(index, point[0] + direction[0]*step, point[1] + direction[1]*step, state.sceneGeometry); rebuild();
+      });
     }
     function frame(now) {
       state.frame = 0;
@@ -1177,7 +1323,7 @@ async function startEnergyApp() {
       number($('damping-readout'), Number($('damping-slider').value), 2, tex`\mathrm{s^{-1}}`);
       scheduleRebuild();
     });
-    $('play').addEventListener('click', () => { if (state.t >= state.duration) state.t = 0; setPlaying(!state.playing); });
+    $('play').addEventListener('click', () => { finishInitialDrag(true); if (state.t >= state.duration) state.t = 0; setPlaying(!state.playing); });
     $('restart').addEventListener('click', () => { setPlaying(false); setTime(0); });
     $('time-slider').addEventListener('input', () => { setPlaying(false); setTime(Number($('time-slider').value)); });
     $('duration').addEventListener('input', () => { number($('duration-readout'), Number($('duration').value), 0, tex`\mathrm s`); scheduleRebuild(); });
@@ -1200,7 +1346,11 @@ async function startEnergyApp() {
       if (event.key.toLowerCase() === 'r') $('restart').click();
     });
     document.addEventListener('visibilitychange', () => { if (document.hidden) setPlaying(false); });
-    new ResizeObserver(() => render()).observe($('scene'));
+    new ResizeObserver(() => {
+      const rect = $('scene-canvas').getBoundingClientRect();
+      if (state.drag && (rect.width !== state.drag.geometry.w || rect.height !== state.drag.geometry.h)) cancelInitialDrag();
+      render();
+    }).observe($('scene'));
     new ResizeObserver(() => render()).observe($('history'));
     setModel(); $('loading').hidden = true;
   } catch (error) {
@@ -1277,12 +1427,15 @@ async function startEnergyApp() {
       <div class="energy-layout">
         <section class="visual-card motion-card">
           <header class="card-heading"><h2 id="scene-title">Oscillateur harmonique</h2><span id="friction-badge" class="result-badge">Sans frottement</span></header>
-          <div id="scene" class="plot-wrap" role="img" aria-label="Mouvement du système et répartition de l’énergie">
+          <div id="scene" class="plot-wrap" role="group" aria-label="Mouvement du système et répartition de l’énergie" aria-describedby="initial-position-hint">
             <canvas id="scene-canvas" aria-hidden="true"></canvas>
             <div class="plot-labels" id="scene-labels" aria-hidden="true"></div>
+            <button id="mass-handle-0" class="mass-handle" type="button" aria-label="Déplacer la première masse" aria-describedby="initial-position-hint" hidden></button>
+            <button id="mass-handle-1" class="mass-handle" type="button" aria-label="Déplacer la deuxième masse" aria-describedby="initial-position-hint" hidden></button>
             <div class="time-badge"><span data-tex="t="></span><span id="scene-time"></span></div>
             <div id="position-badge"><span id="position-symbol" data-tex="x="></span><span id="position-readout"></span></div>
           </div>
+          <p id="initial-position-hint" class="microcopy position-hint">Avant de lire, faites glisser les masses pour choisir leur position initiale.</p>
         </section>
         <section class="visual-card balance-card">
           <header class="card-heading"><h2>Répartition instantanée</h2></header>

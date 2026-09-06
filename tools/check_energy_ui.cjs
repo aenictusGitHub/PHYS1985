@@ -36,10 +36,12 @@ class Element {
     if (deep) result.children = this.children.map(c => typeof c === 'string' ? c : c.cloneNode(true));
     return result;
   }
-  getBoundingClientRect() { return {width, height: this.id?.startsWith('scene') ? 330 : 280, left: 0}; }
+  getBoundingClientRect() { return {width, height: this.id?.startsWith('scene') ? 330 : 280, left: this.id === 'scene-canvas' ? 25 : 0, top: this.id === 'scene-canvas' ? 110 : 0}; }
   getContext() { return ctx; }
   setPointerCapture(id) { this.pointer = id; }
   hasPointerCapture(id) { return this.pointer === id; }
+  releasePointerCapture(id) { this.pointer = undefined; this.fire('lostpointercapture', {pointerId: id}); }
+  focus() { this.focused = true; }
 }
 for (const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
   const el = new Element(match[1]); el.id = match[3];
@@ -228,7 +230,96 @@ async function main() {
   assert(!$('friction-row').hidden && !$('damping-controls').hidden, 'preserve friction preference on returning to a pendulum');
   assert.equal($('segment-0').style.top, '', 'clear signed positioning when changing model');
   assert.equal($('position-readout').dataset.number, '15.00|{}^\\circ');
+  checkInitialDragging();
   assert.deepEqual(reported, []);
-  console.log('Energy UI controllers: four systems, signed gravitational energies, scaled LaTeX units, separated axis title, centered legend, accessible math, springs, examples, friction, sliders, playback and chart seeking passed.');
+  console.log('Energy UI controllers: mouse/touch and keyboard initial-position editing for all four systems, constraints, preview/commit/cancel, playback locks, signed energies, LaTeX, examples, friction and chart seeking passed.');
+}
+function checkInitialDragging() {
+  const near = (a,b) => assert(Math.abs(a-b) < 1e-7, `${a} vs ${b}`);
+  const point = i => [parseFloat($('mass-handle-'+i).style.left), parseFloat($('mass-handle-'+i).style.top)];
+  const parameter = key => Number($('param-'+key).value);
+  const pointer = (i, name, xy, extra = {}) => {
+    const rect = $('scene-canvas').getBoundingClientRect();
+    $('mass-handle-'+i).fire(name, {pointerId: 7, isPrimary: true, button: 0, pointerType: 'touch', clientX: rect.left+xy[0], clientY: rect.top+xy[1], ...extra});
+  };
+  const drag = (i, target) => {
+    const start = point(i);
+    // Grabbing off-center must preserve the pointer offset, without a jump.
+    pointer(i,'pointerdown',[start[0]+6,start[1]-4]);
+    assert($('mass-handle-'+i).hasPointerCapture(7));
+    const end = [target[0]+6,target[1]-4];
+    pointer(i,'pointermove',end);
+    return () => pointer(i,'pointerup',end);
+  };
+  $('friction-toggle').checked = false;
+  $('duration').value = '5'; $('duration').fire('input'); tick();
+  assert(css.includes('touch-action: none'), 'touch dragging does not pan the page');
+  assert(html.includes('role="group"'), 'interactive masses are not hidden inside an image role');
+  for (const viewport of [640,300]) {
+    width = viewport;
+    $('model-select').value = 'oscillator'; $('model-select').fire('change');
+    assert(!$('mass-handle-0').hidden && $('mass-handle-1').hidden);
+    $('param-v0').value = '1'; $('param-v0').fire('input'); tick();
+    const mid = (44+width-28)/2, scaleX = (width-72)/(2*2.15);
+    let release = drag(0,[mid+.5*scaleX,230]);
+    near(parameter('x0'),.5); near(parameter('v0'),1);
+    assert.equal($('total-readout').dataset.number,'1.000|\\mathrm J','energies update before release');
+    near(point(0)[0],mid+.5*scaleX); near(point(0)[1],278);
+    release(); assert(!$('mass-handle-0').hasPointerCapture(7));
+    near(point(0)[0],mid+.5*scaleX);
+    $('play').click(); assert($('mass-handle-0').hidden,'lock immediately when pressing Play');
+    tick(1000); tick(1100); $('play').click();
+    assert($('mass-handle-0').hidden,'paused later is not an initial state');
+    assert.notEqual(parseFloat($('position-readout').dataset.number),.5,'full simulation rebuilt after release');
+    const unchanged = parameter('x0');
+    pointer(0,'pointerdown',point(0)); pointer(0,'pointermove',[30,100]); pointer(0,'pointerup',[30,100]);
+    near(parameter('x0'),unchanged);
+    $('restart').click(); assert(!$('mass-handle-0').hidden); near(parameter('x0'),.5);
+    const beforeKey = parameter('x0'); $('mass-handle-0').fire('keydown',{key:'ArrowRight'});
+    assert(parameter('x0') > beforeKey,'keyboard alternative');
+    release = drag(0,[-1000,0]); near(parameter('x0'),-2); release();
+    const beforeClick = parameter('x0'); pointer(0,'pointerdown',point(0)); pointer(0,'pointerup',point(0)); near(parameter('x0'),beforeClick);
+
+    $('model-select').value = 'simple-pendulum'; $('model-select').fire('change');
+    $('param-omega0').value = '1'; $('param-omega0').fire('input'); tick();
+    const origin = [width/2-10,173], radius = Math.min((width-110)/2,100);
+    release = drag(0,[origin[0]+radius,origin[1]]);
+    near(parameter('theta0'),90); near(parameter('l'),1.2); near(parameter('omega0'),1);
+    assert.equal($('total-readout').dataset.number,'12.492|\\mathrm J'); release();
+    near(Math.hypot(point(0)[0]-origin[0],point(0)[1]-origin[1]),radius);
+    drag(0,[origin[0]-radius,origin[1]]); near(parameter('theta0'),-90);
+    pointer(0,'pointercancel',point(0)); near(parameter('theta0'),90);
+    drag(0,[origin[0],origin[1]-radius]); near(Math.abs(parameter('theta0')),180);
+    $('mass-handle-0').fire('keydown',{key:'Escape'}); near(parameter('theta0'),90);
+    const theta = parameter('theta0'); pointer(0,'pointerdown',point(0),{button:2});
+    pointer(0,'pointermove',[0,0]); near(parameter('theta0'),theta);
+
+    $('model-select').value = 'pendulum'; $('model-select').fire('change');
+    assert(!$('mass-handle-0').hidden && !$('mass-handle-1').hidden);
+    const o = [width/2,185], scale = Math.min((width-80)/4.4,255/4.4);
+    const oldA = point(0), oldB = point(1), arm = 1.2*scale/Math.sqrt(2);
+    release = drag(0,[o[0]+arm,o[1]+arm]); near(parameter('theta1'),45); near(parameter('theta2'),-30);
+    near(point(1)[0]-oldB[0],point(0)[0]-oldA[0]); near(point(1)[1]-oldB[1],point(0)[1]-oldA[1]); release();
+    const a = point(0); release = drag(1,[a[0]-scale,a[1]]); near(parameter('theta2'),-90); near(parameter('theta1'),45); release();
+    near(Math.hypot(point(1)[0]-point(0)[0],point(1)[1]-point(0)[1]),scale);
+
+    $('model-select').value = 'gravity'; $('model-select').fire('change');
+    const c = [width/2,173], gravityScale = Math.min(width-95,220)/20;
+    release = drag(1,[c[0],c[1]-6*gravityScale]);
+    near(parameter('r0'),12); near(parameter('phi0'),90); near(parameter('speedRatio'),1); release();
+    near((point(0)[0]+point(1)[0])/2,c[0]); near((point(0)[1]+point(1)[1])/2,c[1]);
+    near(point(1)[1],c[1]-6*gravityScale);
+    release = drag(0,[c[0]-4*gravityScale,c[1]]); near(parameter('r0'),8); near(parameter('phi0'),0); release();
+    const p = point(0); drag(0,[c[0]-3*gravityScale,c[1]]);
+    pointer(0,'lostpointercapture',p); near(parameter('r0'),8);
+    assert.equal($('example-select').value,'custom');
+    $('time-slider').value = '1'; $('time-slider').fire('input'); assert($('mass-handle-0').hidden);
+    $('restart').click(); assert(!$('mass-handle-0').hidden);
+    // Switching models during a captured gesture must not leave stale handlers.
+    drag(0,[c[0]-5*gravityScale,c[1]]);
+    $('model-select').value = 'oscillator'; $('model-select').fire('change');
+    pointer(0,'pointermove',[0,0]); near(parameter('x0'),1);
+  }
+  width = 640;
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

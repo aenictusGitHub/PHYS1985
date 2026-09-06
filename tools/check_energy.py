@@ -103,6 +103,16 @@ for (const y of [[10,3,.5,2],[-4,5,-3,1]]) {
   near(reducedMass*(y[2]*d[2]+y[3]*d[3])+gradDot,0,.001,'instantaneous gravitational energy balance');
 }
 console.log('Universal gravitation: circular and elliptical Kepler references, escape, signed energy, fixed barycenter, angular momentum and inverse-square force passed. Maximum relative energy error: '+gravityError);
+const unrotated = EnergyModels.simulate('gravity', {...gravity,speedRatio:.65}, 5);
+for (const phi0 of [-90,47,180]) {
+  const rotated = EnergyModels.simulate('gravity', {...gravity,speedRatio:.65,phi0}, 5), phi = phi0*Math.PI/180;
+  for (const t of [0,.13,1.234,5]) {
+    const a = unrotated.at(t), b = rotated.at(t);
+    near(b.y[0],a.y[0]*Math.cos(phi)-a.y[1]*Math.sin(phi),1e-7,'initial orbital orientation x');
+    near(b.y[1],a.y[0]*Math.sin(phi)+a.y[1]*Math.cos(phi),1e-7,'initial orbital orientation z');
+    near(b.E,a.E,1e-7*(a.K+Math.abs(a.U)),'rotation preserves energies and tangential initial velocity');
+  }
+}
 let maxRelative = 0;
 const cases = [
   pendulum,
