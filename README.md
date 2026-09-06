@@ -1,15 +1,13 @@
 # PHYS1985 — Animations interactives de mécanique
 
-Voici quatre animations interactives pour le cours PHYS1985 - Physique générale I (partie Concepts).
-Les symboles, valeurs et unités mathématiques sont composés en LaTeX avec MathJax.
-Les deux animations de cinématique proposent aussi l’à-coup : un vecteur sélectionnable, sa norme et ses composantes en mètres par seconde cube.
+Voici quelques animations interactives pour le cours PHYS1985 - Physique générale I (partie Concepts).
 
 ## Ouvrir les animations
 
 - [Cinématique 2D](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html)
 - [Cinématique 3D](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html)
 - [Travail et puissance](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html)
-- [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) : oscillateur harmonique, pendules simple et double, deux corps gravitationnels.
+- [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html)
 
 ## QR codes
 
