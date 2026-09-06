@@ -78,6 +78,7 @@ Les échelles choisies sont pédagogiques, pas celles d’un atome particulier.
 - Courbes du potentiel et de la composante de force avec le même axe horizontal.
 - Point de lecture et tangente déplaçables, choix direct des équilibres stables ou instables.
 - Vecteurs de longueur proportionnelle au module des forces, avec une échelle de référence ; forces égales et opposées sur les deux corps.
+- Lennard–Jones : paramètres de référence de l’argon, distance d’équilibre d’environ 0.382 nm ; distances en nm, énergies en 10⁻²¹ J et forces en pN.
 - Échelles d’énergie et de longueur réglables ; valeurs et unités LaTeX avec décimales à point.
 - Exploration par curseur, souris, toucher ou clavier. Le balayage automatique explore les positions ; ce n’est pas une simulation de mouvement.
 

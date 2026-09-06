@@ -465,15 +465,17 @@ canvas { display: block; width: 100%; height: 100%; }
 const PotentialModels = (() => {
   'use strict';
   const definitions = {
-    wells: {min: -1.65, max: 1.65, start: .55, coordinate: 'x'},
-    pair: {min: .98, max: 2.8, start: 1.4, coordinate: 'r'},
+    wells: {min: -1.65, max: 1.65, start: .55, coordinate: 'x', energy:1, length:1},
+    // Argon: sigma = 0.3405 nm, epsilon/k_B = 119.8 K
+    // (Heyes, Dini & Smith, 2020, doi:10.1002/pssb.202000344).
+    pair: {min: .98, max: 2.8, start: 1.4, coordinate: 'r', energy:1.654e-21, length:.3405e-9},
   };
   function reduced(model, q) {
     if (model === 'wells') return {u: (q*q-1)**2-q/3, du: 4*q*(q*q-1)-1/3, d2u: 12*q*q-4};
     if (model === 'pair' && q > 0) return {u: 4*(q**-12-q**-6), du: 24*(q**-7-2*q**-13), d2u: 624*q**-14-168*q**-8};
     throw new Error('Potentiel ou position non valide.');
   }
-  function evaluate(model, q, energy = 1, length = 1) {
+  function evaluate(model, q, energy = definitions[model]?.energy, length = definitions[model]?.length) {
     if (![q,energy,length].every(Number.isFinite) || energy <= 0 || length <= 0) throw new Error('Paramètres non valides.');
     const {u,du,d2u} = reduced(model,q);
     return {q, position:q*length, U:energy*u, slope:energy/length*du, F:-energy/length*du, curvature:energy/length**2*d2u};
@@ -506,6 +508,12 @@ async function startPotentialApp() {
     const state = {model:'wells',q:.55,energy:1,length:1,playing:false,frame:0,last:null,direction:1,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(), units=new Map(), labels=new Map();
     let arrowScaleCache=null;
+    const displayUnits={
+      wells:{length:1,energy:1,force:1,lengthTex:tex`\mathrm m`,lengthText:'m',energyTex:tex`\mathrm J`,energyAxis:tex`\mathrm J`,energyText:'J',forceTex:tex`\mathrm N`,forceText:'N',slopeTex:tex`\mathrm{J\,m^{-1}}`},
+      pair:{length:1e-9,energy:1e-21,force:1e-12,lengthTex:tex`\mathrm{nm}`,lengthText:'nm',energyTex:tex`\times10^{-21}\,\mathrm J`,energyAxis:tex`10^{-21}\,\mathrm J`,energyText:'× 10^-21 J',forceTex:tex`\mathrm{pN}`,forceText:'pN',slopeTex:tex`\mathrm{pN}`},
+    };
+    function display() { return displayUnits[state.model]; }
+    function positionText(position) { const u=display();return (position/u.length).toFixed(3)+' '+u.lengthText; }
     function math(el,value) {
       if (el.dataset.math === value) return;
       el.replaceChildren(MathJax.tex2svg(value,{display:false})); el.dataset.math=value;
@@ -555,12 +563,20 @@ async function startPotentialApp() {
       setPlaying(false); state.q=Math.max(definition().min,Math.min(definition().max,q)); render();
     }
     function configure(model=state.model, reset=false) {
+      const changed=model!==state.model;
       setPlaying(false); state.drag=null; state.model=model; state.q=definition().start; state.direction=1;
-      if (reset) { state.energy=1;state.length=1; $('energy-scale').value='1'; $('length-scale').value='1'; }
+      if (reset||changed) {state.energy=definition().energy;state.length=definition().length;}
+      const pair=model==='pair', c=definition().coordinate, u=display();
+      for (const [id,key,min,max,step] of [
+        ['energy-scale','energy',pair ? .5 : .2,4,pair ? .001 : .1],
+        ['length-scale','length',pair ? .25 : .5,pair ? .5 : 2,pair ? .0001 : .1],
+      ]) {
+        const input=$(id);input.min=min;input.max=max;input.step=step;
+        input.value=Number((state[key]/u[key]).toPrecision(12));
+      }
       $('position').min=definition().min; $('position').max=definition().max;
-      const pair=model==='pair', c=definition().coordinate;
       $('model-note').textContent=pair
-        ? 'À courte distance, les particules se repoussent ; plus loin, elles s’attirent. Au minimum du potentiel, la force s’annule.'
+        ? 'Un modèle de deux atomes d’argon : répulsion à courte distance, attraction plus loin. Les réglages initiaux correspondent à l’argon ; les curseurs permettent d’explorer d’autres paramètres atomiques.'
         : 'Deux minima et un maximum : explorez comment le sens de la force change avec la pente du potentiel.';
       math($('coordinate-label'),c); math($('energy-symbol'),pair?tex`\epsilon`:'U_0'); math($('length-symbol'),pair?tex`\sigma`:'L_0');
       math($('potential-symbol'),`U(${c})`);
@@ -573,8 +589,9 @@ async function startPotentialApp() {
           tex`F_x=-\frac{\mathrm dU}{\mathrm dx}`,tex`\vec F=F_x\vec e_x`,tex`U'(x_e)=0,\quad U''(x_e)>0\;\Rightarrow\;\text{stable}`];
       $('relations').replaceChildren(...equations.map(value=>{ const el=document.createElement('div');el.className='equation';math(el,value);return el; }));
       $('reference-note').textContent=pair
-        ? 'Potentiel de Lennard–Jones non tronqué, nul à l’infini. Les échelles sont pédagogiques, pas celles d’un atome particulier. Le vecteur unitaire radial va de la première particule vers la seconde.'
+        ? 'Potentiel de Lennard–Jones non tronqué, nul à l’infini. La distance est mesurée entre les centres des atomes. Le vecteur unitaire radial va du premier atome vers le second. Le schéma est agrandi pour rendre les forces visibles.'
         : 'La force est dirigée vers les potentiels décroissants. Un minimum est stable ; un maximum est instable. La courbe représente une énergie, pas la forme d’une piste.';
+      $('argon-reference').hidden=!pair;
       $('stage-title').textContent=pair?'Attraction et répulsion':'Sens de la force dans l’espace';
       $('stage-note').textContent=pair
         ? 'Faites glisser l’une des particules pour régler leur séparation. Les forces sont égales et opposées. La longueur des flèches est proportionnelle à leur module ; l’échelle reste fixe pour les paramètres choisis.'
@@ -588,7 +605,7 @@ async function startPotentialApp() {
         const button=document.createElement('button'), name=document.createElement('span'), value=document.createElement('span');
         button.type='button';button.dataset.q=String(eq.q); value.className='eq-position';
         name.textContent=state.model==='pair'?'Distance stable':i===1?'Maximum — instable':i===0?'Minimum gauche — stable':'Minimum droit — stable';
-        number(value,eq.q*state.length,3,tex`\mathrm m`); button.append(name,value);
+        number(value,eq.q*state.length/display().length,3,display().lengthTex); button.append(name,value);
         button.addEventListener('click',()=>setPosition(eq.q));return button;
       }));
     }
@@ -616,23 +633,27 @@ async function startPotentialApp() {
       for (const el of $(layer).children) el.hidden=true;
       const points=Array.from({length:501},(_,i)=>sample(min+(max-min)*i/500));
       const key=kind==='potential'?'U':'F', values=points.map(s=>s[key]);
-      const rawMin=Math.min(0,...values),rawMax=Math.max(0,...values), span=Math.max(.01,rawMax-rawMin);
+      const u=display(), unitScale=kind==='potential'?u.energy:u.force;
+      const rawMin=Math.min(0,...values),rawMax=Math.max(0,...values), span=Math.max(.01*unitScale,rawMax-rawMin);
       const ymin=rawMin-span*.12,ymax=rawMax+span*.12;
       const X=q=>r.left+(q-min)/(max-min)*(r.right-r.left),Y=v=>r.bottom-(v-ymin)/(ymax-ymin)*(r.bottom-r.top);
       const ticks=w<450?3:5;
       for (let i=0;i<=ticks;i++) {
         const q=min+(max-min)*i/ticks,x=X(q);
         line(ctx,[[x,r.top],[x,r.bottom]],colors.grid);
-        label(layer,'x'+i,(q*state.length).toFixed(2),x,r.bottom+16,colors.muted,true);
+        label(layer,'x'+i,(q*state.length/u.length).toFixed(2),x,r.bottom+16,colors.muted,true);
       }
       for (let i=0;i<=4;i++) {
         const value=ymin+(ymax-ymin)*i/4,y=Y(value);
         line(ctx,[[r.left,y],[r.right,y]],colors.grid);
-        label(layer,'y'+i,(Math.abs(value)<.0005?0:value).toFixed(Math.abs(ymax-ymin)<5?2:1),r.left-28,y,colors.muted,true);
+        const shown=value/unitScale;
+        label(layer,'y'+i,(Math.abs(shown)<.0005?0:shown).toFixed((ymax-ymin)/unitScale<5?2:1),r.left-28,y,colors.muted,true);
       }
       line(ctx,[[r.left,Y(0)],[r.right,Y(0)]],colors.muted,1,[4,4]);
-      label(layer,'unitY',kind==='potential'?tex`U\,[\mathrm J]`:(state.model==='pair'?'F_r':'F_x')+tex`\,[\mathrm N]`,r.left,12);
-      label(layer,'unitX',coordinate+tex`\,[\mathrm m]`,(r.left+r.right)/2,h-9);
+      const unitY=kind==='potential'?'U'+tex`\,[${u.energyAxis}]`:(state.model==='pair'?'F_r':'F_x')+tex`\,[${u.forceTex}]`;
+      // The scientific energy unit is wider: align its left edge with the plot.
+      label(layer,'unitY',unitY,r.left,12).style.transform='translate(0,-50%)';
+      label(layer,'unitX',coordinate+tex`\,[${u.lengthTex}]`,(r.left+r.right)/2,h-9);
       ctx.save();ctx.beginPath();ctx.rect(r.left,r.top,r.right-r.left,r.bottom-r.top);ctx.clip();
       line(ctx,points.map(s=>[X(s.q),Y(s[key])]),kind==='potential'?colors.U:colors.F,2.2);
       const current=sample(), x=X(state.q), y=Y(current[key]);
@@ -649,8 +670,8 @@ async function startPotentialApp() {
       line(ctx,[[x,r.top],[x,r.bottom]],colors.muted,1,[4,4]);dot(ctx,x,y,5.5,colors.body);
       ctx.restore();
       const plot=$(kind+'-plot');
-      plot.setAttribute('aria-valuemin',min*state.length);plot.setAttribute('aria-valuemax',max*state.length);
-      plot.setAttribute('aria-valuenow',current.position);plot.setAttribute('aria-valuetext',current.position.toFixed(3)+' m ; '+key+' = '+current[key].toFixed(3)+(key==='U'?' J':' N'));
+      plot.setAttribute('aria-valuemin',min*state.length/u.length);plot.setAttribute('aria-valuemax',max*state.length/u.length);
+      plot.setAttribute('aria-valuenow',current.position/u.length);plot.setAttribute('aria-valuetext',positionText(current.position)+' ; '+key+' = '+(current[key]/unitScale).toFixed(3)+' '+(key==='U'?u.energyText:u.forceText));
     }
     function forceArrowScale(w) {
       const key=[state.model,w,state.energy,state.length].join('|');
@@ -661,7 +682,7 @@ async function startPotentialApp() {
       // force. Both particles share this one linear pixels-per-newton scale.
       for (let i=0;i<=1000;i++) {
         const q=min+(max-min)*i/1000, F=sample(q).F;
-        if (Math.abs(F)<1e-12) continue;
+        if (Math.abs(F)<1e-12*state.energy/state.length) continue;
         let room;
         if (pair) {
           const halfDistance=q*(w-90)/max/2;
@@ -689,12 +710,13 @@ async function startPotentialApp() {
       const bodyRadius=10, scale=(w-90)/max;
       const centers=pair?[[w/2-state.q*scale/2,y],[w/2+state.q*scale/2,y]]:[[X(state.q),y]];
       const forceScale=forceArrowScale(w);
+      const u=display();
       state.stage={w,h,scale,centers};
       // A reference arrow makes rescaling after a parameter/viewport change
       // explicit. Its label and drawn length represent exactly the same force.
-      const reference=Number((40/forceScale).toPrecision(2));
-      $('force-scale-arrow').style.width=reference*forceScale+'px';
-      number($('force-scale-value'),reference,reference<1?3:2,tex`\mathrm N`);
+      const reference=Number((40/forceScale/u.force).toPrecision(2));
+      $('force-scale-arrow').style.width=reference*u.force*forceScale+'px';
+      number($('force-scale-value'),reference,reference<1?3:2,u.forceTex);
       $('force-scale-key').hidden=!$('forces').checked;
       if (!pair) {
         line(ctx,[[r.left,y],[r.right,y]],colors.grid,1.5);
@@ -703,7 +725,7 @@ async function startPotentialApp() {
       } else {
         line(ctx,[[centers[0][0],y+34],[centers[1][0],y+34]],colors.muted,1);
         for (const [x] of centers) line(ctx,[[x,y+29],[x,y+39]],colors.muted,1);
-        label('stage-labels','distance',tex`r=${current.position.toFixed(3)}\,\mathrm m`,w/2,y+50);
+        label('stage-labels','distance',tex`r=${(current.position/u.length).toFixed(3)}\,${u.lengthTex}`,w/2,y+50);
       }
       for (const [i,[x,y]] of centers.entries()) {
         dot(ctx,x,y,bodyRadius,i?colors.body2:colors.body);
@@ -718,17 +740,21 @@ async function startPotentialApp() {
           }
         }
       }
-      $('stage').setAttribute('aria-label',pair?'Séparation '+current.position.toFixed(3)+' m. Force sur la deuxième particule : '+current.F.toFixed(3)+' N ; force opposée sur la première.':'Position '+current.position.toFixed(3)+' m. Force : '+current.F.toFixed(3)+' N.');
+      const forceText=(current.F/u.force).toFixed(3)+' '+u.forceText;
+      $('stage').setAttribute('aria-label',pair?'Séparation '+positionText(current.position)+'. Force sur le deuxième atome : '+forceText+' ; force opposée sur le premier.':'Position '+positionText(current.position)+'. Force : '+forceText+'.');
     }
     function render(readouts=true) {
       const current=sample(), pair=state.model==='pair', zero=Math.abs(current.F)<1e-7*state.energy/state.length;
+      const u=display();
       $('position').value=state.q;
-      $('position').setAttribute('aria-valuetext',current.position.toFixed(3)+' m');
+      $('position').setAttribute('aria-valuetext',positionText(current.position));
       for (const button of $('equilibrium-buttons').children) button.dataset.selected=String(Math.abs(Number(button.dataset.q)-state.q)<1e-7);
       if (readouts) {
-        number($('position-value'),current.position,3,tex`\mathrm m`);
-        number($('energy-value'),state.energy,2,tex`\mathrm J`);number($('length-value'),state.length,2,tex`\mathrm m`);
-        number($('potential-value'),current.U,3,tex`\mathrm J`);number($('slope-value'),current.slope,3,tex`\mathrm{J\,m^{-1}}`);number($('force-value'),current.F,3,tex`\mathrm N`);
+        number($('position-value'),current.position/u.length,3,u.lengthTex);
+        number($('energy-value'),state.energy/u.energy,pair?3:2,u.energyTex);number($('length-value'),state.length/u.length,pair?4:2,u.lengthTex);
+        number($('potential-value'),current.U/u.energy,3,u.energyTex);number($('slope-value'),current.slope/u.force,3,u.slopeTex);number($('force-value'),current.F/u.force,3,u.forceTex);
+        $('energy-scale').setAttribute('aria-valuetext',(state.energy/u.energy).toFixed(pair?3:2)+' '+u.energyText);
+        $('length-scale').setAttribute('aria-valuetext',(state.length/u.length).toFixed(pair?4:2)+' '+u.lengthText);
       }
       $('force-sign').textContent=zero?'Force nulle':current.F>0?'Force positive':'Force négative';
       $('force-sign').className='sign-badge '+(zero?'neutral':current.F>0?'positive':'negative');
@@ -749,7 +775,7 @@ async function startPotentialApp() {
     }
     $('model-select').addEventListener('change',()=>configure($('model-select').value));
     $('position').addEventListener('input',()=>setPosition(Number($('position').value)));
-    for (const [id,key] of [['energy-scale','energy'],['length-scale','length']]) $(id).addEventListener('input',()=>{setPlaying(false);state[key]=Number($(id).value);buildEquilibria();render();});
+    for (const [id,key] of [['energy-scale','energy'],['length-scale','length']]) $(id).addEventListener('input',()=>{setPlaying(false);state[key]=Number($(id).value)*display()[key];buildEquilibria();render();});
     $('reset').addEventListener('click',()=>configure(state.model,true));
     $('restart').addEventListener('click',()=>{state.direction=1;setPosition(definition().start);});
     $('play').addEventListener('click',()=>{setPlaying(!state.playing);if(!state.playing)render();});
@@ -806,7 +832,7 @@ async function startPotentialApp() {
       </header>
       <section class="panel-section">
         <label class="field-label" for="model-select">Exemples</label>
-        <select id="model-select"><option value="wells">Double puits asymétrique</option><option value="pair">Interaction de deux particules</option></select>
+        <select id="model-select"><option value="wells">Double puits asymétrique</option><option value="pair">Lennard–Jones — deux atomes d’argon</option></select>
         <p id="model-note" class="microcopy"></p>
         <label class="field-label compact" for="position">Explorer <span id="coordinate-label" data-tex="x"></span></label>
         <input id="position" type="range" min="-1.65" max="1.65" value="0.55" step="0.0001" />
@@ -840,6 +866,7 @@ async function startPotentialApp() {
         <h2>Relations</h2>
         <div id="relations" class="equations"></div>
         <p id="reference-note" class="microcopy"></p>
+        <p id="argon-reference" class="microcopy" hidden>Référence argon : <span data-tex="\sigma=0.3405\,\mathrm{nm}"></span> et <span data-tex="\epsilon\simeq1.654\times10^{-21}\,\mathrm J"></span>. La distance d’équilibre du modèle vaut alors <span data-tex="r_{\mathrm{eq}}=2^{1/6}\sigma\simeq0.382\,\mathrm{nm}"></span>. <span data-tex="1\,\mathrm{pN}=10^{-12}\,\mathrm N"></span>. <a href="https://doi.org/10.1002/pssb.202000344" target="_blank" rel="noopener noreferrer">Paramètres de référence</a>.</p>
       </section>
       <footer class="panel-footer"><span>© J. Martin</span><span>Espace : balayage · R : au départ</span></footer>
     </aside>

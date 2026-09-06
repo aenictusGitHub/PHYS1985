@@ -35,6 +35,19 @@ for(const model of ['wells','pair']) {
 assert(models.evaluate('pair',1).F>0 && models.evaluate('pair',1.4).F<0);
 assert.throws(()=>models.evaluate('pair',0));
 assert.throws(()=>models.evaluate('wells',NaN));
+// Atomic distances are real SI values, not metre-sized labels relabelled nm.
+const argon=models.definitions.pair,eqArgon=models.equilibria('pair')[0].q;
+near(argon.length/1e-9,.3405,1e-12);near(argon.energy/1e-21,1.654,1e-12);
+near(models.evaluate('pair',eqArgon).position/1e-9,.3821983274493415,1e-12);
+near(models.evaluate('pair',eqArgon).U/argon.energy,-1,1e-12);
+for(const energy of [.5e-21,argon.energy,4e-21])for(const length of [.25e-9,argon.length,.5e-9]) {
+  for(let i=0;i<=100;i++) {
+    const q=argon.min+(argon.max-argon.min)*i/100,h=1e-5;
+    const s=models.evaluate('pair',q,energy,length),lo=models.evaluate('pair',q-h,energy,length),hi=models.evaluate('pair',q+h,energy,length);
+    near(s.F/(energy/length),-(hi.U-lo.U)/(2*h*energy),2e-5);
+    near(s.curvature/(energy/length**2),(hi.slope-lo.slope)/(2*h*energy/length),2e-4);
+  }
+}
 console.log('Potential physics: analytical gradients, curvature, stable/unstable equilibria, pair minimum and bounded sweep passed.');
 
 let width=640,frameId=0,typesetCount=0;
@@ -71,6 +84,7 @@ for(const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
   el.dataset.tex=/\bdata-tex="([^"]*)"/.exec(match[2])?.[1];
 }
 const $=id=>{assert(nodes.has(id),'missing '+id);return nodes.get(id);};
+const staticMath=[...html.matchAll(/\bdata-tex="([^"]*)"/g)].map(match=>{const el=new Element();el.dataset.tex=match[1];return el;});
 $('model-select').value='wells';$('speed').value='1';
 let convertTex;
 if(process.env.PHYS1985_MATHJAX_ROOT) {
@@ -90,7 +104,7 @@ function typeset(text) {
   svg.setAttribute('viewBox','0 -700 500 722');svg.setAttribute('width','1.131ex');svg.append(g);out.append(svg);return out;
 }
 const document={readyState:'complete',getElementById:$,createElement:t=>new Element(t),createElementNS:(_,t)=>new Element(t),
-  querySelectorAll:()=>[...nodes.values()].filter(el=>el.dataset.tex),addEventListener:(event,fn)=>{docEvents[event]=fn;}};
+  querySelectorAll:()=>[...nodes.values()].filter(el=>el.dataset.tex).concat(staticMath),addEventListener:(event,fn)=>{docEvents[event]=fn;}};
 const context={document,window:{devicePixelRatio:1},console:{error:e=>errors.push(e)},ResizeObserver:class{observe(){}},
   requestAnimationFrame:fn=>{frames.set(++frameId,fn);return frameId;},cancelAnimationFrame:id=>frames.delete(id),
   MathJax:{startup:{promise:Promise.resolve(),document:{updateDocument(){}}},tex2svg:typeset}};
@@ -99,7 +113,8 @@ const value=id=>parseFloat($(id).dataset.number);
 const forceArrows=()=>plots.get('stage-canvas').strokes.filter(s=>s.color==='#7758a6'&&s.width===2.5);
 const arrowLength=shaft=>Math.abs(shaft.points[1][0]-shaft.points[0][0]);
 function checkArrowGeometry(F,model) {
-  const arrows=forceArrows(),factor=parseFloat($('force-scale-arrow').style.width)/value('force-scale-value');
+  const forceUnit=model==='pair'?1e-12:1;
+  const arrows=forceArrows(),factor=parseFloat($('force-scale-arrow').style.width)/(value('force-scale-value')*forceUnit);
   assert(Number.isFinite(factor)&&factor>0,'positive finite force scale');
   assert.equal(arrows.length,model==='pair'?4:2);
   for(let i=0;i<arrows.length;i+=2) {
@@ -121,31 +136,50 @@ async function checkUI(){
   for(const model of ['wells','pair'])for(const viewport of [240,300,640,1100]) {
     width=viewport;$('model-select').value=model;$('model-select').fire('change');
     assert.equal($('body-1').hidden,model!=='pair');
+    assert.equal($('argon-reference').hidden,model!=='pair');
     let fixedFactor;
-    const d=models.definitions[model];
+    const d=models.definitions[model],u=model==='pair'?{energy:1e-21,length:1e-9,force:1e-12}:{energy:1,length:1,force:1};
+    const initialPosition=d.start*d.length/u.length, ys={potential:[],force:[]};
+    near(Number($('length-scale').value),d.length/u.length,1e-12);
+    near(Number($('energy-scale').value),d.energy/u.energy,1e-12);
+    near(value('length-value'),d.length/u.length,1e-12);
     for(const q of [d.min,d.start,d.max,...Array.from({length:31},(_,i)=>d.min+(d.max-d.min)*(i+.37)/31)]) {
       $('position').value=q;$('position').fire('input');const s=models.evaluate(model,q);
-      near(value('force-value'),s.F,.00051);near(value('potential-value'),s.U,.00051);near(value('slope-value'),-s.F,.00051);
+      near(value('force-value'),s.F/u.force,.00051);near(value('potential-value'),s.U/u.energy,.00051);near(value('slope-value'),-s.F/u.force,.00051);
+      near(value('position-value'),s.position/u.length,.00051);
+      for(const kind of ['potential','force'])ys[kind].push(plots.get(kind+'-canvas').circles.at(-1)[1]);
       const factor=checkArrowGeometry(s.F,model);
       if(fixedFactor===undefined)fixedFactor=factor;else near(factor,fixedFactor,1e-12);
       for(const id of ['position-value','energy-value','length-value','potential-value','slope-value','force-value','force-scale-value']) {
         assert(!$(id).dataset.number.split('|')[0].includes(','),'decimal dots');assert.equal($(id).children.length,1);assert.equal($(id).children[0].tag,'svg','one shared numeric baseline');
       }
     }
+    for(const kind of ['potential','force'])assert(Math.max(...ys[kind])-Math.min(...ys[kind])>80,'atomic curves keep a visible vertical range');
+    if(model==='pair') {
+      assert($('position').attrs['aria-valuetext'].includes('nm'));
+      assert($('stage').attrs['aria-label'].includes('pN'));
+      assert($('potential-plot').attrs['aria-valuetext'].includes('10^-21 J'));
+      assert($('force-scale-value').dataset.number.includes('pN'));
+      assert($('potential-value').dataset.number.includes('10^{-21}'));
+      assert($('length-value').dataset.number.startsWith('0.3405|'));
+    }
     const eq=models.equilibria(model);
     $('equilibrium-buttons').children.forEach((button,i)=>{button.click();near(value('force-value'),0);assert($('state-badge').textContent.includes(eq[i].stable?'stable':'instable'));assert.equal(forceArrows().length,0);});
+    if(model==='pair') {near(value('position-value'),.382,.0001);near(value('potential-value'),-1.654,.0001);}
     $('restart').click();const old=value('force-value');
-    $('energy-scale').value='2';$('energy-scale').fire('input');near(value('force-value'),old*2,.002);
-    $('length-scale').value='2';$('length-scale').fire('input');near(value('force-value'),old,.002);near(value('position-value'),models.definitions[model].start*2,.001);
+    $('energy-scale').value=2*d.energy/u.energy;$('energy-scale').fire('input');near(value('force-value'),old*2,.002);
+    $('length-scale').value=1.2*d.length/u.length;$('length-scale').fire('input');near(value('force-value'),old*2/1.2,.002);near(value('position-value'),initialPosition*1.2,.001);
     // Changing physical parameters may fit a new scale, but never individual
     // positions. Test extremes, signs and a very small nonzero force as well.
-    for(const energy of [.2,4])for(const length of [.5,2]) {
+    for(const energy of [Number($('energy-scale').min),Number($('energy-scale').max)])for(const length of [Number($('length-scale').min),Number($('length-scale').max)]) {
       $('energy-scale').value=energy;$('energy-scale').fire('input');
       $('length-scale').value=length;$('length-scale').fire('input');
       let scale;
       for(const q of [d.min,d.max,d.start,...eq.map(e=>e.q+.0001)]) {
         $('position').value=q;$('position').fire('input');
-        const next=checkArrowGeometry(models.evaluate(model,q,energy,length).F,model);
+        const s=models.evaluate(model,q,energy*u.energy,length*u.length);
+        near(value('force-value'),s.F/u.force,.00051);near(value('potential-value'),s.U/u.energy,.00051);
+        const next=checkArrowGeometry(s.F,model);
         if(scale===undefined)scale=next;else near(next,scale,1e-10);
       }
     }
@@ -159,8 +193,8 @@ async function checkUI(){
     $('potential-plot').fire('pointerdown',{pointerId:3,clientX:width/2,button:0});
     $('potential-plot').fire('pointermove',{pointerId:3,clientX:width-24});
     $('potential-plot').fire('pointerup',{pointerId:3});
-    near(value('position-value'),models.definitions[model].max,.001);
-    $('force-plot').fire('keydown',{key:'Home'});near(value('position-value'),models.definitions[model].min,.001);
+    near(value('position-value'),d.max*d.length/u.length,.001);
+    $('force-plot').fire('keydown',{key:'Home'});near(value('position-value'),d.min*d.length/u.length,.001);
     near(plots.get('potential-canvas').circles.at(-1)[0],plots.get('force-canvas').circles.at(-1)[0],1e-12);
     const before=[$('position-value').dataset.number,$('force-value').dataset.number,$('body-0').style.left];
     for(const id of ['tangent','equilibria','forces']) {$(id).checked=false;$(id).fire('change');}
@@ -174,8 +208,10 @@ async function checkUI(){
     assert.equal($('play').textContent,'Pause');assert.equal(frames.size,1);
     assert(Number($('position').value)>=models.definitions[model].min&&Number($('position').value)<=models.definitions[model].max);
     $('play').click();assert.equal(frames.size,0);const paused=$('position-value').dataset.number;tick(20000);assert.equal($('position-value').dataset.number,paused);
-    $('restart').click();near(value('position-value'),models.definitions[model].start,.001);
+    $('restart').click();near(value('position-value'),initialPosition,.001);
   }
+  // Switching out of the atomic example must not leak nanometre defaults.
+  $('model-select').value='wells';$('model-select').fire('change');near(value('length-value'),1);near(value('energy-value'),1);assert(!$('position-value').dataset.number.includes('nm'));
   $('play').click();document.hidden=true;docEvents.visibilitychange();assert.equal(frames.size,0);assert.equal($('play').textContent,'Balayer');
   assert.deepEqual(errors,[]);
   console.log('Potential controllers: synchronized plots, arrows, equilibria, scales, pointer/keyboard input, display options, numeric baselines and continuous sweep passed'+(convertTex?' with real MathJax SVG.':'.'));
