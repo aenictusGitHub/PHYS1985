@@ -582,6 +582,15 @@ async function startRotationApp(){
     function surface(id){const canvas=$(id),r=canvas.getBoundingClientRect(),dpr=Math.min(2,window.devicePixelRatio||1),ctx=canvas.getContext('2d');if(canvas.width!==Math.round(r.width*dpr)||canvas.height!==Math.round(r.height*dpr)){canvas.width=Math.round(r.width*dpr);canvas.height=Math.round(r.height*dpr);}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,r.width,r.height);return {ctx,w:r.width,h:r.height};}
     function line(ctx,points,color,width=1,dash=[]){if(!points.length)return;ctx.beginPath();ctx.moveTo(...points[0]);for(const p of points.slice(1))ctx.lineTo(...p);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.stroke();ctx.setLineDash([]);}
     function dot(ctx,x,y,r,color){ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();}
+    // Same purely graphical relief as Collisions; physical radii are unchanged.
+    function sphere(ctx,x,y,r,index){
+      const colors=index===1?['#b8ddf6','#62a8d9','#2775b6','#1c5280']:['#e1f8ee','#b6e8d7','#94d9c5','#529c89'];
+      const shade=ctx.createRadialGradient(x-r*.34,y-r*.38,r*.03,x-r*.08,y-r*.1,r*1.14);
+      for(const [offset,color]of [[0,colors[0]],[.3,colors[1]],[.7,colors[2]],[1,colors[3]]])shade.addColorStop(offset,color);
+      ctx.save();ctx.shadowColor='rgba(35,52,73,.16)';ctx.shadowBlur=Math.min(7,r*.3);ctx.shadowOffsetY=Math.min(3,r*.12);
+      ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fillStyle=shade;ctx.fill();ctx.restore();
+      ctx.strokeStyle=index===1?'#23679c':'#68ae9a';ctx.lineWidth=.7;ctx.stroke();
+    }
     function label(layer,key,value,x,y,color=colors.ink,tick=false){const id=layer+':'+key;let el=labels.get(id);if(!el){el=document.createElement('span');$(layer).append(el);labels.set(id,el);}el.hidden=false;el.className='plot-label'+(tick?' tick':'');math(el,value);el.style.left=x+'px';el.style.top=y+'px';el.style.color=color;return el;}
     function arrow(ctx,a,b,color,width=2.5){const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);if(length<1e-8)return;const ux=dx/length,uy=dy/length,head=Math.min(9,length*.35);line(ctx,[a,b],color,width);line(ctx,[[b[0]-head*ux-head*.48*uy,b[1]-head*uy+head*.48*ux],b,[b[0]-head*ux+head*.48*uy,b[1]-head*uy-head*.48*ux]],color,width);}
     function sceneGeometry(w,h){return {cx:w/2,cy:h*.52,scale:Math.min(w*.32,h*.29)/RotationModels.maxRadius};}
@@ -608,6 +617,7 @@ async function startRotationApp(){
       line(ctx,[[cx,35],[cx,h-32]],colors.grid,1.3,[4,5]);label('scene-labels','axis',tex`+z`,cx+17,38,colors.muted);
       if($('show-radius').checked)line(ctx,circle(p.r),colors.grid,1.5,[4,5]);
       if(sim.model==='shell'){
+        sphere(ctx,cx,cy,scale*s.r,1);
         for(let j=1;j<6;j++){const a=j*Math.PI/6;line(ctx,circle(s.r*Math.sin(a),s.r*Math.cos(a)),'#a6c8df',1);}
         for(let j=0;j<10;j++){const angle=s.theta+j*Math.PI/5;line(ctx,Array.from({length:65},(_,i)=>{const a=i*Math.PI/64;return P(s.r*Math.sin(a)*Math.cos(angle),s.r*Math.sin(a)*Math.sin(angle),s.r*Math.cos(a));}),j===0?colors.body:'#a6c8df',j===0?2:1);}
       }else{
@@ -623,7 +633,8 @@ async function startRotationApp(){
         const pos=P(s.r*Math.cos(a),s.r*Math.sin(a));
         line(ctx,[[cx,cy],pos],sim.model==='stool'?'#93a7b8':colors.r,sim.model==='stool'?4:1.8);
         if(i===0)label('scene-labels','radius','r',(cx+pos[0])/2-8,(cy+pos[1])/2+15,colors.r);
-        dot(ctx,...pos,sim.model==='shell'?5.5:10,i?colors.body2:colors.body);
+        if(sim.model==='shell')dot(ctx,...pos,5.5,colors.ink);
+        else sphere(ctx,...pos,10,i+1);
         if(sim.model!=='shell')label('scene-labels','mass'+i,'m',pos[0],pos[1]+22,i?'#237a68':colors.body);
         if($('show-v').checked&&Math.abs(s.omega)>1e-9){
           const vx=-s.r*s.omega*Math.sin(a),vy=s.r*s.omega*Math.cos(a),tip=[pos[0]+vScale*vx,pos[1]-.42*vScale*vy];

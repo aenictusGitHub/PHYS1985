@@ -19,9 +19,10 @@ const ctx = new Proxy({}, {get(target, key) {
     for (const a of args.flat()) if (typeof a === 'number') assert(Number.isFinite(a), 'canvas finite coordinate');
     if (key === 'beginPath') { strokePoints = []; circle = null; }
     if (key === 'arc') circle = [...args];
+    if (key === 'createRadialGradient') return {type: 'radial', args, stops: [], addColorStop(offset, color) { this.stops.push([offset, color]); }};
     if (key === 'moveTo' || key === 'lineTo') strokePoints.push([...args]);
     if (key === 'clearRect' && canvasId === 'scene-canvas') { sceneStrokes.length = 0; sceneFills.length = 0; }
-    if (key === 'fill' && canvasId === 'scene-canvas' && circle) sceneFills.push({circle, color: target.fillStyle});
+    if (key === 'fill' && canvasId === 'scene-canvas' && circle) sceneFills.push({circle, color: target.fillStyle?.stops?.[2]?.[1] || target.fillStyle, gradient: target.fillStyle?.type === 'radial' ? target.fillStyle : null});
     if (key === 'stroke' && canvasId === 'scene-canvas') sceneStrokes.push({points: strokePoints, color: target.strokeStyle, width: target.lineWidth});
   };
 }});
@@ -235,7 +236,7 @@ function checkGravityVelocityOptions() {
   const sceneLayout = () => ({
     bounds: $('scene-canvas').getBoundingClientRect(),
     masses: [0,1].map(i => [$('mass-handle-'+i).style.left, $('mass-handle-'+i).style.top]),
-    radii: sceneFills.filter(fill => ['#2775b6','#74c9b2'].includes(fill.color)).map(fill => fill.circle[2]),
+    radii: sceneFills.filter(fill => ['#2775b6','#94d9c5'].includes(fill.color)).map(fill => fill.circle[2]),
     labels: $('scene-labels').children.filter(node => !node.hidden && /^(m_[12]|C)$/.test(node.dataset.math)).map(node => [node.dataset.math, node.style.left, node.style.top]),
     // Separation line and barycenter axes must be unaffected by both options.
     structure: JSON.stringify(sceneStrokes.filter(stroke => ['#dce4ec','#607185'].includes(stroke.color))),
@@ -309,7 +310,7 @@ function checkGravityVelocityOptions() {
   $('restart').click(); $('reset-parameters').click();
 }
 function checkGravityZoom() {
-  const bodies = () => ['#2775b6','#74c9b2'].map(color => sceneFills.find(fill => fill.color === color).circle);
+  const bodies = () => ['#2775b6','#94d9c5'].map(color => sceneFills.find(fill => fill.color === color).circle);
   const seek = t => { $('time-slider').value = String(t); $('time-slider').fire('input'); };
   for (const viewport of [300,640]) {
     width = viewport;
@@ -539,14 +540,17 @@ async function main() {
   console.log('Energy UI controllers: mouse/touch and keyboard initial-position editing for all four systems, constraints, preview/commit/cancel, playback locks, signed energies, LaTeX, examples, friction and chart seeking passed.');
 }
 function checkSecondBodyColor() {
-  const body = sceneFills.find(fill => fill.color === '#74c9b2');
-  assert(body, 'second body is filled with light turquoise');
+  const body = sceneFills.find(fill => fill.color === '#94d9c5');
+  assert(body?.gradient, 'second body uses the light turquoise Collisions relief');
+  assert.deepEqual(body.gradient.stops, [[0,'#e1f8ee'],[.3,'#b6e8d7'],[.7,'#94d9c5'],[1,'#529c89']]);
+  const [x,y,r] = body.circle;
+  assert.deepEqual(body.gradient.args, [x-r*.34,y-r*.38,r*.03,x-r*.08,y-r*.1,r*1.14], 'relief is anchored to the same body center and radius');
   assert.equal(body.circle[0], parseFloat($('mass-handle-1').style.left));
   assert.equal(body.circle[1], parseFloat($('mass-handle-1').style.top));
-  assert(sceneStrokes.some(stroke => stroke.color === '#499e88' && stroke.width === 1.25), 'thin darker outline keeps the pale mass visible');
+  assert(sceneStrokes.some(stroke => stroke.color === '#68ae9a' && stroke.width === .7), 'same thin colored outline as Collisions, no white halo');
   const massLabel = $('scene-labels').children.find(node => !node.hidden && node.dataset.math === 'm_2');
   assert.equal(massLabel.style.color, '#237a68', 'mathematical label retains darker readable ink');
-  assert(sceneFills.some(fill => fill.color === '#2775b6'), 'first body stays blue');
+  assert(sceneFills.some(fill => fill.color === '#2775b6' && fill.gradient), 'first body uses the blue relief');
 }
 function checkInitialDragging() {
   const near = (a,b) => assert(Math.abs(a-b) < 1e-7, `${a} vs ${b}`);

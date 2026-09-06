@@ -41,6 +41,7 @@ function canvasContext(id){
   let points=[];const strokes=[],circles=[];
   const context=new Proxy({}, {get(target,key){if(key in target)return target[key];return (...args)=>{
     for(const n of args.flat())if(typeof n==='number')assert(Number.isFinite(n),'finite canvas coordinate');
+    if(key==='createRadialGradient')return {type:'radial',args,stops:[],addColorStop(offset,color){this.stops.push([offset,color]);}};
     if(key==='clearRect'){strokes.length=0;circles.length=0;}if(key==='beginPath')points=[];
     if(key==='moveTo'||key==='lineTo')points.push([...args]);if(key==='arc')circles.push([...args]);if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth});
   };}});plots.set(id,{context,strokes,circles});return context;

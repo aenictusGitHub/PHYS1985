@@ -10,6 +10,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - [Énergie mécanique](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html)
 - [Énergie potentielle et force](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html)
 - [Moment cinétique](https://aenictusgithub.github.io/PHYS1985/moment_cinetique_webapp_fr.html)
+- [Collisions](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html)
 
 ## QR codes
 
@@ -31,6 +32,12 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 
 [QR code PNG](qr-codes/moment_cinetique.png) · [QR code SVG](qr-codes/moment_cinetique.svg).
 
+### Collisions
+
+[![QR code vers Collisions](qr-codes/collisions.png)](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html)
+
+[QR code PNG](qr-codes/collisions.png) · [QR code SVG](qr-codes/collisions.svg).
+
 ## Fichiers
 
 - `cinematique_2d_webapp_fr.html` et `cinematique_3d_webapp_fr.html` : versions autonomes prêtes à ouvrir ;
@@ -40,6 +47,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - `energie_mecanique_webapp_fr.html` et `energie_mecanique_webapp_fr.zip` : animation autonome sur l’énergie et archive de ses sources ;
 - `potentiel_force_webapp_fr.html` et `potentiel_force_webapp_fr.zip` : animation autonome reliant potentiel et force, et archive de ses sources ;
 - `moment_cinetique_webapp_fr.html` et `moment_cinetique_webapp_fr.zip` : animation autonome sur le moment cinétique autour d’un axe fixe, et archive de ses sources ;
+- `collisions_webapp_fr.html` et `collisions_webapp_fr.zip` : animation autonome sur les chocs en 1D et 2D, et archive de ses sources et tests ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
@@ -47,9 +55,11 @@ Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/Ma
 
 ## Présentation commune
 
-Les six applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
+Les sept applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
 
-Pour reconstruire les six applications à partir de leurs archives sources après une modification du thème :
+Énergie mécanique, Moment cinétique et Collisions utilisent le même relief pour leurs corps sphériques : dégradé radial bleu ou vert clair, reflet supérieur gauche et ombre légère. Le relief est purement graphique et ne change pas les modèles physiques. Les marqueurs des graphes restent plats. `node tools/check_spheres.cjs` vérifie la cohérence des trois versions empaquetées.
+
+Pour reconstruire les sept applications à partir de leurs archives sources après une modification du thème :
 
 ```sh
 python3 tools/build_apps.py
@@ -107,6 +117,16 @@ Application inspirée de `Ivariable.mp4`, `Tabouret tournant.mp4` et
 
 Tests des modèles, des commandes et de la lecture : `node tools/check_angular.cjs`.
 L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules avec MathJax réel.
+
+## Collisions
+
+- Deux disques isolés en 1D ou 2D : chocs élastiques, inélastiques avec coefficient de restitution réglable, ou parfaitement inélastiques avec liaison rigide après contact.
+- Masses et vitesses initiales réglables, exemples frontaux et décentrés, rattrapage ou absence de rencontre. En 2D, modules et angles des vitesses sont modifiables.
+- Deux vitesses affichées avec une échelle commune ; impulsion totale dans un diagramme séparé. Bilan avant/après, énergie dissipée et courbes temporelles.
+- Cadrage fixé dès le départ en fonction de toute la durée choisie, sans dézoom pendant la lecture. En 2D, les vitesses partent du centre des corps, au premier plan. Les trajectoires sont tracées depuis l’instant initial.
+- Contact et propagation analytiques. Une paire soudée après un choc décentré translate et tourne pour conserver aussi le moment cinétique. Les corps sont des disques homogènes dans le modèle mécanique, malgré leur relief graphique.
+
+L’archive source contient `check_physics.cjs` et `check_ui.cjs` : exécuter chacun avec Node.js depuis le dossier extrait. Vérifications de 218 configurations physiques et des commandes, du cadrage fixe, des flèches et des nombres LaTeX via un adaptateur, sans navigateur. Le test des commandes accepte `PHYS1985_MATHJAX_ROOT` pour le moteur MathJax réel.
 
 ## Sauvegarde avant harmonisation
 

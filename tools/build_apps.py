@@ -18,6 +18,7 @@ APPS = {
     "energie_mecanique_webapp_fr": ("conservation", "energie_mecanique_webapp_fr_source"),
     "potentiel_force_webapp_fr": ("potential", "potentiel_force_webapp_fr_source"),
     "moment_cinetique_webapp_fr": ("angular", "moment_cinetique_webapp_fr_source"),
+    "collisions_webapp_fr": ("collisions", "collisions_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 
@@ -40,6 +41,8 @@ def build(name, source, archive_root, app_kind):
         THEME_LINK: ("style", "phys1985-theme.css"),
         '<script src="./app.js" defer></script>': ("script", "app.js"),
     }
+    if "physics.js" in files:
+        bindings['<script src="./physics.js" defer></script>'] = ("script", "physics.js")
     for reference, (tag, filename) in bindings.items():
         if html.count(reference) != 1:
             raise ValueError(f"Missing or duplicate {reference} in {name}")
