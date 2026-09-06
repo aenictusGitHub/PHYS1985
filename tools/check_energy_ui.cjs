@@ -161,6 +161,30 @@ function checkOscillatorVisualOptions() {
 function checkGravityVelocityOptions() {
   const arrows = () => ['#2775b6', '#268576'].map(color => sceneStrokes.filter(stroke => stroke.color === color && stroke.width === 2.5));
   const labels = () => $('scene-labels').children.filter(node => !node.hidden && node.dataset.math?.startsWith('\\vec v_'));
+  const sceneLayout = () => ({
+    bounds: $('scene-canvas').getBoundingClientRect(),
+    masses: [0,1].map(i => [$('mass-handle-'+i).style.left, $('mass-handle-'+i).style.top]),
+    labels: $('scene-labels').children.filter(node => !node.hidden && /^(m_[12]|C)$/.test(node.dataset.math)).map(node => [node.dataset.math, node.style.left, node.style.top]),
+    // Separation line and barycenter axes must be unaffected by both options.
+    structure: JSON.stringify(sceneStrokes.filter(stroke => ['#dce4ec','#607185'].includes(stroke.color))),
+  });
+  const trajectories = () => JSON.stringify(sceneStrokes.filter(stroke => ['#e0e9f1','#e0ede9'].includes(stroke.color) || (['#2775b6','#268576'].includes(stroke.color) && stroke.width === 1.5)));
+  const verifyOverlays = () => {
+    const before = sceneLayout(), paths = trajectories(), vectors = JSON.stringify(arrows());
+    $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
+    assert.deepEqual(sceneLayout(), before, 'hiding velocity must not zoom or move any physical element or mass label');
+    assert.equal(trajectories(), paths, 'hiding velocity must not reproject the trajectories');
+    assert(arrows().every(parts => parts.length === 0) && labels().length === 0);
+    $('trail').checked = false; $('trail').fire('change');
+    assert.deepEqual(sceneLayout(), before, 'hiding trajectories must not reframe the physical scene');
+    assert.equal(trajectories(), '[]');
+    $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+    assert.deepEqual(sceneLayout(), before);
+    assert.equal(JSON.stringify(arrows()), vectors, 'vectors have the same geometry with or without trajectories');
+    $('trail').checked = true; $('trail').fire('change');
+    assert.deepEqual(sceneLayout(), before);
+    assert.equal(trajectories(), paths, 'restoring overlays recovers the exact same paths');
+  };
   assert(!$('velocity-row').hidden && !$('velocity-toggle').checked);
   assert.equal($('velocity-label').textContent, 'Vitesses instantanées');
   assert.equal($('velocity-symbol').dataset.math, '\\vec v_1(t),\\;\\vec v_2(t)');
@@ -187,9 +211,7 @@ function checkGravityVelocityOptions() {
         assert.equal(labels().length, 2, 'two LaTeX velocity labels');
         assert.equal($('scene').dataset.velocity, 'false', 'gravity does not acquire the oscillator extra band');
         const before = $('total-readout').dataset.number;
-        $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
-        assert(arrows().every(parts => parts.length === 0) && labels().length === 0);
-        $('velocity-toggle').checked = true; $('velocity-toggle').fire('change');
+        verifyOverlays();
         assert.equal(Number($('time-slider').value), Number(time));
         assert.equal($('total-readout').dataset.number, before, 'toggling does not change energy');
       }
@@ -199,7 +221,10 @@ function checkGravityVelocityOptions() {
   $('mass-handle-1').fire('keydown', {key:'ArrowRight'});
   assert(Number($('param-r0').value) > 10, 'initial mass editing uses the velocity view projection');
   assert.equal(Number($('time-slider').value), 0);
+  verifyOverlays();
   $('play').click(); tick(2000); tick(2100);
+  verifyOverlays();
+  assert.equal($('play').textContent, 'Pause', 'both overlays leave playback running');
   $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
   assert.equal($('play').textContent, 'Pause');
   $('restart').click(); $('reset-parameters').click();
@@ -458,7 +483,7 @@ function checkInitialDragging() {
     near(Math.hypot(point(1)[0]-point(0)[0],point(1)[1]-point(0)[1]),scale);
 
     $('model-select').value = 'gravity'; $('model-select').fire('change');
-    const c = [width/2,173], gravityScale = Math.min(width-95,220)/20;
+    const c = [width/2,173], gravityScale = Math.hypot(point(1)[0]-point(0)[0],point(1)[1]-point(0)[1])/10;
     release = drag(1,[c[0],c[1]-6*gravityScale]);
     near(parameter('r0'),12); near(parameter('phi0'),90); near(parameter('speedRatio'),1); release();
     near((point(0)[0]+point(1)[0])/2,c[0]); near((point(0)[1]+point(1)[1])/2,c[1]);

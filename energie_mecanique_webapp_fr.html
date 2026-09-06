@@ -1000,7 +1000,7 @@ async function startEnergyApp() {
       const saved = state.drag?.geometry || state.initialGeometry;
       // Keep the projection fixed through a gesture and subsequent playback.
       // A resize or an explicit parameter/example change starts a fresh view.
-      const same = saved && saved.model === state.model && saved.w === w && saved.h === h && saved.velocity === geometry.velocity;
+      const same = saved && saved.model === state.model && saved.w === w && saved.h === h;
       state.sceneGeometry = same ? saved : {model: state.model, w, h, ...geometry};
       return state.sceneGeometry;
     }
@@ -1097,13 +1097,16 @@ async function startEnergyApp() {
     }
     function drawGravity(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
-      const showVelocity = $('velocity-toggle').checked, vectorInset = showVelocity ? 80 : 0;
+      const showVelocity = $('velocity-toggle').checked;
+      // Reserve the same space for annotations in every display mode. Neither
+      // trails nor vectors may change the projection of the physical scene.
+      const available = Math.max(1, Math.min(w - 135, h - 150));
       const bound = state.simulation.samples[0].E < 0;
       const separation = Math.max(20, bound ? state.gravityRange.radius : sample.r);
       const radius = separation * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
-      const camera = sceneGeometry(w, h, {scale: Math.min(w - 95 - vectorInset, h - 110 - vectorInset) / (2 * radius), origin: [w / 2, h / 2 + 8], velocity: showVelocity});
+      const camera = sceneGeometry(w, h, {scale: available / (2 * radius), origin: [w / 2, h / 2 + 8]});
       const visibleRadius = sample.r * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
-      const scale = state.t > 0 ? Math.min(camera.scale, Math.min(w - 65 - vectorInset, h - 85 - vectorInset) / (2 * visibleRadius)) : camera.scale;
+      const scale = state.t > 0 ? Math.min(camera.scale, available / (2 * visibleRadius)) : camera.scale;
       const {origin} = camera, point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
       const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
       state.massPositions = [a, b];
@@ -1125,9 +1128,11 @@ async function startEnergyApp() {
       for (const [i, body, color, mass] of [[1, a, COLORS.K, p.m1], [2, b, COLORS.K2, p.m2]]) {
         const bodyRadius = 5 + 2 * Math.cbrt(mass / 1e12);
         dot(ctx, ...body, bodyRadius, color);
-        const arrow = showVelocity && velocityArrow2D(body, sample[`vx${i}`], sample[`vz${i}`], velocityScale,
+        // Compute annotation anchors independently of visibility, so mass
+        // labels do not jump when velocity arrows are shown or hidden.
+        const arrow = velocityArrow2D(body, sample[`vx${i}`], sample[`vz${i}`], velocityScale,
           bodyRadius, [body[0] - origin[0], body[1] - origin[1]]);
-        if (arrow) {
+        if (showVelocity && arrow) {
           line(ctx, [arrow.start, arrow.end], color, 2.5);
           line(ctx, arrow.tip, color, 2.5);
           label('scene-labels', `velocity${i}`, tex`\vec v_${i}(t)`,
