@@ -1126,12 +1126,17 @@ async function startEnergyApp() {
       // Reserve the same space for annotations in every display mode. Neither
       // trails nor vectors may change the projection of the physical scene.
       const available = Math.max(1, Math.min(w - 135, h - 150));
-      const bound = state.simulation.samples[0].E < 0;
+      const initial = state.simulation.samples[0], bound = initial.E < 0;
       const separation = Math.max(20, bound ? state.gravityRange.radius : sample.r);
       const radius = separation * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
       const camera = sceneGeometry(w, h, {scale: available / (2 * radius), origin: [w / 2, h / 2 + 8]});
       const visibleRadius = sample.r * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
       const scale = state.t > 0 ? Math.min(camera.scale, available / (2 * visibleRadius)) : camera.scale;
+      // Escaping bodies must visibly shrink with the camera, rather than seem
+      // stationary at a constant size. Reference the initial framing (not the
+      // previous frame), so scrubbing, replay and resizing remain deterministic.
+      const initialRadius = Math.max(20, initial.r) * Math.max(p.m1, p.m2) / (p.m1 + p.m2);
+      const bodyZoom = bound ? 1 : Math.min(1, scale / (available / (2 * initialRadius)));
       const {origin} = camera, point = (x, z) => [origin[0] + scale*x, origin[1] - scale*z];
       const a = point(sample.x1, sample.z1), b = point(sample.x2, sample.z2);
       state.massPositions = [a, b];
@@ -1151,7 +1156,9 @@ async function startEnergyApp() {
       line(ctx, [[origin[0],origin[1]-5], [origin[0],origin[1]+5]], COLORS.muted, 1.5);
       const velocityScale = gravityVelocityScale(p, Math.min(40, w * .12));
       for (const [i, body, color, mass] of [[1, a, COLORS.K, p.m1], [2, b, COLORS.K2, p.m2]]) {
-        const bodyRadius = 5 + 2 * Math.cbrt(mass / 1e12);
+        // Approach a small visible marker smoothly at very large distances;
+        // the symbolic mass sizes are not physical radii. Text stays readable.
+        const bodyRadius = 2 + (3 + 2 * Math.cbrt(mass / 1e12)) * bodyZoom;
         const labelColor = i === 2 ? COLORS.body2Ink : color;
         dot(ctx, ...body, bodyRadius, i === 2 ? COLORS.body2 : color, i === 2 ? color : null);
         // Compute annotation anchors independently of visibility, so mass

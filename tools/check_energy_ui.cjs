@@ -235,6 +235,7 @@ function checkGravityVelocityOptions() {
   const sceneLayout = () => ({
     bounds: $('scene-canvas').getBoundingClientRect(),
     masses: [0,1].map(i => [$('mass-handle-'+i).style.left, $('mass-handle-'+i).style.top]),
+    radii: sceneFills.filter(fill => ['#2775b6','#74c9b2'].includes(fill.color)).map(fill => fill.circle[2]),
     labels: $('scene-labels').children.filter(node => !node.hidden && /^(m_[12]|C)$/.test(node.dataset.math)).map(node => [node.dataset.math, node.style.left, node.style.top]),
     // Separation line and barycenter axes must be unaffected by both options.
     structure: JSON.stringify(sceneStrokes.filter(stroke => ['#dce4ec','#607185'].includes(stroke.color))),
@@ -306,6 +307,47 @@ function checkGravityVelocityOptions() {
   $('velocity-toggle').checked = false; $('velocity-toggle').fire('change');
   assert.equal($('play').textContent, 'Pause');
   $('restart').click(); $('reset-parameters').click();
+}
+function checkGravityZoom() {
+  const bodies = () => ['#2775b6','#74c9b2'].map(color => sceneFills.find(fill => fill.color === color).circle);
+  const seek = t => { $('time-slider').value = String(t); $('time-slider').fire('input'); };
+  for (const viewport of [300,640]) {
+    width = viewport;
+    $('example-select').value = '3'; $('example-select').fire('change');
+    const initial = bodies().map(body => body[2]);
+    assert.deepEqual(initial, [7,7], 'initial symbolic body sizes are unchanged');
+    const snapshots = new Map();
+    let previous = initial, previousR = 10;
+    for (const t of [2,5,8.93,15,30,60]) {
+      seek(t);
+      const current = bodies().map(body => body[2]), r = parseFloat($('position-readout').dataset.number);
+      assert(r > previousR, 'escape distance increases');
+      const zoom = Math.min(1,20/r);
+      current.forEach((radius,i) => {
+        assert(radius <= previous[i] && radius > 2, 'zoom-out shrinks each body smoothly, keeping it visible');
+        assert(Math.abs(radius-(2+(initial[i]-2)*zoom)) < .003, 'size tracks the actual initial-to-current camera ratio');
+        if (previousR > 20) assert(radius < previous[i], 'bodies continue shrinking as distance increases');
+      });
+      assert.deepEqual(current, [current[0],current[0]], 'equal masses remain equally sized');
+      snapshots.set(t, JSON.stringify(bodies())); previous = current; previousR = r;
+    }
+    for (const t of [8.93,30,5,60]) {
+      seek(t); assert.equal(JSON.stringify(bodies()), snapshots.get(t), 'backward scrubbing reproduces the same body size and position');
+    }
+    $('restart').click(); assert.deepEqual(bodies().map(body => body[2]), initial, 'restart restores initial sizes');
+    // Initial editing preserves the view; zoom still follows the new trajectory.
+    $('mass-handle-1').fire('keydown', {key:'ArrowRight'});
+    assert.deepEqual(bodies().map(body => body[2]), initial);
+    seek(60); assert(bodies().every(body => body[2] < 4), 'zoom also works after an initial mass drag');
+    for (const example of ['0','1','2']) {
+      $('example-select').value = example; $('example-select').fire('change');
+      const radii = bodies().map(body => body[2]);
+      for (const t of [1,8.93,30,60]) {
+        seek(t); assert.deepEqual(bodies().map(body => body[2]), radii, 'bound-orbit marker sizes do not change');
+      }
+    }
+  }
+  width = 640; $('reset-parameters').click();
 }
 async function main() {
   vm.runInNewContext(source, context);
@@ -461,6 +503,7 @@ async function main() {
   assert(css.includes('.energy-meter[data-signed="true"]::after'), 'signed energy meter has a zero divider');
   checkHistoryAnnotations(false, true);
   checkGravityVelocityOptions();
+  checkGravityZoom();
   $('param-m1').value = '2000000000000'; $('param-m1').fire('input'); tick();
   assert.equal($('value-m1').dataset.number, '2.00|\\times10^{12}\\,\\mathrm{kg}');
   assert.equal($('total-readout').dataset.number, '-6.674|\\times10^{12}\\,\\mathrm J');
