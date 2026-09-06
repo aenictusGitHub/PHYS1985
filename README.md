@@ -100,7 +100,7 @@ Application inspirée de `Ivariable.mp4`, `Tabouret tournant.mp4` et
 `Universe_4min11s.mp4` ; les vidéos ne sont pas redistribuées.
 
 - Point matériel : `I_z = m r²` ; tabouret et haltères symétriques : `I_z = I_0 + 2 m r²` ; coquille sphérique mince et uniforme : `I_z = (2/3) m r²`.
-- Rayon modifiable avant et pendant la lecture ; rapprochement et éloignement progressifs. À moment extérieur nul, `L_z = I_z omega` est conservé.
+- Rayon modifiable avant et pendant la lecture ; rapprochement et éloignement progressifs. Un curseur sous la scène règle directement la distance entre les haltères `d = 2r`, et les masses se déplacent aussi par glissement pendant la rotation. À moment extérieur nul, `L_z = I_z omega` est conservé.
 - Moment extérieur signé, réglable en direct : accélération, freinage et inversion. Bilan entre variation de moment cinétique et impulsion angulaire.
 - Valeurs instantanées de l’inertie, de la vitesse angulaire, du moment cinétique et de l’énergie de rotation. Graphe sélectionnable, historique complet et reprise depuis un instant passé.
 - Vecteurs LaTeX, vitesse tangentielle optionnelle, repère fixe et rayon initial en pointillé. Le déplacement radial est imposé et son énergie cinétique n’est pas incluse dans l’énergie de rotation.

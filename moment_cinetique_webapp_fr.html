@@ -25,6 +25,11 @@ output { font-size: var(--text-value); }
 .card-heading h2 { margin: 0; }
 .scene-wrap, .history-wrap { position: relative; width: 100%; }
 .scene-wrap { height: 390px; background: #fbfcfe; }
+#scene-canvas { touch-action: none; }
+.live-radius-control { padding: .8rem 1rem .65rem; border-top: 1px solid var(--line); }
+.live-radius-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .4rem 1rem; }
+.live-radius-heading .field-label { margin: 0; }
+.live-radius-control .microcopy { margin: .35rem 0 0; }
 .time-badge { position: absolute; display: flex; align-items: baseline; gap: .25rem; }
 canvas { display: block; width: 100%; height: 100%; }
 .plot-labels { position: absolute; inset: 0; pointer-events: none; }
@@ -525,7 +530,7 @@ async function startRotationApp(){
   try {
     await MathJax.startup.promise;
     const colors={body:'#2775b6',body2:'#74c9b2',v:'#2775b6',L:'#7758a6',I:'#bc8b3b',r:'#d9683b',K:'#b5688b',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
-    const state={sim:new RotationModels.Simulation(),playing:false,frame:0,last:null,lastReadout:-Infinity};
+    const state={sim:new RotationModels.Simulation(),playing:false,frame:0,last:null,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(),units=new Map(),labels=new Map();
     function math(el,value){if(el.dataset.math===value)return;el.replaceChildren(MathJax.tex2svg(value,{display:false}));el.dataset.math=value;}
     function numericPart(value){const svg=MathJax.tex2svg(value,{display:false}).querySelector('svg');const [x,y,width,height]=svg.getAttribute('viewBox').split(/\s+/).map(Number);return {svg,x,y,width,height,exPerUnit:parseFloat(svg.getAttribute('width'))/width};}
@@ -550,14 +555,19 @@ async function startRotationApp(){
     }
     function pause(){state.playing=false;state.last=null;if(state.frame)cancelAnimationFrame(state.frame);state.frame=0;$('play').textContent='Lire';$('play').setAttribute('aria-pressed','false');}
     function play(){if(state.sim.x.t>=state.sim.p.duration-1e-9)restart();state.sim.started=true;state.playing=true;state.last=null;$('play').textContent='Pause';$('play').setAttribute('aria-pressed','true');if(!state.frame)state.frame=requestAnimationFrame(frame);}
-    function restart(){pause();state.sim=new RotationModels.Simulation(state.sim.model,state.sim.p);syncControls();render();}
-    function configure(model){pause();state.sim=new RotationModels.Simulation(model);syncControls();render();}
+    function restart(){endMassDrag();pause();state.sim=new RotationModels.Simulation(state.sim.model,state.sim.p);syncControls();render();}
+    function configure(model){endMassDrag();pause();state.sim=new RotationModels.Simulation(model);syncControls();render();}
     function syncControls(){
       const sim=state.sim,p=sim.p;$('model-select').value=sim.model;
       for(const [id,value] of [['mass',p.mass],['base',p.base],['omega-initial',p.omega],['radius',sim.x.r],['torque',sim.x.torque],['duration',p.duration]])$(id).value=value;
       $('base-control').hidden=sim.model!=='stool';
       $('mass-name').textContent=sim.model==='stool'?'Masse de chaque haltère':sim.model==='shell'?'Masse de la coquille':'Masse du point';
       $('radius-name').textContent=sim.model==='shell'?'Rayon de la sphère':sim.model==='stool'?'Distance des haltères à l’axe':'Distance à l’axe';
+      const factor=distanceFactor(),live=$('scene-radius');
+      live.min=factor*RotationModels.minRadius;live.max=factor*RotationModels.maxRadius;live.step=factor*.01;
+      $('scene-radius-name').textContent=sim.model==='stool'?'Distance entre les masses':sim.model==='shell'?'Rayon de la sphère':'Distance à l’axe';
+      math($('scene-radius-symbol'),sim.model==='stool'?tex`d=2r`:'r');
+      $('live-radius-help').textContent=sim.model==='shell'?'Déplacer ce curseur ou faire glisser le point bleu pour changer le rayon, même pendant la rotation.':'Déplacer ce curseur ou faire glisser une masse vers l’axe ou vers l’extérieur, même pendant la rotation.';
       $('scene-title').textContent=sim.model==='stool'?'Tabouret tournant':sim.model==='shell'?'Sphère rétractable':'Point matériel en rotation';
       $('model-note').textContent=sim.model==='stool'?'Deux haltères sont rapprochés symétriquement du corps. Le tabouret et le corps sont représentés par une inertie fixe, les haltères par deux masses ponctuelles.':sim.model==='shell'?'La structure rétractable de la vidéo est idéalisée par une coquille sphérique mince et uniforme, de masse constante.':'Une masse ponctuelle décrit un cercle dans un plan perpendiculaire à l’axe fixe. Faire varier sa distance à l’axe change le moment d’inertie.';
       math($('inertia-formula'),sim.model==='stool'?tex`I_z=I_0+2mr^2`:sim.model==='shell'?tex`I_z=\frac23 mr^2`:tex`I_z=mr^2,\quad\vec L_O=\vec r\times m\vec v`);
@@ -574,10 +584,25 @@ async function startRotationApp(){
     function dot(ctx,x,y,r,color){ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();}
     function label(layer,key,value,x,y,color=colors.ink,tick=false){const id=layer+':'+key;let el=labels.get(id);if(!el){el=document.createElement('span');$(layer).append(el);labels.set(id,el);}el.hidden=false;el.className='plot-label'+(tick?' tick':'');math(el,value);el.style.left=x+'px';el.style.top=y+'px';el.style.color=color;return el;}
     function arrow(ctx,a,b,color,width=2.5){const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);if(length<1e-8)return;const ux=dx/length,uy=dy/length,head=Math.min(9,length*.35);line(ctx,[a,b],color,width);line(ctx,[[b[0]-head*ux-head*.48*uy,b[1]-head*uy+head*.48*ux],b,[b[0]-head*ux+head*.48*uy,b[1]-head*uy-head*.48*ux]],color,width);}
+    function sceneGeometry(w,h){return {cx:w/2,cy:h*.52,scale:Math.min(w*.32,h*.29)/RotationModels.maxRadius};}
+    function distanceFactor(){return state.sim.model==='stool'?2:1;}
+    function setLiveRadius(r){state.sim.setRadius(r);if(!state.sim.started)updateVectorScale();render();}
+    function endMassDrag(){
+      if(state.drag){const canvas=$('scene-canvas'),id=state.drag.id;state.drag=null;if(canvas.hasPointerCapture(id))canvas.releasePointerCapture(id);}
+      $('scene-canvas').style.cursor='default';
+    }
+    function scenePointer(event){
+      const rect=$('scene-canvas').getBoundingClientRect(),g=sceneGeometry(rect.width,rect.height),x=event.clientX-rect.left,y=event.clientY-rect.top;
+      return {...g,x,y,r:Math.hypot((x-g.cx)/g.scale,(y-g.cy)/(.42*g.scale))};
+    }
+    function hitsMass(q){
+      const s=state.sim.x,angles=state.sim.model==='stool'?[s.theta,s.theta+Math.PI]:[s.theta];
+      return angles.some(a=>Math.hypot(q.x-q.cx-q.scale*s.r*Math.cos(a),q.y-q.cy+.42*q.scale*s.r*Math.sin(a))<=22);
+    }
     function drawScene(s){
       const {ctx,w,h}=surface('scene-canvas'),sim=state.sim,p=sim.p;
       for(const el of $('scene-labels').children)el.hidden=true;
-      const cx=w/2,cy=h*.52,scale=Math.min(w*.32,h*.29)/RotationModels.maxRadius;
+      const {cx,cy,scale}=sceneGeometry(w,h);
       const P=(x,y,z=0)=>[cx+scale*x,cy-scale*(.42*y+.9075*z)];
       const circle=(r,z=0)=>Array.from({length:121},(_,i)=>P(r*Math.cos(i*Math.PI/60),r*Math.sin(i*Math.PI/60),z));
       line(ctx,[[cx,35],[cx,h-32]],colors.grid,1.3,[4,5]);label('scene-labels','axis',tex`+z`,cx+17,38,colors.muted);
@@ -635,13 +660,15 @@ async function startRotationApp(){
     }
     function render(readouts=true){
       const sim=state.sim,s=sim.snapshot(),p=sim.p;
-      $('radius').value=s.r;$('torque').value=s.torque;
+      $('radius').value=s.r;$('scene-radius').value=distanceFactor()*s.r;$('torque').value=s.torque;
       if(readouts){
         number($('time-value'),s.t,2,tex`\mathrm s`);number($('radius-value'),s.r,2,tex`\mathrm m`);
+        number($('scene-radius-value'),distanceFactor()*s.r,2,tex`\mathrm m`);
         number($('mass-value'),p.mass,2,tex`\mathrm{kg}`);number($('base-value'),p.base,2,tex`\mathrm{kg\,m^2}`);number($('omega-initial-value'),p.omega,2,tex`\mathrm{rad\,s^{-1}}`);number($('torque-value'),s.torque,2,tex`\mathrm{N\,m}`);number($('duration-value'),p.duration,0,tex`\mathrm s`);
         number($('inertia-value'),s.I,3,tex`\mathrm{kg\,m^2}`);number($('omega-value'),s.omega,3,tex`\mathrm{rad\,s^{-1}}`);number($('momentum-value'),s.L,3,tex`\mathrm{kg\,m^2\,s^{-1}}`);number($('energy-value'),s.K,3,tex`\mathrm J`);number($('balance-value'),s.balance,Math.abs(s.balance)<1e-7?0:6,tex`\mathrm{kg\,m^2\,s^{-1}}`);
       }
       for(const [id,value,unit]of [['radius',s.r,'m'],['mass',p.mass,'kg'],['base',p.base,'kg m²'],['omega-initial',p.omega,'rad/s'],['torque',s.torque,'N m'],['duration',p.duration,'s']])$(id).setAttribute('aria-valuetext',value.toFixed(id==='duration'?0:2)+' '+unit);
+      $('scene-radius').setAttribute('aria-valuetext',(distanceFactor()*s.r).toFixed(2)+' m');
       $('conservation-badge').textContent=Math.abs(s.torque)<1e-12?'Moment cinétique conservé':'Moment extérieur appliqué';
       $('observation').textContent=Math.abs(s.torque)>1e-12?'Le moment extérieur modifie le moment cinétique. Son signe indique le sens de cette variation, pas nécessairement le sens de rotation.':Math.abs(s.L)<1e-10?'Sans moment cinétique initial ni moment extérieur, rapprocher les masses ne suffit pas à lancer la rotation.':s.r<p.r-.01?'Les masses se rapprochent de l’axe : le moment d’inertie diminue et la rotation accélère. Le moment cinétique reste constant.':s.r>p.r+.01?'Les masses s’éloignent de l’axe : le moment d’inertie augmente et la rotation ralentit. Le moment cinétique reste constant.':'Rapprochez les masses de l’axe pour réduire le moment d’inertie, puis éloignez-les. Comparez les variations d’inertie et de vitesse angulaire au moment cinétique conservé.';
       drawScene(s);if(readouts)drawHistory(s);
@@ -654,23 +681,37 @@ async function startRotationApp(){
       state.frame=requestAnimationFrame(frame);
     }
     $('model-select').addEventListener('change',()=>configure($('model-select').value));
-    $('radius').addEventListener('input',()=>{state.sim.setRadius(Number($('radius').value));if(!state.sim.started)updateVectorScale();render();});
+    $('radius').addEventListener('input',()=>{endMassDrag();setLiveRadius(Number($('radius').value));});
+    $('scene-radius').addEventListener('input',()=>{endMassDrag();setLiveRadius(Number($('scene-radius').value)/distanceFactor());});
+    const sceneCanvas=$('scene-canvas');
+    sceneCanvas.addEventListener('pointerdown',event=>{
+      if(state.drag||(event.button!==undefined&&event.button!==0))return;
+      const q=scenePointer(event);if(!hitsMass(q))return;
+      event.preventDefault();state.drag={id:event.pointerId,r:state.sim.x.r,pointerRadius:q.r};
+      state.sim.motion=null;sceneCanvas.setPointerCapture(event.pointerId);sceneCanvas.style.cursor='grabbing';
+    });
+    sceneCanvas.addEventListener('pointermove',event=>{
+      if(state.drag){if(event.pointerId!==state.drag.id)return;event.preventDefault();const q=scenePointer(event);setLiveRadius(state.drag.r+q.r-state.drag.pointerRadius);}
+      else sceneCanvas.style.cursor=hitsMass(scenePointer(event))?'grab':'default';
+    });
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])sceneCanvas.addEventListener(type,event=>{if(state.drag?.id===event.pointerId)endMassDrag();});
+    sceneCanvas.addEventListener('pointerleave',()=>{if(!state.drag)sceneCanvas.style.cursor='default';});
     for(const [id,key]of [['mass','mass'],['base','base'],['omega-initial','omega'],['duration','duration']])$(id).addEventListener('input',()=>{state.sim.p[key]=Number($(id).value);restart();});
     $('torque').addEventListener('input',()=>{state.sim.setTorque(Number($('torque').value));updateVectorScale();render();});
     $('zero-torque').addEventListener('click',()=>{state.sim.setTorque(0);updateVectorScale();render();});
-    $('contract').addEventListener('click',()=>{if(state.sim.x.t>=state.sim.p.duration-1e-9)restart();state.sim.moveTo(RotationModels.minRadius);if(!state.playing)play();render();});
-    $('expand').addEventListener('click',()=>{if(state.sim.x.t>=state.sim.p.duration-1e-9)restart();state.sim.moveTo(RotationModels.maxRadius);if(!state.playing)play();render();});
+    $('contract').addEventListener('click',()=>{endMassDrag();if(state.sim.x.t>=state.sim.p.duration-1e-9)restart();state.sim.moveTo(RotationModels.minRadius);if(!state.playing)play();render();});
+    $('expand').addEventListener('click',()=>{endMassDrag();if(state.sim.x.t>=state.sim.p.duration-1e-9)restart();state.sim.moveTo(RotationModels.maxRadius);if(!state.playing)play();render();});
     $('play').addEventListener('click',()=>{if(state.playing){pause();render();}else play();});
     $('restart').addEventListener('click',restart);$('reset').addEventListener('click',()=>configure(state.sim.model));
     for(const id of ['show-l','show-v','show-radius','chart-select'])$(id).addEventListener('change',()=>render());
-    const seek=t=>{pause();state.sim.seek(t);updateVectorScale();render();},plot=$('history');
+    const seek=t=>{endMassDrag();pause();state.sim.seek(t);updateVectorScale();render();},plot=$('history');
     const seekPointer=event=>{const r=plot.getBoundingClientRect(),g=chartGeometry(r.width,r.height);seek((event.clientX-r.left-g.left)/(g.right-g.left)*state.sim.p.duration);};
     plot.addEventListener('pointerdown',event=>{if(event.button!==undefined&&event.button!==0)return;plot.setPointerCapture(event.pointerId);seekPointer(event);});
     plot.addEventListener('pointermove',event=>{if(plot.hasPointerCapture(event.pointerId))seekPointer(event);});
     for(const type of ['pointerup','pointercancel'])plot.addEventListener(type,event=>{if(plot.hasPointerCapture(event.pointerId))plot.releasePointerCapture(event.pointerId);});
     plot.addEventListener('keydown',event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();seek(event.key==='Home'?0:event.key==='End'?state.sim.end:state.sim.x.t+(event.key==='ArrowLeft'?-.1:.1)*(event.shiftKey?10:1));}});
     document.addEventListener('keydown',event=>{if(event.target.closest('input,select,button,[role="slider"]')||event.ctrlKey||event.metaKey||event.altKey)return;if(event.code==='Space'){event.preventDefault();$('play').click();}if(event.key.toLowerCase()==='r')restart();});
-    document.addEventListener('visibilitychange',()=>{if(document.hidden){pause();render();}});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){endMassDrag();pause();render();}});
     new ResizeObserver(()=>render()).observe($('scene'));syncControls();render();$('loading').hidden=true;
   }catch(error){$('loading').hidden=false;$('loading').textContent='L’animation n’a pas pu démarrer. '+error.message;console.error(error);}
 }
@@ -731,6 +772,11 @@ async function startRotationApp(){
         <div id="scene" class="scene-wrap" role="img" aria-label="Rotation autour de l’axe vertical fixe">
           <canvas id="scene-canvas" aria-hidden="true"></canvas><div id="scene-labels" class="plot-labels" aria-hidden="true"></div>
           <div class="time-badge"><span data-tex="t="></span><span id="time-value"></span></div>
+        </div>
+        <div class="live-radius-control">
+          <div class="live-radius-heading"><label class="field-label" for="scene-radius"><span id="scene-radius-name">Distance entre les masses</span> <span id="scene-radius-symbol"></span></label><output id="scene-radius-value" for="scene-radius"></output></div>
+          <input id="scene-radius" type="range" min="0.5" max="2.4" step="0.02" value="1.6" aria-describedby="live-radius-help" />
+          <p id="live-radius-help" class="microcopy">Déplacer ce curseur ou faire glisser une masse vers l’axe ou vers l’extérieur, même pendant la rotation.</p>
         </div>
         <p class="scene-note microcopy">Vue en perspective ; sens positif : antihoraire vu du côté <span data-tex="+z"></span>. Les flèches de vitesse représentent la composante tangentielle, pas le déplacement radial.</p>
       </section>

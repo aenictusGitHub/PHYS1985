@@ -91,7 +91,7 @@ async function checkUI(){
   for(const model of ['particle','stool','shell'])for(const viewport of [240,700]){
     width=viewport;$('model-select').value=model;$('model-select').fire('change');const p=models.definitions[model];
     near(value('radius-value'),p.r);near(value('momentum-value'),models.inertia(model,p.mass,p.base,p.r)*p.omega,.00051);assert.equal($('base-control').hidden,model!=='stool');
-    for(const id of ['time-value','radius-value','mass-value','base-value','omega-initial-value','torque-value','duration-value','inertia-value','omega-value','momentum-value','energy-value','balance-value']){assert.equal($(id).children.length,1);assert.equal($(id).children[0].tag,'svg');assert(!$(id).dataset.number.split('|')[0].includes(','));}
+    for(const id of ['time-value','radius-value','scene-radius-value','mass-value','base-value','omega-initial-value','torque-value','duration-value','inertia-value','omega-value','momentum-value','energy-value','balance-value']){assert.equal($(id).children.length,1);assert.equal($(id).children[0].tag,'svg');assert(!$(id).dataset.number.split('|')[0].includes(','));}
     input('radius',.6);near(value('omega-value'),p.omega,.00051);const L=value('momentum-value'),I=value('inertia-value');
     $('contract').click();assert.equal($('play').textContent,'Pause');tick(0);for(let i=1;i<=180;i++)tick(i*1000/60);
     $('play').click();near(value('time-value'),3,.011);near(value('radius-value'),.25,.001);near(value('momentum-value'),L,.001);assert(value('inertia-value')<I);near(value('balance-value'),0);checkScene();
@@ -110,9 +110,41 @@ async function checkUI(){
     input('omega-initial',0);$('contract').click();tick(20000);for(let i=1;i<=150;i++)tick(20000+i*1000/60);$('play').click();near(value('omega-value'),0);near(value('momentum-value'),0);checkScene();
     $('reset').click();near(value('radius-value'),p.r);near(value('omega-value'),p.omega);
   }
+  // The nearby slider and direct radial dragging remain live while time advances.
+  let interactionClock=30000;
+  for(const model of ['particle','stool','shell'])for(const viewport of [240,700]){
+    width=viewport;$('model-select').value=model;$('model-select').fire('change');
+    const clock=interactionClock;interactionClock+=5000;
+    const p=models.definitions[model],factor=model==='stool'?2:1,canvas=$('scene-canvas'),h=width<420?340:390,cx=width/2,cy=h*.52,scale=Math.min(width*.32,h*.29)/1.2;
+    const eventAt=(x,y,id=7)=>({clientX:x,clientY:y,pointerId:id,button:0});
+    near(value('scene-radius-value'),factor*p.r);near(Number($('scene-radius').min),factor*.25);near(Number($('scene-radius').max),factor*1.2);
+    assert.equal($('scene-radius-symbol').dataset.math,model==='stool'?'d=2r':'r');
+    input('scene-radius',factor*.6);near(value('radius-value'),.6);near(Number($('radius').value),.6);near(value('omega-value'),p.omega,.001);assert.equal(frames.size,0);
+    canvas.fire('pointerdown',eventAt(cx+scale*.6+3,cy));assert.equal(canvas.capture,7);
+    canvas.fire('pointermove',eventAt(cx+scale*.6+3,cy));near(value('radius-value'),.6); // No jump when caught off-center.
+    canvas.fire('pointermove',eventAt(cx+scale*.7+3,cy));near(value('radius-value'),.7);near(value('scene-radius-value'),factor*.7);near(value('omega-value'),p.omega,.001);
+    canvas.fire('pointerup',eventAt(cx+scale*.7,cy));assert.equal(canvas.capture,undefined);assert.equal(frames.size,0);
+    $('play').click();tick(clock);for(let i=1;i<=60;i++)tick(clock+i*1000/60);
+    const L=value('momentum-value');input('scene-radius',factor*.4);near(value('radius-value'),.4);near(value('time-value'),1,.011);near(value('momentum-value'),L,.001);assert.equal($('play').textContent,'Pause');assert.equal(frames.size,1);
+    tick(clock+1050);tick(clock+1100);assert(value('time-value')>1.05);const t=value('time-value');
+    const mass=plots.get('scene-canvas').circles.find(c=>c[2]===(model==='shell'?5.5:10)),dx=mass[0]-cx,dy=mass[1]-cy;
+    canvas.fire('pointerdown',eventAt(mass[0],mass[1]));assert.equal(canvas.capture,7);
+    canvas.fire('pointermove',eventAt(cx+2*dx,cy+2*dy,8));near(value('radius-value'),.4); // Ignore a second pointer.
+    canvas.fire('pointermove',eventAt(cx+1.5*dx,cy+1.5*dy));near(value('radius-value'),.6);near(value('momentum-value'),L,.001);near(value('time-value'),t);near(value('balance-value'),0);
+    tick(clock+1150);tick(clock+1200);assert(value('time-value')>t);assert.equal($('play').textContent,'Pause');
+    canvas.fire('pointermove',eventAt(cx+100*dx,cy+100*dy));near(value('radius-value'),1.2);checkScene();
+    canvas.fire('pointermove',eventAt(cx,cy));near(value('radius-value'),.25);checkScene();
+    canvas.fire('pointercancel',eventAt(cx,cy));assert.equal(canvas.capture,undefined);assert.equal(canvas.style.cursor,'default');
+    canvas.fire('pointermove',eventAt(cx+100,cy));near(value('radius-value'),.25);
+    $('play').click();assert.equal(frames.size,0);input('scene-radius',factor*.5);near(value('momentum-value'),L,.001);assert.equal($('play').textContent,'Lire');
+    const pausedMass=plots.get('scene-canvas').circles.find(c=>c[2]===(model==='shell'?5.5:10));
+    canvas.fire('pointerdown',eventAt(pausedMass[0],pausedMass[1]));assert.equal(canvas.capture,7);$('restart').click();assert.equal(canvas.capture,undefined);near(value('radius-value'),.7);near(value('time-value'),0);
+    canvas.fire('pointerdown',eventAt(0,0));assert.equal(canvas.capture,undefined);
+    canvas.fire('pointerdown',eventAt(cx+scale*.7,cy));assert.equal(canvas.capture,7);canvas.fire('lostpointercapture',{pointerId:7});assert.equal(canvas.capture,undefined);
+  }
   // Completion, replay and tab hiding do not strand the play button or clock.
   input('duration',10);$('play').click();tick(0);for(let i=1;i<=605;i++)tick(i*1000/60);near(value('time-value'),10,.001);assert.equal(frames.size,0);assert.equal($('play').textContent,'Lire');
   $('play').click();tick(12000);tick(12050);document.hidden=true;docEvents.visibilitychange();assert.equal(frames.size,0);assert.equal($('play').textContent,'Lire');assert(value('time-value')<1);
-  assert.deepEqual(errors,[]);console.log('Angular controllers: all models, initial/live radius, smooth actions, signed torque, bounded vectors, stable layout, history/branching, reset, clocks and LaTeX baselines passed'+(convertTex?' with real MathJax.':'.'));
+  assert.deepEqual(errors,[]);console.log('Angular controllers: all models, initial/live radius, distance slider, continuous mass dragging, pointer cleanup, smooth actions, signed torque, bounded vectors, stable layout, history/branching, reset, clocks and LaTeX baselines passed'+(convertTex?' with real MathJax.':'.'));
 }
 checkUI().catch(error=>{console.error(error);process.exitCode=1;});
