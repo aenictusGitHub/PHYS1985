@@ -7,7 +7,7 @@ const read=file=>execFileSync('unzip',['-p',zip,'potentiel_force_webapp_fr_sourc
 const source=read('app.js'),html=read('index.html');
 const models=vm.runInNewContext(source.split("if (typeof document")[0]+';PotentialModels');
 const near=(a,b,tol=1e-8)=>assert(Math.abs(a-b)<=tol,`${a} != ${b}`);
-for(const model of ['wells','pair']) {
+for(const model of ['wells','pair','gravity']) {
   const d=models.definitions[model];
   for(const energy of [.2,1,4]) for(const length of [.5,1,2]) {
     for(let i=0;i<=100;i++) {
@@ -18,7 +18,7 @@ for(const model of ['wells','pair']) {
       near(s.slope,-s.F);near(s.position,q*length);
     }
     const equilibria=models.equilibria(model);
-    assert.equal(equilibria.length,model==='wells'?3:1);
+    assert.equal(equilibria.length,model==='wells'?3:model==='pair'?1:0);
     for(const eq of equilibria) {
       const s=models.evaluate(model,eq.q,energy,length);near(s.F,0,1e-10);
       const before=models.evaluate(model,eq.q-.001,energy,length),after=models.evaluate(model,eq.q+.001,energy,length);
@@ -34,6 +34,13 @@ for(const model of ['wells','pair']) {
 }
 assert(models.evaluate('pair',1).F>0 && models.evaluate('pair',1.4).F<0);
 assert.throws(()=>models.evaluate('pair',0));
+assert.throws(()=>models.evaluate('gravity',0));
+for(const r of [.1,1,2,10,1e6]){
+  const s=models.evaluate('gravity',r,2,3);
+  near(s.U,-6/s.position);near(s.F,-6/s.position**2);
+  assert(s.U<0&&s.F<0&&s.slope>0,'universal attraction, negative potential');
+}
+near(models.evaluate('gravity',1e12).U,0,1e-11);
 assert.throws(()=>models.evaluate('wells',NaN));
 // Atomic distances are real SI values, not metre-sized labels relabelled nm.
 const argon=models.definitions.pair,eqArgon=models.equilibria('pair')[0].q;
@@ -116,15 +123,15 @@ function checkArrowGeometry(F,model) {
   const forceUnit=model==='pair'?1e-12:1;
   const arrows=forceArrows(),factor=parseFloat($('force-scale-arrow').style.width)/(value('force-scale-value')*forceUnit);
   assert(Number.isFinite(factor)&&factor>0,'positive finite force scale');
-  assert.equal(arrows.length,model==='pair'?4:2);
+  assert.equal(arrows.length,model!=='wells'?4:2);
   for(let i=0;i<arrows.length;i+=2) {
     const [shaft,head]=arrows.slice(i,i+2);
     near(arrowLength(shaft),factor*Math.abs(F),1e-8); // Linear length; no per-force saturation.
     assert.deepEqual(shaft.points[1],head.points[1],'head at endpoint');
-    near(Math.sign(shaft.points[1][0]-shaft.points[0][0]),Math.sign(F)*(model==='pair'&&i===0?-1:1));
+    near(Math.sign(shaft.points[1][0]-shaft.points[0][0]),Math.sign(F)*(model!=='wells'&&i===0?-1:1));
     for(const stroke of [shaft,head])for(const [x] of stroke.points)assert(x>=15&&x<=width-15,'arrow stays in the scene');
   }
-  if(model==='pair') {
+  if(model!=='wells') {
     near(arrowLength(arrows[0]),arrowLength(arrows[2]));
     if(F<0)assert(arrows[0].points[1][0]+24<arrows[2].points[1][0],'attraction arrows remain distinct');
   }
@@ -133,10 +140,11 @@ function checkArrowGeometry(F,model) {
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(errors,[]);assert($('loading').hidden);
-  for(const model of ['wells','pair'])for(const viewport of [240,300,640,1100]) {
+  for(const model of ['wells','pair','gravity'])for(const viewport of [240,300,640,1100]) {
     width=viewport;$('model-select').value=model;$('model-select').fire('change');
-    assert.equal($('body-1').hidden,model!=='pair');
+    assert.equal($('body-1').hidden,model==='wells');
     assert.equal($('argon-reference').hidden,model!=='pair');
+    assert.equal($('no-equilibrium').hidden,model!=='gravity');
     let fixedFactor;
     const d=models.definitions[model],u=model==='pair'?{energy:1e-21,length:1e-9,force:1e-12}:{energy:1,length:1,force:1};
     const initialPosition=d.start*d.length/u.length, ys={potential:[],force:[]};
@@ -149,6 +157,11 @@ async function checkUI(){
       near(value('position-value'),s.position/u.length,.00051);
       for(const kind of ['potential','force'])ys[kind].push(plots.get(kind+'-canvas').circles.at(-1)[1]);
       const factor=checkArrowGeometry(s.F,model);
+      for(const layer of ['potential-labels','force-labels']){
+        const ticks=$(layer).children.filter(el=>!el.hidden&&parseFloat(el.style.left)===36);
+        const zero=ticks.filter(el=>el.dataset.math==='0');assert.equal(zero.length,1);
+        assert(ticks.every(el=>el===zero[0]||Math.abs(parseFloat(el.style.top)-parseFloat(zero[0].style.top))>=22),'vertical zero is not overlapped');
+      }
       if(fixedFactor===undefined)fixedFactor=factor;else near(factor,fixedFactor,1e-12);
       for(const id of ['position-value','energy-value','length-value','potential-value','slope-value','force-value','force-scale-value']) {
         assert(!$(id).dataset.number.split('|')[0].includes(','),'decimal dots');assert.equal($(id).children.length,1);assert.equal($(id).children[0].tag,'svg','one shared numeric baseline');
@@ -185,7 +198,7 @@ async function checkUI(){
     }
     $('reset').click();
     const probeBefore=value('position-value');
-    $('body-0').fire('keydown',{key:'ArrowRight'});assert(model==='pair'?value('position-value')<probeBefore:value('position-value')>probeBefore);
+    $('body-0').fire('keydown',{key:'ArrowRight'});assert(model!=='wells'?value('position-value')<probeBefore:value('position-value')>probeBefore);
     const x=parseFloat($('body-0').style.left);
     $('body-0').fire('pointerdown',{pointerId:1,clientX:x,button:0});$('body-0').fire('pointermove',{pointerId:1,clientX:x+15});$('body-0').fire('pointerup',{pointerId:1});
     assert.equal($('body-0').capture,undefined,'pointer capture is released');

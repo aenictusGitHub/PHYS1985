@@ -73,11 +73,13 @@ L’option `--app nom_application` limite la reconstruction à une application; 
 
 Cette nouvelle application s’inspire des échanges d’énergie présentés dans les vidéos `oscillations_harmoniques.mp4` et `Energie_pendule_double.mp4`. Les dessins et calculs sont réalisés dans l’application ; les vidéos ne sont pas redistribuées.
 
-- Oscillateur : solution analytique, masse, raideur, position et vitesse initiales réglables ; parabole du potentiel et segment représentant l’énergie cinétique.
+- Oscillateur harmonique : solution analytique, masse, raideur, position et vitesse initiales réglables ; parabole du potentiel et segment représentant l’énergie cinétique.
+- Oscillateur anharmonique : potentiel `U = kx²/2 + αx⁴/4`, terme `α ≥ 0` réglable, force cubique, période dépendant de l’amplitude, déplacement initial et frottement optionnel ; `α = 0` redonne le cas harmonique.
+- Période affichée sous les deux oscillateurs : formule exacte pour le ressort harmonique, quadrature du potentiel à l’énergie initiale pour l’anharmonique. Mise à jour avec les paramètres et le déplacement initial. Avec frottements, il s’agit explicitement de la référence sans amortissement ; au repos, de la limite des petites oscillations.
 - Pendule simple : équation complète aux grands angles, masse, longueur, angle et vitesse angulaire initiaux et pesanteur réglables ; petites et grandes oscillations, rotations complètes, hauteur et angle affichés. Tige idéale rigide sans masse, potentiel nul au point le plus bas.
 - Pendule double : masses, longueurs, angles, vitesses angulaires initiales et pesanteur réglables ; tiges idéales sans masse. Chaque potentiel est référencé à la hauteur minimale accessible à sa masse.
 - Deux corps gravitationnels : attraction newtonienne mutuelle, centre de masse fixe, masses, séparation et vitesse relative initiales réglables ; orbites circulaires, elliptiques, masses inégales et échappement. Potentiel de la paire négatif et nul à l’infini ; affichage signé des énergies avec facteurs d’échelle explicites. Ce système est isolé, sans frottement.
-- Option « Avec frottements » pour les trois systèmes : force visqueuse proportionnelle à la vitesse, amortissement réglable, énergie dissipée en gris et vérification du bilan entre énergie mécanique restante et énergie transférée au milieu.
+- Option « Avec frottements » pour les quatre systèmes non gravitationnels : force visqueuse proportionnelle à la vitesse, amortissement réglable, énergie dissipée en gris et vérification du bilan entre énergie mécanique restante et énergie transférée au milieu.
 - Diagramme de répartition, énergies empilées ou courbes séparées, détail par masse, lecture/pause, vitesse de lecture, durée et choix de l’instant par curseur, graphique ou clavier.
 - Position initiale réglable en faisant glisser les masses avant « Lire », à la souris ou au toucher, ou avec les touches fléchées sur une masse sélectionnée. Les longueurs des tiges et les réglages de vitesse sont conservés ; pour la gravitation, la séparation et l’orientation s’ajustent autour du centre de masse fixe, en conservant le rapport à la vitesse circulaire. Paramètres et énergies se mettent à jour pendant le geste. « Recommencer » permet de les repositionner après la lecture.
 - Calcul des pendules, des deux corps gravitationnels et de l’oscillateur amorti par Runge–Kutta avec contrôle adaptatif du pas et correction de Richardson, sans renormaliser l’énergie. L’énergie dissipée est intégrée indépendamment. L’écart numérique réel du bilan énergétique est affiché, arrondi à zéro sous la résolution d’affichage.
@@ -89,8 +91,8 @@ Tests unitaires des commandes (avec un adaptateur DOM/canvas minimal, sans navig
 ## Énergie potentielle et force
 
 Cette application s’inspire de `Potential Energy Force.mp4`, sans redistribuer la vidéo.
-Deux exemples : un double puits asymétrique original, puis une paire de particules
-avec un [potentiel de Lennard–Jones](https://docs.lammps.org/pair_lj.html) non tronqué.
+Trois exemples : un double puits asymétrique original, une paire de particules
+avec un [potentiel de Lennard–Jones](https://docs.lammps.org/pair_lj.html) non tronqué, et le potentiel gravitationnel universel `U = −Gm₁m₂/r`.
 Le double puits utilise des échelles pédagogiques ; la paire prend les paramètres de l’argon comme référence.
 
 - Courbes du potentiel et de la composante de force avec le même axe horizontal.
@@ -124,10 +126,29 @@ L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules ave
 - Deux disques isolés en 1D ou 2D : chocs élastiques, inélastiques avec coefficient de restitution réglable, ou parfaitement inélastiques avec liaison rigide après contact.
 - Masses et vitesses initiales réglables, exemples frontaux et décentrés, rattrapage ou absence de rencontre. En 2D, modules et angles des vitesses sont modifiables.
 - Deux vitesses affichées avec une échelle commune ; impulsion totale dans un diagramme séparé. Bilan avant/après, énergie dissipée et courbes temporelles.
-- Cadrage fixé dès le départ en fonction de toute la durée choisie, sans dézoom pendant la lecture. En 2D, les vitesses partent du centre des corps, au premier plan. Les trajectoires sont tracées depuis l’instant initial.
+- Cadrage fixé dès le départ en fonction de toute la durée choisie, sans dézoom pendant la lecture. En 1D comme en 2D, les vitesses partent du centre des corps, au premier plan. Les trajectoires sont tracées depuis l’instant initial.
+- C désigne le centre de masse, également dans l’app Énergie mécanique. Après un choc 2D parfaitement inélastique, l’affichage remplace les vitesses individuelles par la vitesse de translation du centre de masse et la vitesse angulaire signée de l’ensemble.
 - Contact et propagation analytiques. Une paire soudée après un choc décentré translate et tourne pour conserver aussi le moment cinétique. Les corps sont des disques homogènes dans le modèle mécanique, malgré leur relief graphique.
 
 L’archive source contient `check_physics.cjs` et `check_ui.cjs` : exécuter chacun avec Node.js depuis le dossier extrait. Vérifications de 218 configurations physiques et des commandes, du cadrage fixe, des flèches et des nombres LaTeX via un adaptateur, sans navigateur. Le test des commandes accepte `PHYS1985_MATHJAX_ROOT` pour le moteur MathJax réel.
+
+## Mise à jour du 7 septembre 2026
+
+Les nouveaux oscillateur anharmonique et potentiel gravitationnel, les ajustements
+de Collisions et les repères verticaux « 0 » sont disponibles dans les fichiers
+autonomes et leurs archives sources. Les graphes d’Énergie mécanique, Potentiel et
+force, Moment cinétique, Collisions et du prototype Frottements portent désormais
+un zéro explicite, sans doublon avec les graduations voisines. Les deux apps de
+cinématique et Travail et puissance le possédaient déjà ; leur présence est
+vérifiée par `node tools/check_vertical_zeros.cjs`.
+
+Le prototype Frottements reste local et n’est pas inclus dans la publication.
+Tests des commandes de Collisions depuis le dépôt : `node tools/check_collisions.cjs`.
+
+Les sept QR codes partagent le même format : noir sur blanc, marge de cinq modules,
+SVG adaptatif à contours nets et PNG de 564 × 564 pixels. `node tools/format_qr.cjs`
+harmonise les trois derniers sans modifier leur matrice ni leur destination.
+`python3 tools/check_qr.py` (OpenCV) vérifie les sept destinations et l’accord SVG/PNG.
 
 ## Sauvegarde avant harmonisation
 

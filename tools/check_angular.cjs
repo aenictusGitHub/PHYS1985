@@ -83,6 +83,9 @@ const value=id=>parseFloat($(id).dataset.number);
 const input=(id,value)=>{$(id).value=value;$(id).fire('input');};
 const labelValue=key=>$('scene-labels').children.find(el=>el.dataset.math===key);
 function checkScene(){
+  const ticks=$('history-labels').children.filter(el=>!el.hidden&&parseFloat(el.style.left)===40);
+  const zero=ticks.filter(el=>el.dataset.math==='0');assert.equal(zero.length,1,'explicit zero for every angular graph');
+  assert(ticks.every(el=>el===zero[0]||Math.abs(parseFloat(el.style.top)-parseFloat(zero[0].style.top))>=22),'zero separated from nearby ticks');
   const strokes=plots.get('scene-canvas').strokes,h=width<420?340:390;
   for(const s of strokes)for(const [x,y]of s.points)assert(x>=0&&x<=width&&y>=0&&y<=h,'scene/vector stays inside fixed viewport');
   const L=strokes.filter(s=>s.color==='#7758a6'&&s.width===3);

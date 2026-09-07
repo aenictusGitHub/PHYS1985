@@ -469,10 +469,12 @@ const PotentialModels = (() => {
     // Argon: sigma = 0.3405 nm, epsilon/k_B = 119.8 K
     // (Heyes, Dini & Smith, 2020, doi:10.1002/pssb.202000344).
     pair: {min: .98, max: 2.8, start: 1.4, coordinate: 'r', energy:1.654e-21, length:.3405e-9},
+    gravity: {min: 1, max: 3, start: 1.5, coordinate: 'r', energy:1, length:1},
   };
   function reduced(model, q) {
     if (model === 'wells') return {u: (q*q-1)**2-q/3, du: 4*q*(q*q-1)-1/3, d2u: 12*q*q-4};
     if (model === 'pair' && q > 0) return {u: 4*(q**-12-q**-6), du: 24*(q**-7-2*q**-13), d2u: 624*q**-14-168*q**-8};
+    if (model === 'gravity' && q > 0) return {u: -1/q, du: 1/q**2, d2u: -2/q**3};
     throw new Error('Potentiel ou position non valide.');
   }
   function evaluate(model, q, energy = definitions[model]?.energy, length = definitions[model]?.length) {
@@ -481,6 +483,7 @@ const PotentialModels = (() => {
     return {q, position:q*length, U:energy*u, slope:energy/length*du, F:-energy/length*du, curvature:energy/length**2*d2u};
   }
   function equilibria(model) {
+    if (model === 'gravity') return [];
     const roots = model === 'pair' ? [2**(1/6)] : [[-1.65,-.6],[-.6,.6],[.6,1.65]].map(([lo,hi]) => {
       for (let i=0;i<60;i++) { const mid=(lo+hi)/2; if (reduced(model,lo).du*reduced(model,mid).du <= 0) hi=mid; else lo=mid; }
       return (lo+hi)/2;
@@ -512,6 +515,8 @@ async function startPotentialApp() {
       wells:{length:1,energy:1,force:1,lengthTex:tex`\mathrm m`,lengthText:'m',energyTex:tex`\mathrm J`,energyAxis:tex`\mathrm J`,energyText:'J',forceTex:tex`\mathrm N`,forceText:'N',slopeTex:tex`\mathrm{J\,m^{-1}}`},
       pair:{length:1e-9,energy:1e-21,force:1e-12,lengthTex:tex`\mathrm{nm}`,lengthText:'nm',energyTex:tex`\times10^{-21}\,\mathrm J`,energyAxis:tex`10^{-21}\,\mathrm J`,energyText:'× 10^-21 J',forceTex:tex`\mathrm{pN}`,forceText:'pN',slopeTex:tex`\mathrm{pN}`},
     };
+    displayUnits.gravity=displayUnits.wells;
+    const isRadial=()=>state.model!=='wells';
     function display() { return displayUnits[state.model]; }
     function positionText(position) { const u=display();return (position/u.length).toFixed(3)+' '+u.lengthText; }
     function math(el,value) {
@@ -566,7 +571,7 @@ async function startPotentialApp() {
       const changed=model!==state.model;
       setPlaying(false); state.drag=null; state.model=model; state.q=definition().start; state.direction=1;
       if (reset||changed) {state.energy=definition().energy;state.length=definition().length;}
-      const pair=model==='pair', c=definition().coordinate, u=display();
+      const pair=model==='pair', gravity=model==='gravity', radial=isRadial(), c=definition().coordinate, u=display();
       for (const [id,key,min,max,step] of [
         ['energy-scale','energy',pair ? .5 : .2,4,pair ? .001 : .1],
         ['length-scale','length',pair ? .25 : .5,pair ? .5 : 2,pair ? .0001 : .1],
@@ -575,29 +580,37 @@ async function startPotentialApp() {
         input.value=Number((state[key]/u[key]).toPrecision(12));
       }
       $('position').min=definition().min; $('position').max=definition().max;
-      $('model-note').textContent=pair
+      $('model-note').textContent=gravity
+        ? 'Deux masses s’attirent suivant la loi de gravitation universelle. Le potentiel est négatif et tend vers zéro à l’infini ; la force attractive décroît comme l’inverse du carré de la distance.'
+        : pair
         ? 'Un modèle de deux atomes d’argon : répulsion à courte distance, attraction plus loin. Les réglages initiaux correspondent à l’argon ; les curseurs permettent d’explorer d’autres paramètres atomiques.'
         : 'Deux minima et un maximum : explorez comment le sens de la force change avec la pente du potentiel.';
       math($('coordinate-label'),c); math($('energy-symbol'),pair?tex`\epsilon`:'U_0'); math($('length-symbol'),pair?tex`\sigma`:'L_0');
       math($('potential-symbol'),`U(${c})`);
       const slope=tex`\frac{\mathrm dU}{\mathrm d`+c+'}';
-      math($('slope-symbol'),slope); math($('force-symbol'),pair?'F_r':'F_x'); math($('force-relation'),(pair?'F_r':'F_x')+'=-'+slope);
-      const equations=pair ? [tex`U(r)=4\epsilon\!\left[\left(\frac{\sigma}{r}\right)^{12}-\left(\frac{\sigma}{r}\right)^6\right]`,
+      math($('slope-symbol'),slope); math($('force-symbol'),radial?'F_r':'F_x'); math($('force-relation'),(radial?'F_r':'F_x')+'=-'+slope);
+      const equations=gravity ? [tex`U(r)=-\frac{Gm_1m_2}{r}=-U_0\frac{L_0}{r}`,
+        tex`Gm_1m_2=U_0L_0,\quad r>0`, tex`F_r=-\frac{\mathrm dU}{\mathrm dr}=-\frac{Gm_1m_2}{r^2}`,
+        tex`\vec F_2=F_r\vec e_r,\quad\vec F_1=-\vec F_2`, tex`U(\infty)=0`]
+        : pair ? [tex`U(r)=4\epsilon\!\left[\left(\frac{\sigma}{r}\right)^{12}-\left(\frac{\sigma}{r}\right)^6\right]`,
         tex`F_r=-\frac{\mathrm dU}{\mathrm dr}`, tex`\vec F_2=F_r\vec e_r,\quad\vec F_1=-\vec F_2`,
         tex`r_{\mathrm{eq}}=2^{1/6}\sigma,\quad U_{\min}=-\epsilon`]
         : [tex`q=\frac{x}{L_0},\quad U(x)=U_0\!\left[(q^2-1)^2-\frac q3\right]`,
           tex`F_x=-\frac{\mathrm dU}{\mathrm dx}`,tex`\vec F=F_x\vec e_x`,tex`U'(x_e)=0,\quad U''(x_e)>0\;\Rightarrow\;\text{stable}`];
       $('relations').replaceChildren(...equations.map(value=>{ const el=document.createElement('div');el.className='equation';math(el,value);return el; }));
-      $('reference-note').textContent=pair
+      $('reference-note').textContent=gravity
+        ? 'Masses ponctuelles ; la distance est mesurée entre leurs centres. Les échelles U₀ et L₀ fixent le produit Gm₁m₂ = U₀L₀. Le potentiel appartient à la paire et n’est compté qu’une fois. La force est toujours attractive : il n’existe pas de position d’équilibre à distance finie. Le schéma est symbolique.'
+        : pair
         ? 'Potentiel de Lennard–Jones non tronqué, nul à l’infini. La distance est mesurée entre les centres des atomes. Le vecteur unitaire radial va du premier atome vers le second. Le schéma est agrandi pour rendre les forces visibles.'
         : 'La force est dirigée vers les potentiels décroissants. Un minimum est stable ; un maximum est instable. La courbe représente une énergie, pas la forme d’une piste.';
       $('argon-reference').hidden=!pair;
-      $('stage-title').textContent=pair?'Attraction et répulsion':'Sens de la force dans l’espace';
-      $('stage-note').textContent=pair
+      $('no-equilibrium').hidden=!gravity;
+      $('stage-title').textContent=gravity?'Attraction gravitationnelle':pair?'Attraction et répulsion':'Sens de la force dans l’espace';
+      $('stage-note').textContent=radial
         ? 'Faites glisser l’une des particules pour régler leur séparation. Les forces sont égales et opposées. La longueur des flèches est proportionnelle à leur module ; l’échelle reste fixe pour les paramètres choisis.'
         : 'Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. La longueur de la flèche est proportionnelle au module de la force ; l’échelle reste fixe pour les paramètres choisis.';
-      $('body-1').hidden=!pair;
-      $('body-0').setAttribute('aria-label',pair?'Déplacer la première particule pour changer la séparation':'Déplacer la particule');
+      $('body-1').hidden=!radial;
+      $('body-0').setAttribute('aria-label',radial?'Déplacer la première particule pour changer la séparation':'Déplacer la particule');
       buildEquilibria(); render();
     }
     function buildEquilibria() {
@@ -647,10 +660,11 @@ async function startPotentialApp() {
         const value=ymin+(ymax-ymin)*i/4,y=Y(value);
         line(ctx,[[r.left,y],[r.right,y]],colors.grid);
         const shown=value/unitScale;
-        label(layer,'y'+i,(Math.abs(shown)<.0005?0:shown).toFixed((ymax-ymin)/unitScale<5?2:1),r.left-28,y,colors.muted,true);
+        if (Math.abs(y-Y(0))>=22) label(layer,'y'+i,(Math.abs(shown)<.0005?0:shown).toFixed((ymax-ymin)/unitScale<5?2:1),r.left-28,y,colors.muted,true);
       }
+      label(layer,'y-zero','0',r.left-28,Y(0),colors.muted,true);
       line(ctx,[[r.left,Y(0)],[r.right,Y(0)]],colors.muted,1,[4,4]);
-      const unitY=kind==='potential'?'U'+tex`\,[${u.energyAxis}]`:(state.model==='pair'?'F_r':'F_x')+tex`\,[${u.forceTex}]`;
+      const unitY=kind==='potential'?'U'+tex`\,[${u.energyAxis}]`:(isRadial()?'F_r':'F_x')+tex`\,[${u.forceTex}]`;
       // The scientific energy unit is wider: align its left edge with the plot.
       label(layer,'unitY',unitY,r.left,12).style.transform='translate(0,-50%)';
       label(layer,'unitX',coordinate+tex`\,[${u.lengthTex}]`,(r.left+r.right)/2,h-9);
@@ -676,7 +690,7 @@ async function startPotentialApp() {
     function forceArrowScale(w) {
       const key=[state.model,w,state.energy,state.length].join('|');
       if (arrowScaleCache?.key===key) return arrowScaleCache.factor;
-      const {min,max}=definition(), pair=state.model==='pair', r=geometry(w,150);
+      const {min,max}=definition(), pair=isRadial(), r=geometry(w,150);
       let factor=Infinity;
       // Fit the entire position range once, never normalize to the current
       // force. Both particles share this one linear pixels-per-newton scale.
@@ -706,7 +720,7 @@ async function startPotentialApp() {
     function drawStage(current,zero) {
       const {ctx,w,h}=surface('stage-canvas'), {min,max}=definition(), y=79;
       for (const el of $('stage-labels').children) el.hidden=true;
-      const r=geometry(w,h), X=q=>r.left+(q-min)/(max-min)*(r.right-r.left), pair=state.model==='pair';
+      const r=geometry(w,h), X=q=>r.left+(q-min)/(max-min)*(r.right-r.left), pair=isRadial();
       const bodyRadius=10, scale=(w-90)/max;
       const centers=pair?[[w/2-state.q*scale/2,y],[w/2+state.q*scale/2,y]]:[[X(state.q),y]];
       const forceScale=forceArrowScale(w);
@@ -741,10 +755,10 @@ async function startPotentialApp() {
         }
       }
       const forceText=(current.F/u.force).toFixed(3)+' '+u.forceText;
-      $('stage').setAttribute('aria-label',pair?'Séparation '+positionText(current.position)+'. Force sur le deuxième atome : '+forceText+' ; force opposée sur le premier.':'Position '+positionText(current.position)+'. Force : '+forceText+'.');
+      $('stage').setAttribute('aria-label',pair?'Séparation '+positionText(current.position)+'. Force sur le deuxième corps : '+forceText+' ; force opposée sur le premier.':'Position '+positionText(current.position)+'. Force : '+forceText+'.');
     }
     function render(readouts=true) {
-      const current=sample(), pair=state.model==='pair', zero=Math.abs(current.F)<1e-7*state.energy/state.length;
+      const current=sample(), pair=state.model==='pair', radial=isRadial(), zero=Math.abs(current.F)<1e-7*state.energy/state.length;
       const u=display();
       $('position').value=state.q;
       $('position').setAttribute('aria-valuetext',positionText(current.position));
@@ -758,10 +772,10 @@ async function startPotentialApp() {
       }
       $('force-sign').textContent=zero?'Force nulle':current.F>0?'Force positive':'Force négative';
       $('force-sign').className='sign-badge '+(zero?'neutral':current.F>0?'positive':'negative');
-      $('state-badge').textContent=zero?(current.curvature>0?'Équilibre stable':'Équilibre instable'):pair?(current.F>0?'Répulsion':'Attraction'):(current.F>0?'Vers la droite':'Vers la gauche');
+      $('state-badge').textContent=zero?(current.curvature>0?'Équilibre stable':'Équilibre instable'):radial?(current.F>0?'Répulsion':'Attraction'):(current.F>0?'Vers la droite':'Vers la gauche');
       $('observation').textContent=zero
         ? (current.curvature>0?'Au minimum du potentiel, la force est nulle. Un petit déplacement fait apparaître une force qui ramène vers l’équilibre.':'Au maximum du potentiel, la force est nulle. Un petit déplacement fait apparaître une force qui éloigne de l’équilibre.')
-        : pair?(current.F>0?'La pente est négative : la force radiale est positive. Les deux particules se repoussent.':'La pente est positive : la force radiale est négative. Les deux particules s’attirent.')
+        : radial?(current.F>0?'La pente est négative : la force radiale est positive. Les deux particules se repoussent.':'La pente est positive : la force radiale est négative. Les deux particules s’attirent.')
         : current.F>0?'Le potentiel décroît vers la droite : sa pente est négative et la force est dirigée vers la droite.':'Le potentiel croît vers la droite : sa pente est positive et la force est dirigée vers la gauche.';
       drawCurve('potential');drawCurve('force');drawStage(current,zero);
     }
@@ -803,11 +817,11 @@ async function startPotentialApp() {
       body.addEventListener('pointermove',event=>{
         if(state.drag?.index!==index||state.drag.pointerId!==event.pointerId)return;
         const rect=$('stage-canvas').getBoundingClientRect(),x=event.clientX-rect.left-state.drag.offset;
-        if(state.model==='pair')setPosition((index?1:-1)*2*(x-state.stage.w/2)/state.stage.scale);
+        if(isRadial())setPosition((index?1:-1)*2*(x-state.stage.w/2)/state.stage.scale);
         else {const r=geometry(rect.width,rect.height),d=definition();setPosition(d.min+(x-r.left)/(r.right-r.left)*(d.max-d.min));}
       });
       for (const type of ['pointerup','pointercancel','lostpointercapture']) body.addEventListener(type,event=>{if(state.drag?.pointerId===event.pointerId){state.drag=null;if(body.hasPointerCapture(event.pointerId))body.releasePointerCapture(event.pointerId);}});
-      body.addEventListener('keydown',event=>keyboard(event,state.model==='pair'&&index===0?-1:1));
+      body.addEventListener('keydown',event=>keyboard(event,isRadial()&&index===0?-1:1));
     }
     document.addEventListener('keydown',event=>{
       if(event.target.closest('input,select,button,[role="slider"]')||event.ctrlKey||event.metaKey||event.altKey)return;
@@ -832,7 +846,7 @@ async function startPotentialApp() {
       </header>
       <section class="panel-section">
         <label class="field-label" for="model-select">Exemples</label>
-        <select id="model-select"><option value="wells">Double puits asymétrique</option><option value="pair">Lennard–Jones — deux atomes d’argon</option></select>
+        <select id="model-select"><option value="wells">Double puits asymétrique</option><option value="pair">Lennard–Jones — deux atomes d’argon</option><option value="gravity">Gravitation universelle</option></select>
         <p id="model-note" class="microcopy"></p>
         <label class="field-label compact" for="position">Explorer <span id="coordinate-label" data-tex="x"></span></label>
         <input id="position" type="range" min="-1.65" max="1.65" value="0.55" step="0.0001" />
@@ -840,6 +854,7 @@ async function startPotentialApp() {
         <p class="microcopy">Faites glisser le point sur l’une des courbes, ou la particule dans le schéma.</p>
         <h2 class="equilibrium-heading">Positions d’équilibre</h2>
         <div id="equilibrium-buttons" class="equilibrium-buttons"></div>
+        <p id="no-equilibrium" class="microcopy" hidden>Aucun équilibre à distance finie : l’interaction est toujours attractive.</p>
       </section>
       <section class="panel-section">
         <div class="section-heading-row"><h2>Échelles du potentiel</h2><button type="button" id="reset" class="text-button">Réinitialiser</button></div>

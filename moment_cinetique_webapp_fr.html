@@ -691,7 +691,8 @@ async function startRotationApp(){
       const low=min-.12*span,high=max+.15*span,X=t=>g.left+t/sim.p.duration*(g.right-g.left),Y=value=>g.bottom-(value-low)/(high-low)*(g.bottom-g.top);
       const ticks=w<450?4:5;
       for(let i=0;i<=ticks;i++){const t=i*sim.p.duration/ticks,x=X(t);line(ctx,[[x,g.top],[x,g.bottom]],colors.grid);label('history-labels','x'+i,String(Number(t.toFixed(1))),x,g.bottom+16,colors.muted,true);}
-      for(let i=0;i<=4;i++){const value=low+(high-low)*i/4,y=Y(value);line(ctx,[[g.left,y],[g.right,y]],colors.grid);label('history-labels','y'+i,(Math.abs(value)<.0005?0:value).toFixed(high-low<10?2:1),g.left-30,y,colors.muted,true);}
+      for(let i=0;i<=4;i++){const value=low+(high-low)*i/4,y=Y(value);line(ctx,[[g.left,y],[g.right,y]],colors.grid);if(Math.abs(y-Y(0))>=22)label('history-labels','y'+i,(Math.abs(value)<.0005?0:value).toFixed(high-low<10?2:1),g.left-30,y,colors.muted,true);}
+      label('history-labels','y-zero','0',g.left-30,Y(0),colors.muted,true);
       label('history-labels','unitY',info.tex,g.left,15).style.transform='translate(0,-50%)';label('history-labels','unitX',tex`t\,[\mathrm s]`,(g.left+g.right)/2,h-9);
       line(ctx,[[g.left,Y(0)],[g.right,Y(0)]],colors.muted,1,[4,4]);
       line(ctx,data.map(x=>[X(x.t),Y(x[key])]),info.color,2.2);

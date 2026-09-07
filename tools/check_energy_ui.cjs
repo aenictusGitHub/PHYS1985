@@ -143,7 +143,9 @@ function checkHistoryAnnotations(withFriction = false, gravity = false) {
   const labels = $('history-labels').children.filter(node => !node.hidden);
   const title = labels.find(node => node.dataset.math === (gravity ? 'E\\,[10^{12}\\,\\mathrm J]' : 'E\\,[\\mathrm J]'));
   const ticks = labels.filter(node => node.className.includes('tick') && parseFloat(node.style.left) === 41);
-  assert(title && ticks.length === 5, 'energy title and all vertical ticks are present');
+  assert(title && ticks.length >= 4 && ticks.length <= 6, 'energy title and vertical ticks are present');
+  const zero=ticks.filter(node=>node.dataset.math==='0');assert.equal(zero.length,1,'one explicit vertical zero');
+  assert(ticks.every(node=>node===zero[0]||Math.abs(parseFloat(node.style.top)-parseFloat(zero[0].style.top))>=22),'zero separated from other labels');
   assert(Math.min(...ticks.map(node => parseFloat(node.style.top))) - parseFloat(title.style.top) >= 30,
     'unit title has its own row above the vertical graduations');
   const lines = $('chart-key').children.map(row => row.children[0]).filter(node => node.className === 'legend-line');
@@ -374,6 +376,9 @@ async function main() {
   }
   assert.equal($('value-m').dataset.number, '1.00|\\mathrm{kg}', 'initial values are TeX');
   assert.equal($('total-readout').dataset.number, '2.000|\\mathrm J');
+  assert(!$('period-info').hidden, 'oscillator period is visible below the scene');
+  assert.equal($('period-readout').dataset.number, '3.142|\\mathrm s');
+  assert.equal($('period-symbol').dataset.math, 'T=');
   checkNumericBaseline();
   checkContinuousPlayback();
   checkOscillatorVisualOptions();
@@ -382,9 +387,10 @@ async function main() {
   $('param-k').value = '10'; $('param-k').fire('input'); tick();
   assert.equal($('example-select').value, 'custom');
   assert.equal($('total-readout').dataset.number, '5.000|\\mathrm J');
+  assert.equal($('period-readout').dataset.number, (2*Math.PI/Math.sqrt(10)).toFixed(3)+'|\\mathrm s', 'period responds to spring stiffness');
   $('reset-parameters').click();
   assert.equal($('value-k').dataset.number, '4.00|\\mathrm{N\\,m^{-1}}');
-  for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
+  for (const model of ['oscillator', 'anharmonic', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
     const defaultDuration = model === 'pendulum' ? 10 : 30;
     assert.equal(Number($('duration').value), defaultDuration, 'model-specific default duration');
@@ -406,10 +412,34 @@ async function main() {
       assert.equal(Number($('time-slider').max), 10, 'selecting the double pendulum restores its default');
     }
     assert.equal($('position-badge').hidden, model === 'pendulum');
+    assert.equal($('period-info').hidden, !['oscillator','anharmonic'].includes(model), 'period only on the requested oscillators');
     assert.equal($('detail-row').hidden, model !== 'pendulum');
-    assert.equal($('trail-row').hidden, model === 'oscillator');
-    assert.equal($('velocity-row').hidden, model !== 'oscillator');
+    assert.equal($('trail-row').hidden, ['oscillator','anharmonic'].includes(model));
+    assert.equal($('velocity-row').hidden, !['oscillator','anharmonic'].includes(model));
     assert.equal($('scene').dataset.velocity, 'false');
+    if(model==='anharmonic'){
+      assert.equal($('value-alpha').dataset.number,'4.00|\\mathrm{N\\,m^{-3}}');
+      assert.equal($('total-readout').dataset.number,'3.000|\\mathrm J');
+      const expectedPeriod=vm.runInNewContext('EnergyModels.oscillatorPeriod({m:1,k:4,alpha:4,x0:1,v0:0})',context);
+      assert.equal($('period-readout').dataset.number,expectedPeriod.toFixed(3)+'|\\mathrm s');
+      assert($('period-note').textContent.includes('amplitude initiale'));
+      assert($('scene-labels').children.some(el=>!el.hidden&&el.dataset.math.includes('alpha x^4')));
+      for(const viewport of [300,640]){
+        width=viewport;$('velocity-toggle').checked=true;$('velocity-toggle').fire('change');
+        for(const t of [0,.1,.3,.5,1.234,10]){
+          $('time-slider').value=t;$('time-slider').fire('input');
+          assert($('scene').dataset.velocity==='true');
+          for(const stroke of sceneStrokes.filter(s=>s.color==='#bc8b3b'&&s.width===2.5))for(const [x]of stroke.points)assert(x>=0&&x<=width,'anharmonic velocity in frame');
+        }
+      }
+      $('restart').click();const old=parseFloat($('value-x0').dataset.number);
+      $('mass-handle-0').fire('keydown',{key:'ArrowLeft'});
+      assert(parseFloat($('value-x0').dataset.number)<old,'anharmonic initial mass can be moved');
+      assert(parseFloat($('period-readout').dataset.number)>expectedPeriod, 'period responds during initial-position editing');
+      $('param-alpha').value='0';$('param-alpha').fire('input');tick();
+      assert.equal($('period-readout').dataset.number,'3.142|\\mathrm s','anharmonic limit restores harmonic period');
+      $('model-select').fire('change');$('velocity-toggle').checked=false;$('velocity-toggle').fire('change');
+    }
     if (model === 'simple-pendulum') {
       assert.equal($('value-l').dataset.number, '1.20|\\mathrm m');
       assert.equal($('value-theta0').dataset.number, '15|{}^\\circ');
@@ -448,12 +478,17 @@ async function main() {
   $('history').fire('keydown', {key: 'Home'}); assert.equal(Number($('time-slider').value), 0);
   $('history').fire('pointerdown', {clientX: 340, pointerId: 1});
   assert(Number($('time-slider').value) > 20 && Number($('time-slider').value) < 40);
-  for (const model of ['oscillator', 'simple-pendulum', 'pendulum']) {
+  for (const model of ['oscillator', 'anharmonic', 'simple-pendulum', 'pendulum']) {
     $('model-select').value = model; $('model-select').fire('change');
     $('duration').value = '60'; $('duration').fire('input'); tick();
     $('friction-toggle').checked = true; $('friction-toggle').fire('change');
     assert(!$('damping-controls').hidden && !$('dissipation-card').hidden);
     assert.equal($('friction-badge').textContent, 'Avec frottements');
+    if(['oscillator','anharmonic'].includes(model)){
+      assert.equal($('period-label').textContent,'Période de référence');
+      assert.equal($('period-symbol').dataset.math,'T_{\\mathrm{ref}}=');
+      assert($('period-note').textContent.includes('Sans frottements'));
+    }
     checkHistoryAnnotations(true);
     assert.equal($('damping-readout').dataset.number, '0.25|\\mathrm{s^{-1}}');
     assert.equal($('energy-key').children.length, model === 'pendulum' ? 5 : 3);
@@ -473,8 +508,12 @@ async function main() {
     $('time-slider').value = '60'; $('time-slider').fire('input');
     assert(parseFloat($('total-readout').dataset.number) < .001);
     $('example-select').value = '3'; $('example-select').fire('change');
+    if(model==='anharmonic'){
+      $('param-x0').value=0;$('param-x0').fire('input');$('param-v0').value=0;$('param-v0').fire('input');tick();
+    }
     $('time-slider').value = '60'; $('time-slider').fire('input');
     assert.equal(parseFloat($('dissipation-readout').dataset.number), 0, 'no dissipation at rest');
+    if(['oscillator','anharmonic'].includes(model))assert($('period-note').textContent.includes('Masse au repos'), 'no observed cycle claimed at rest');
     $('reset-parameters').click();
     assert.equal($('damping-readout').dataset.number, '0.25|\\mathrm{s^{-1}}');
     $('friction-toggle').checked = false; $('friction-toggle').fire('change');
@@ -490,6 +529,7 @@ async function main() {
   assert.equal(Number($('duration').value), 30, 'gravity keeps its original default');
   $('duration').value = '60'; $('duration').fire('input'); tick();
   assert($('friction-row').hidden && $('damping-controls').hidden && $('dissipation-card').hidden, 'gravity is an isolated two-body system');
+  assert($('period-info').hidden, 'no oscillator period on gravity');
   assert.equal($('friction-badge').textContent, 'Gravitation seule');
   checkSecondBodyColor();
   assert(!$('velocity-row').hidden, 'velocity option is available for gravity');
@@ -537,7 +577,7 @@ async function main() {
   assert.equal($('position-readout').dataset.number, '15.00|{}^\\circ');
   checkInitialDragging();
   assert.deepEqual(reported, []);
-  console.log('Energy UI controllers: mouse/touch and keyboard initial-position editing for all four systems, constraints, preview/commit/cancel, playback locks, signed energies, LaTeX, examples, friction and chart seeking passed.');
+  console.log('Energy UI controllers: mouse/touch and keyboard initial-position editing for all five systems, constraints, preview/commit/cancel, playback locks, signed energies, LaTeX, examples, friction and chart seeking passed.');
 }
 function checkSecondBodyColor() {
   const body = sceneFills.find(fill => fill.color === '#94d9c5');

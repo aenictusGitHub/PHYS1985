@@ -29,6 +29,39 @@ for (const p of [oscillator, {m: .2, k: 20, x0: -2, v0: 4}, {m: 5, k: .5, x0: 2,
   near(sim.at(3.4567).E, E, 1e-11, 'oscillator continuous time');
 }
 const pendulum = {m1: 1, m2: 1, l1: 1.2, l2: 1, theta1: 120, theta2: -30, omega1: 0, omega2: 0, g: 9.81};
+// Quartic potential, its true force, harmonic limit and amplitude dependence.
+for (const p of [{...oscillator,alpha:4}, {...oscillator,alpha:0},
+  {m:.2,k:.5,alpha:20,x0:2,v0:4}, {m:5,k:20,alpha:.25,x0:-2,v0:-4},
+  {...oscillator,alpha:20,x0:0,v0:0}]) for (const gamma of [0,.7]) {
+  const params={...p,gamma},sim=EnergyModels.simulate('anharmonic',params,60),E0=sim.samples[0].E;
+  assert(sim.maxError<1e-7*Math.max(1,E0),'anharmonic energy plus dissipated work');
+  const A=EnergyModels.oscillatorAmplitude(p,E0);
+  near(EnergyModels.oscillatorPotential(p,A),E0,1e-9,'quartic turning point');
+  let previousD=0;
+  for(const s of sim.samples){assert(s.K>=0&&s.U>=0&&Math.abs(s.x)<=A+1e-6,'anharmonic energy envelope');assert(s.D>=previousD-1e-10,'dissipated work is nondecreasing');previousD=s.D;}
+  for(const t of [0,.0034,1.23456,5.42000000001,59.999,60])near(sim.at(t).E+sim.at(t).D,E0,1e-7*Math.max(1,E0),'anharmonic continuous time');
+  const x=.73,v=-1.8,h=1e-6,rhs=EnergyModels.oscillatorRhs(params,[x,v,0]);
+  near(p.m*(rhs[1]+gamma*v),-(EnergyModels.oscillatorPotential(p,x+h)-EnergyModels.oscillatorPotential(p,x-h))/(2*h),1e-6,'force is negative potential gradient');
+  if(p.alpha===0&&gamma===0)for(const t of [.123,1,20])near(sim.at(t).x,EnergyModels.oscillator(p,t).x,1e-7,'harmonic limit');
+}
+function firstCrossing(amplitude){const sim=EnergyModels.simulate('anharmonic',{...oscillator,alpha:4,x0:amplitude},4);return sim.samples.find(s=>s.x<0).t;}
+assert(firstCrossing(1.5)<firstCrossing(.3),'hardening oscillator period decreases with amplitude');
+// Period from an independent energy quadrature, checked against a full orbit.
+for (const p of [oscillator, {...oscillator,alpha:0,x0:0,v0:2},
+  {...oscillator,alpha:4}, {...oscillator,alpha:20,x0:-.7,v0:1.4},
+  {m:.2,k:.5,alpha:20,x0:2,v0:4}, {m:5,k:20,alpha:.25,x0:-2,v0:-4}]) {
+  const T=EnergyModels.oscillatorPeriod(p),sim=EnergyModels.simulate('anharmonic',p,T);
+  assert(Number.isFinite(T)&&T>0,'positive finite oscillation period');
+  near(sim.at(T).x,p.x0,1e-7*Math.max(1,Math.abs(p.x0)),'full-period position');
+  near(sim.at(T).v,p.v0,1e-6*Math.max(1,Math.abs(p.v0)),'full-period velocity');
+  near(sim.at(T/2).x,-p.x0,1e-7*Math.max(1,Math.abs(p.x0)),'half-period symmetry');
+  if(!p.alpha)near(T,2*Math.PI*Math.sqrt(p.m/p.k),1e-14,'exact harmonic period');
+  near(EnergyModels.oscillatorPeriod({...p,gamma:2}),T,1e-14,'damped display is explicitly the conservative reference');
+}
+near(EnergyModels.oscillatorPeriod({...oscillator,alpha:20,x0:0,v0:0}),Math.PI,1e-14,'rest: small-amplitude period');
+near(EnergyModels.oscillatorPeriod({...oscillator,alpha:4,m:4}),2*EnergyModels.oscillatorPeriod({...oscillator,alpha:4}),1e-13,'period mass scaling at fixed amplitude');
+assert(EnergyModels.oscillatorPeriod({...oscillator,alpha:4,x0:1.5})<EnergyModels.oscillatorPeriod({...oscillator,alpha:4,x0:.3}),'calculated period decreases with amplitude');
+console.log('Anharmonic oscillator: quartic force, turning points, harmonic limit, amplitude-dependent period, damping and conservation passed.');
 const simple = {m: 1, l: 1.2, theta0: 15, omega0: 0, g: 9.81};
 const simpleCases = [simple, {...simple, theta0: 120}, {...simple, theta0: 0, omega0: 7},
   {...simple, theta0: 0}, {...simple, m: .2, l: .5, g: 20, theta0: 170, omega0: -8},

@@ -430,6 +430,8 @@ canvas { display: block; width: 100%; height: 100%; }
 .plot-label { position: absolute; transform: translate(-50%,-50%); white-space: nowrap; font-size: var(--text-formula); }
 .plot-label.tick { font-size: var(--text-tick); }
 .scene-footer { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem 1.5rem; align-items: baseline; padding: .5rem 1rem; font-size: var(--text-formula); }
+#rotation-info { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: .5rem 1rem; }
+#rotation-info[hidden] { display: none; }
 .scene-note { margin: 0; padding: .5rem 1rem .85rem; }
 .total-momentum-panel { display:grid; grid-template-columns: minmax(10rem,1fr) 1.3fr; align-items:center; gap:.7rem; padding:0 1rem; border-top:1px solid var(--line); background:var(--panel-soft); }
 .momentum-caption { font-size:var(--text-ui); color:var(--muted); line-height:1.6; }
@@ -602,11 +604,17 @@ async function startCollisionApp(){
       $('model-note').textContent=sticky?'Liaison rigide idéalisée au contact. Dans un choc décentré, l’ensemble tourne : l’énergie cinétique inclut cette rotation et le moment cinétique est conservé.':'Contact lisse : l’impulsion est dirigée selon la normale du corps 1 vers le corps 2. La composante tangentielle de la vitesse relative est inchangée. Pour le choc élastique, le coefficient de restitution vaut 1.';
       const has=!!sim.impact,inTime=has&&sim.tc<=p.duration;$('before').disabled=!inTime;$('after').disabled=!inTime;
       $('comparison-wrap').hidden=!has;$('no-collision').hidden=has;
+      $('ensemble-speed-row').hidden=!(sticky&&plane);$('ensemble-rotation-row').hidden=!(sticky&&plane);
       if(has){
         const a=sim.sample(sim.tc,'before'),b=sim.sample(sim.tc);
         for(const [suffix,s]of [['before',a],['after',b]]){vectorValue($('v1-'+suffix),s.v1,tex`\mathrm{m\,s^{-1}}`);vectorValue($('v2-'+suffix),s.v2,tex`\mathrm{m\,s^{-1}}`);vectorValue($('P-'+suffix),s.P,tex`\mathrm{kg\,m\,s^{-1}}`);number($('K-'+suffix),s.K,3,tex`\mathrm J`);}
+        if(sticky&&plane){
+          for(const i of [1,2])math($('v'+i+'-after'),tex`\text{—}`);
+          for(const suffix of ['before','after'])vectorValue($('VC-'+suffix),sim.V,tex`\mathrm{m\,s^{-1}}`);
+          math($('omega-before'),tex`\text{—}`);number($('omega-after'),b.omega,2,tex`\mathrm{rad\,s^{-1}}`);
+        }
       }
-      $('comparison-note').textContent=(plane?'Les couples indiquent les composantes selon les axes horizontal et vertical. ':'Les valeurs sont signées selon l’axe horizontal. ')+(sticky&&plane?'Après un choc décentré, les vitesses des centres peuvent différer : les deux disques tournent ensemble.':'')+(has&&!inTime?' Le choc prévu est au-delà de la durée choisie.':'');
+      $('comparison-note').textContent=(plane?'Les couples indiquent les composantes selon les axes horizontal et vertical. ':'Les valeurs sont signées selon l’axe horizontal. ')+(sticky&&plane?'Après le choc, l’ensemble est décrit par la vitesse de son centre de masse C et sa vitesse angulaire. Avant le choc, il n’existe pas encore d’ensemble rigide ; les disques n’ont pas de rotation propre.':'')+(has&&!inTime?' Le choc prévu est au-delà de la durée choisie.':'');
       if(has)math($('contact-info'),tex`t_{\mathrm{choc}}=${fixed(sim.tc,2)}\,\mathrm s`);else{$('contact-info').replaceChildren();delete $('contact-info').dataset.math;$('contact-info').textContent='Pas de rencontre prévue';}
       $('observation').textContent=p.mode==='elastic'?'L’énergie cinétique et la quantité de mouvement totale restent constantes. Avec deux masses égales et une cible immobile, le choc frontal échange les vitesses.':sticky?(plane?'Un choc décentré conserve aussi le moment cinétique : les corps solidaires tournent autour de leur centre de masse, qui poursuit son mouvement rectiligne uniforme.':'Après le choc, les deux corps ont une vitesse commune. La quantité de mouvement est conservée, mais une partie de l’énergie cinétique est dissipée.'):'La quantité de mouvement reste constante, même si l’énergie cinétique diminue. En deux dimensions, la perte dépend de la vitesse relative normale au contact, et pas de sa seule norme.';
       state.legend='';
@@ -654,12 +662,14 @@ async function startCollisionApp(){
       const kind=$('vectors').value,vel=kind==='velocity';
       if(kind!=='none'){
         const hit=sim.impact,maxV=i=>Math.max(CP.norm(sim['v'+i]),hit?(sim.p.mode==='sticking'?CP.norm(sim.V)+Math.abs(hit.omega)*CP.norm(hit['d'+i]):CP.norm(hit['v'+i])):0),max=Math.max(maxV(1)*(vel?1:sim.p.m1),maxV(2)*(vel?1:sim.p.m2),1),vectorScale=Math.min(76,w*.14)/max;
-        for(const i of [1,2]){
-          const v=s[(vel?'v':'p')+i],center=centers[i-1],delta=[v[0]*vectorScale,-v[1]*vectorScale],length=Math.hypot(...delta),color=i===1?C.one:C.two,symbol=vel?tex`\vec v_${i}`:tex`\vec p_${i}`;
+        // A welded 2D pair has one translational velocity, applied at C;
+        // its separate angular velocity is shown in the scene footer.
+        for(const i of (s.stuck&&plane&&vel?[0]:[1,2])){
+          const v=i===0?sim.V:s[(vel?'v':'p')+i],center=i===0?P(s.C):centers[i-1],delta=[v[0]*vectorScale,-v[1]*vectorScale],length=Math.hypot(...delta),color=i===0?C.ink:i===1?C.one:C.two,symbol=i===0?tex`\vec V_C`:vel?tex`\vec v_${i}`:tex`\vec p_${i}`;
           if(length>.001){
             const u=CP.mul(delta,1/length),perp=[-u[1],u[0]],preferred=(i===1?-1:1)*(Math.sign(perp[1])||Math.sign(perp[0]));let best=null;
-            if(plane&&vel){
-              // The 2D velocity originates at the body center. Bodies were
+            if(vel){
+              // Every velocity originates at the body (or assembly) center. Bodies were
               // painted first, so even a short arrow stays in the foreground.
               const tip=CP.add(center,delta),n=CP.mul(perp,preferred);
               arrow(ctx,center,tip,color);vectorLabel('vector'+i,symbol,tip,u,n,color);
@@ -702,7 +712,8 @@ async function startCollisionApp(){
       const data=[sim.sample(0)];if(sim.impact&&sim.tc<=sim.p.duration){data.push(sim.sample(sim.tc,'before'),sim.sample(sim.tc));}data.push(sim.sample(sim.p.duration));
       const values=series.flatMap(q=>data.map(q.get)),min=Math.min(0,...values),max=Math.max(0,...values),span=Math.max(1,max-min),low=min-.1*span,high=max+.15*span,X=t=>g.left+t/sim.p.duration*(g.right-g.left),Y=v=>g.bottom-(v-low)/(high-low)*(g.bottom-g.top),ticks=w<450?3:5;
       for(let i=0;i<=ticks;i++){const t=i*sim.p.duration/ticks,x=X(t);line(ctx,[[x,g.top],[x,g.bottom]],C.grid);numericLabel('history-labels','x'+i,t,x,g.bottom+18,Number.isInteger(t)?0:1);}
-      for(let i=0;i<=4;i++){const value=low+(high-low)*i/4,y=Y(value);line(ctx,[[g.left,y],[g.right,y]],C.grid);numericLabel('history-labels','y'+i,value,g.left-12,y,high-low<10?1:0).style.transform='translate(-100%,-50%)';}
+      for(let i=0;i<=4;i++){const value=low+(high-low)*i/4,y=Y(value);line(ctx,[[g.left,y],[g.right,y]],C.grid);if(Math.abs(y-Y(0))>=22)numericLabel('history-labels','y'+i,value,g.left-12,y,high-low<10?1:0).style.transform='translate(-100%,-50%)';}
+      numericLabel('history-labels','y-zero',0,g.left-12,Y(0)).style.transform='translate(-100%,-50%)';
       label('history-labels','unitY',energy?tex`E\,[\mathrm J]`:tex`P\,[\mathrm{kg\,m\,s^{-1}}]`,g.left,13).style.transform='translate(0,-50%)';label('history-labels','unitX',tex`t\,[\mathrm s]`,(g.left+g.right)/2,h-10);
       line(ctx,[[g.left,Y(0)],[g.right,Y(0)]],C.muted,1,[3,5]);
       const past=data.filter(q=>q.t<=s.t);past.push(s);
@@ -713,6 +724,7 @@ async function startCollisionApp(){
       const sim=state.sim,s=sim.sample();if(readouts){
         for(const id of ['time-value','timeline-value'])number($(id),s.t,2,tex`\mathrm s`);$('timeline').value=s.t;$('timeline').setAttribute('aria-valuetext',s.t.toFixed(2)+' s');
         vectorValue($('P-value'),s.P,tex`\mathrm{kg\,m\,s^{-1}}`);number($('K-value'),s.K,3,tex`\mathrm J`);number($('loss-value'),s.loss,3,tex`\mathrm J`);number($('omega-value'),s.omega,2,tex`\mathrm{rad\,s^{-1}}`);$('rotation-info').hidden=!s.stuck||sim.dimension!=='plane';
+        if(s.stuck&&sim.dimension==='plane')vectorValue($('ensemble-velocity-value'),sim.V,tex`\mathrm{m\,s^{-1}}`);
         $('status-badge').textContent=!sim.impact?'Sans rencontre':s.stuck?'Corps solidaires':s.after?'Après le choc':sim.tc>sim.p.duration?'Choc hors durée':'Avant le choc';$('status-badge').dataset.mode=s.after?'after':'before';drawHistory(s);
       }drawScene(s);drawTotalMomentum(s);
     }
@@ -797,7 +809,7 @@ async function startCollisionApp(){
       <label class="field-label" for="vectors">Vecteurs</label><select id="vectors"><option value="velocity">Vitesses instantanées</option><option value="momentum">Quantités de mouvement</option><option value="none">Aucun</option></select>
       <label class="check-row"><input id="total-momentum" type="checkbox" checked />Impulsion totale <span data-tex="\vec P"></span></label>
       <label class="check-row"><input id="traces" type="checkbox" checked />Trajectoires depuis le départ</label>
-      <label class="check-row"><input id="center" type="checkbox" checked />Centre de masse</label>
+      <label class="check-row"><input id="center" type="checkbox" checked />Centre de masse <span data-tex="C"></span></label>
       <label class="check-row"><input id="normal" type="checkbox" />Normale au contact</label>
     </section>
     <section class="panel-section equation-section">
@@ -816,8 +828,8 @@ async function startCollisionApp(){
       <header class="card-heading"><h2 id="scene-title">Collision en une dimension</h2><span id="status-badge" class="result-badge">Avant le choc</span></header>
       <div id="scene" class="scene-wrap" role="img" aria-label="Deux corps avant leur collision"><canvas id="scene-canvas" aria-hidden="true"></canvas><div id="scene-labels" class="plot-labels" aria-hidden="true"></div><div class="time-badge"><span data-tex="t="></span><span id="time-value"></span></div></div>
       <div id="total-momentum-panel" class="total-momentum-panel"><div class="momentum-caption">Impulsion totale<div data-tex="\vec P=m_1\vec v_1+m_2\vec v_2"></div></div><div id="momentum-diagram" class="momentum-diagram" role="img" aria-label="Vecteur quantité de mouvement totale"><canvas id="momentum-canvas" aria-hidden="true"></canvas><div id="momentum-labels" class="plot-labels" aria-hidden="true"></div></div></div>
-      <div class="scene-footer"><span id="contact-info"></span><span id="rotation-info" hidden><span data-tex="\omega="></span><span id="omega-value"></span></span></div>
-      <p class="scene-note microcopy">Cadrage fixe pour toute la durée choisie. En 2D, les vecteurs vitesse partent du centre des corps ; en 1D, ils sont légèrement décalés pour rester lisibles. Les deux vitesses partagent la même échelle. L’impulsion totale a son propre témoin d’échelle.</p>
+      <div class="scene-footer"><span id="contact-info"></span><span id="rotation-info" hidden>Ensemble solidaire : <span><span data-tex="\vec V_C="></span><span id="ensemble-velocity-value"></span></span><span><span data-tex="\omega="></span><span id="omega-value"></span></span></span></div>
+      <p class="scene-note microcopy"><span data-tex="C"></span> représente le centre de masse. Les vecteurs vitesse partent du centre des corps, en 1D comme en 2D. Après un choc 2D parfaitement inélastique, une seule flèche <span data-tex="\vec V_C"></span> représente la translation de l’ensemble ; <span data-tex="\omega"></span> indique sa rotation (positive dans le sens antihoraire). Cadrage et échelles fixes pour toute la durée choisie.</p>
     </section>
     <section class="readout-panel" aria-label="Bilan instantané du système">
       <article class="readout-card" style="--card-color:#233449"><span data-tex="\vec P(t)"></span><strong id="P-value"></strong><small>quantité de mouvement totale</small></article>
@@ -830,6 +842,8 @@ async function startCollisionApp(){
       <div id="comparison-wrap" class="table-wrap"><table><thead><tr><th scope="col">Grandeur</th><th scope="col">Juste avant</th><th scope="col">Juste après</th></tr></thead><tbody>
         <tr><th scope="row" data-tex="\vec v_1"></th><td id="v1-before"></td><td id="v1-after"></td></tr>
         <tr><th scope="row" data-tex="\vec v_2"></th><td id="v2-before"></td><td id="v2-after"></td></tr>
+        <tr id="ensemble-speed-row" hidden><th scope="row" data-tex="\vec V_C"></th><td id="VC-before"></td><td id="VC-after"></td></tr>
+        <tr id="ensemble-rotation-row" hidden><th scope="row" data-tex="\omega"></th><td id="omega-before"></td><td id="omega-after"></td></tr>
         <tr><th scope="row" data-tex="\vec P"></th><td id="P-before"></td><td id="P-after"></td></tr>
         <tr><th scope="row" data-tex="K"></th><td id="K-before"></td><td id="K-after"></td></tr>
       </tbody></table></div>

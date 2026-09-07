@@ -53,6 +53,10 @@ canvas { display: block; width: 100%; height: 100%; }
 .phys-app .mass-handle:focus-visible { outline-color: var(--accent); outline-offset: 2px; }
 .phys-app .mass-handle[data-dragging="true"] { cursor: grabbing; border-color: var(--accent); }
 .position-hint { margin: 0; padding: .5rem 1rem .75rem; }
+.period-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; padding: .5rem 1rem .25rem; font-size: var(--text-ui); }
+.period-info[hidden] { display: none; }
+.period-value { display: inline-flex; align-items: baseline; gap: .2rem; white-space: nowrap; font-size: var(--text-value); }
+#period-note { flex-basis: 100%; }
 .plot-label { position: absolute; white-space: nowrap; font-size: var(--text-formula); transform: translate(-50%, -50%); }
 .plot-label.tick { font-size: var(--text-tick); color: var(--muted); }
 .time-badge { position: absolute; display: flex; gap: .25rem; align-items: baseline; }
@@ -497,6 +501,23 @@ canvas { display: block; width: 100%; height: 100%; }
 const EnergyModels = (() => {
   'use strict';
   const G = 6.67430e-11;
+  const oscillatorPotential = (p, x) => .5 * p.k * x * x + .25 * (p.alpha || 0) * x ** 4;
+  // Stable positive root of U(A)=E, including the harmonic limit alpha=0.
+  const oscillatorAmplitude = (p, E) => Math.sqrt(4 * Math.max(0, E) / (p.k + Math.sqrt(p.k ** 2 + 4 * (p.alpha || 0) * Math.max(0, E))));
+  function oscillatorPeriod(p, E = oscillatorPotential(p, p.x0) + .5 * p.m * p.v0 ** 2) {
+    // Conservative period at energy E. Substituting x=A*sin(theta) removes
+    // the turning-point singularity in 4*sqrt(m/2)*integral dx/sqrt(E-U).
+    // T = 4*sqrt(m)*integral_0^(pi/2) [k+alpha*A^2*(1+sin^2(theta))/2]^-1/2 dtheta.
+    // At rest this returns the small-amplitude limit, not an observed cycle.
+    const alpha = p.alpha || 0;
+    if (![p.m, p.k, alpha, E].every(Number.isFinite) || p.m <= 0 || p.k <= 0 || alpha < 0 || E < 0) throw new Error('Paramètres de période non valides.');
+    if (alpha === 0 || E === 0) return 2 * Math.PI * Math.sqrt(p.m / p.k);
+    const A = oscillatorAmplitude(p, E), b = .5 * alpha * A * A, n = 64, h = Math.PI / (2 * n);
+    const integrand = theta => 1 / Math.sqrt(p.k + b * (1 + Math.sin(theta) ** 2));
+    let sum = integrand(0) + integrand(Math.PI / 2);
+    for (let i = 1; i < n; i++) sum += (i % 2 ? 4 : 2) * integrand(i * h);
+    return 4 * Math.sqrt(p.m) * h * sum / 3;
+  }
   function oscillator(p, t) {
     const omega = Math.sqrt(p.k / p.m);
     const x = p.x0 * Math.cos(omega * t) + p.v0 / omega * Math.sin(omega * t);
@@ -505,12 +526,12 @@ const EnergyModels = (() => {
   }
   function oscillatorState(p, y, t) {
     const [x, v, D] = y;
-    const K = .5 * p.m * v * v, U = .5 * p.k * x * x;
+    const K = .5 * p.m * v * v, U = oscillatorPotential(p, x);
     return {t, y, x, v, K, U, D, E: K + U, parts: [K, U]};
   }
   function oscillatorRhs(p, y) {
     const [x, v] = y, gamma = p.gamma || 0;
-    return [v, -p.k / p.m * x - gamma * v, gamma * p.m * v * v];
+    return [v, -(p.k * x + (p.alpha || 0) * x ** 3) / p.m - gamma * v, gamma * p.m * v * v];
   }
   function simplePendulum(p, y, t) {
     const [theta, omega, D = 0] = y;
@@ -577,11 +598,11 @@ const EnergyModels = (() => {
       for (let i = 0; i <= count; i++) samples.push(oscillator(p, i / 60));
       return {samples, at: t => oscillator(p, t), maxError: 0};
     }
-    const evaluate = {oscillator: oscillatorState, 'simple-pendulum': simplePendulum, gravity, pendulum}[model];
-    const derivative = {oscillator: oscillatorRhs, 'simple-pendulum': simplePendulumRhs, gravity: gravityRhs, pendulum: rhs}[model];
+    const evaluate = {oscillator: oscillatorState, anharmonic: oscillatorState, 'simple-pendulum': simplePendulum, gravity, pendulum}[model];
+    const derivative = {oscillator: oscillatorRhs, anharmonic: oscillatorRhs, 'simple-pendulum': simplePendulumRhs, gravity: gravityRhs, pendulum: rhs}[model];
     const phi = (p.phi0 || 0) * Math.PI / 180;
     const orbitalSpeed = model === 'gravity' ? p.speedRatio * Math.sqrt(G * (p.m1 + p.m2) / p.r0) : 0;
-    let y = model === 'oscillator' ? [p.x0, p.v0, 0]
+    let y = ['oscillator', 'anharmonic'].includes(model) ? [p.x0, p.v0, 0]
       : model === 'simple-pendulum' ? [p.theta0 * Math.PI / 180, p.omega0, 0]
       : model === 'gravity' ? [p.r0 * Math.cos(phi), p.r0 * Math.sin(phi), -orbitalSpeed * Math.sin(phi), orbitalSpeed * Math.cos(phi)]
       : [p.theta1 * Math.PI / 180, p.theta2 * Math.PI / 180, p.omega1, p.omega2, 0];
@@ -622,7 +643,7 @@ const EnergyModels = (() => {
       return evaluate(p, advance(base.y, bounded - base.t), bounded);
     }};
   }
-  return {G, oscillator, oscillatorState, oscillatorRhs, simplePendulum, simplePendulumRhs, gravity, gravityRhs, rhs, step, pendulum, simulate};
+  return {G, oscillatorPotential, oscillatorAmplitude, oscillatorPeriod, oscillator, oscillatorState, oscillatorRhs, simplePendulum, simplePendulumRhs, gravity, gravityRhs, rhs, step, pendulum, simulate};
 })();
 
 // A projected helix: fixed turn count, smoothly changing pitch, straight leads.
@@ -649,9 +670,11 @@ function springColor(length, equilibriumLength) {
 
 // One fixed scale per experiment. The energy envelope leaves room for the arrow.
 // A fixed drag view may crop the future trajectory; retain a nonzero scale then.
-function oscillatorVelocityArrow(x, velocity, amplitude, maxSpeed, center, pixelsPerMetre, width, y) {
+function oscillatorVelocityArrow(x, velocity, amplitude, maxSpeed, center, pixelsPerMetre, width, y, anharmonic = false) {
   const radius = Math.max(0, Math.min(center - 12, width - 12 - center));
-  const maxLength = Math.min(90, Math.sqrt(Math.max((radius * .2) ** 2, radius ** 2 - (amplitude * pixelsPerMetre) ** 2)));
+  const maxLength = anharmonic
+    ? Math.min(90, Math.max(5, radius - amplitude * pixelsPerMetre))
+    : Math.min(90, Math.sqrt(Math.max((radius * .2) ** 2, radius ** 2 - (amplitude * pixelsPerMetre) ** 2)));
   const delta = maxSpeed > 0 ? velocity / maxSpeed * maxLength : 0;
   const start = center + x * pixelsPerMetre, end = start + delta;
   const head = Math.min(8, Math.abs(delta) * .45), direction = Math.sign(delta);
@@ -759,7 +782,7 @@ async function startEnergyApp() {
           tex`K=\frac12m_1\lvert\vec v_1\rvert^2+\frac12m_2\lvert\vec v_2\rvert^2`,
           tex`E=K+U=\mathrm{constante}`, tex`v_{\mathrm{circ}}=\sqrt{\frac{G(m_1+m_2)}{r_0}}`,
           tex`G=6.67430\times10^{-11}\,\mathrm{m^3\,kg^{-1}\,s^{-2}}`],
-        reference: 'Masses ponctuelles, sans collision ni frottement ; leur taille dessinée est symbolique. Le centre de masse est immobile. L’orientation initiale est mesurée depuis l’horizontale. La vitesse relative initiale est perpendiculaire à la séparation. Le potentiel appartient à la paire et n’est compté qu’une fois. Les facteurs d’échelle des masses et des énergies sont indiqués dans les unités.',
+        reference: 'Masses ponctuelles, sans collision ni frottement ; leur taille dessinée est symbolique. C désigne le centre de masse, ici immobile. L’orientation initiale est mesurée depuis l’horizontale. La vitesse relative initiale est perpendiculaire à la séparation. Le potentiel appartient à la paire et n’est compté qu’une fois. Les facteurs d’échelle des masses et des énergies sont indiqués dans les unités.',
       },
       pendulum: {
         title: 'Pendule double',
@@ -787,7 +810,22 @@ async function startEnergyApp() {
         reference: 'Tiges rigides, sans masse, pivot fixe. Les angles sont mesurés depuis la verticale descendante. Pour chaque masse, le potentiel est nul à sa hauteur minimale, lorsque les deux tiges sont verticales vers le bas.',
       },
     };
+    DEFINITIONS.anharmonic = {
+      ...DEFINITIONS.oscillator,
+      title: 'Oscillateur anharmonique',
+      note: 'Un ressort qui se raidit avec l’allongement : la force contient un terme cubique. La période dépend de l’amplitude, contrairement au cas harmonique.',
+      defaults: {...DEFINITIONS.oscillator.defaults, alpha: 4},
+      fields: [...DEFINITIONS.oscillator.fields.slice(0, 2),
+        ['alpha', 'Terme anharmonique', tex`\alpha`, 0, 20, .25, tex`\mathrm{N\,m^{-3}}`],
+        ...DEFINITIONS.oscillator.fields.slice(2)],
+      examples: [['Oscillations anharmoniques', {}], ['Anharmonicité forte', {alpha: 16}],
+        ['Passage par l’équilibre', {x0: 0, v0: 2}], ['Limite harmonique', {alpha: 0}]],
+      equations: [tex`U(x)=\frac12kx^2+\frac14\alpha x^4`, tex`K=\frac12mv_x^2`,
+        tex`F_x=-kx-\alpha x^3`, tex`m\ddot x+kx+\alpha x^3=0`, tex`E=K+U=\mathrm{constante}`],
+      reference: 'Mouvement horizontal, potentiel nul à l’équilibre. Le coefficient positif α rend le ressort plus raide loin de l’équilibre ; α = 0 retrouve le modèle harmonique. La courbe est un potentiel, pas la forme d’une piste.',
+    };
     const state = {model: 'oscillator', p: {}, t: 0, duration: 30, playing: false, simulation: null, last: null, frame: 0, dirty: false, readoutTime: -1};
+    const isOscillator = () => ['oscillator', 'anharmonic'].includes(state.model);
     Object.assign(state, {drag: null, initialGeometry: null, sceneGeometry: null, massPositions: []});
     const glyphs = new Map(), units = new Map();
     function energyValue(value) { return value / (DEFINITIONS[state.model].energyScale || 1); }
@@ -905,8 +943,8 @@ async function startEnergyApp() {
       $('example-select').replaceChildren(...definition.examples.map(([label], i) => new Option(label, String(i))));
       const custom = new Option('Réglage personnalisé', 'custom'); custom.disabled = true; $('example-select').append(custom);
       $('detail-row').hidden = !['pendulum', 'gravity'].includes(state.model);
-      $('trail-row').hidden = state.model === 'oscillator';
-      $('velocity-row').hidden = !['oscillator', 'gravity'].includes(state.model);
+      $('trail-row').hidden = isOscillator();
+      $('velocity-row').hidden = !(isOscillator() || state.model === 'gravity');
       $('velocity-label').textContent = state.model === 'gravity' ? 'Vitesses instantanées' : 'Vitesse instantanée';
       math($('velocity-symbol'), state.model === 'gravity' ? tex`\vec v_1(t),\;\vec v_2(t)` : tex`\vec v(t)`);
       $('position-badge').hidden = state.model === 'pendulum';
@@ -930,7 +968,9 @@ async function startEnergyApp() {
         : 'Système idéal, sans frottement. Les échanges modifient la répartition de l’énergie, pas son total.';
       let equations = definition.equations;
       if (on) {
-        equations = state.model === 'oscillator'
+        equations = state.model === 'anharmonic'
+          ? [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`m\ddot x+m\gamma\dot x+kx+\alpha x^3=0`]
+          : state.model === 'oscillator'
           ? [tex`U=\frac12 kx^2,\quad K=\frac12 mv_x^2`, tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot x+\gamma\dot x+\frac{k}{m}x=0`]
           : state.model === 'simple-pendulum'
           ? [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot\theta+\gamma\dot\theta+\frac{g}{\ell}\sin\theta=0`]
@@ -961,6 +1001,16 @@ async function startEnergyApp() {
       // experiment once on release so mouse/touch input stays responsive.
       state.simulation = EnergyModels.simulate(state.model, state.p, previewOnly ? 0 : state.duration);
       const initial = state.simulation.samples[0];
+      $('period-info').hidden = !isOscillator();
+      if (isOscillator()) {
+        const damped = state.p.gamma > 0, resting = initial.E === 0;
+        number($('period-readout'), EnergyModels.oscillatorPeriod(state.p, initial.E), 3, tex`\mathrm s`);
+        math($('period-symbol'), damped ? tex`T_{\mathrm{ref}}=` : 'T=');
+        $('period-label').textContent = damped ? 'Période de référence' : 'Période d’oscillation';
+        $('period-note').textContent = (damped ? 'Sans frottements, pour l’amplitude initiale. ' : '')
+          + (resting ? 'Masse au repos : limite des petites oscillations.' : state.model === 'anharmonic' && !damped ? 'Calculée pour l’amplitude initiale.' : '');
+        $('period-note').hidden = !$('period-note').textContent;
+      }
       if (state.model === 'gravity') {
         state.gravityRange = state.simulation.samples.reduce((range, s) => ({
           min: Math.min(range.min, s.U), max: Math.max(range.max, s.K), radius: Math.max(range.radius, s.r),
@@ -1041,23 +1091,23 @@ async function startEnergyApp() {
     function drawOscillator(sample) {
       const {ctx, w, h} = surface('scene-canvas'), p = state.p;
       const showVelocity = $('velocity-toggle').checked;
-      const initial = state.simulation.samples[0], A = Math.sqrt(2 * initial.E / p.k);
-      const initialRange = Math.max(2.15, A * 1.12);
+      const initial = state.simulation.samples[0], A = EnergyModels.oscillatorAmplitude(p, initial.E);
+      const initialRange = Math.max(state.model === 'anharmonic' ? .6 : 2.15, A * 1.12);
       const {range} = sceneGeometry(w, h, {range: initialRange});
-      const yMax = Math.max(.1, initial.E * 1.4, .55 * p.k * range ** 2);
+      const yMax = Math.max(.1, initial.E * 1.4, 1.1 * EnergyModels.oscillatorPotential(p, range));
       const left = 44, right = w - 28, top = 70, bottom = (h - (showVelocity ? 60 : 0)) * .65;
       const X = x => (left + right) / 2 + x / range * (right - left) / 2;
       const Y = u => bottom - u / yMax * (bottom - top);
       line(ctx, [[left, bottom], [right, bottom]], COLORS.grid, 1);
       line(ctx, [[X(0), top], [X(0), bottom]], COLORS.grid, 1);
       const curve = [];
-      for (let i = 0; i <= 120; i++) { const x = -range + 2 * range * i / 120; curve.push([X(x), Y(.5 * p.k * x * x)]); }
+      for (let i = 0; i <= 120; i++) { const x = -range + 2 * range * i / 120; curve.push([X(x), Y(EnergyModels.oscillatorPotential(p, x))]); }
       line(ctx, curve, COLORS.U, 2);
       line(ctx, [[left, Y(sample.E)], [right, Y(sample.E)]], COLORS.E, 1.5, [5, 4]);
       line(ctx, [[X(sample.x), bottom], [X(sample.x), Y(sample.U)]], COLORS.U, 4);
       line(ctx, [[X(sample.x), Y(sample.U)], [X(sample.x), Y(sample.E)]], COLORS.K, 4);
       dot(ctx, X(sample.x), Y(sample.U), 5, COLORS.ink);
-      label('scene-labels', 'potential', tex`U(x)=\tfrac12 kx^2`, (left + right) / 2, 54, COLORS.U);
+      label('scene-labels', 'potential', state.model === 'anharmonic' ? tex`U(x)=\tfrac12 kx^2+\tfrac14\alpha x^4` : tex`U(x)=\tfrac12 kx^2`, (left + right) / 2, 54, COLORS.U);
       label('scene-labels', 'energy', p.gamma > 0 ? 'E(t)' : 'E', right - 8, Y(sample.E) - 13, COLORS.E);
       label('scene-labels', 'zero', '0', X(0), bottom + 18, COLORS.muted, true);
       if (A > 1e-8) {
@@ -1075,7 +1125,7 @@ async function startEnergyApp() {
       label('scene-labels', 'mass', 'm', massX, rail - 29, COLORS.K);
       if (showVelocity) {
         const arrow = oscillatorVelocityArrow(sample.x, sample.v, A, Math.sqrt(2 * initial.E / p.m),
-          X(0), (right - left) / (2 * range), w, rail - 50);
+          X(0), (right - left) / (2 * range), w, rail - 50, state.model === 'anharmonic');
         // A light guide associates the translated vector with the moving mass.
         line(ctx, [[massX, rail - 40], [massX, arrow.y]], COLORS.grid, 1, [2, 3]);
         if (!arrow.zero && Math.abs(arrow.delta) >= .1) {
@@ -1230,8 +1280,9 @@ async function startEnergyApp() {
       for (let i = 0; i <= 4; i++) {
         const e = r.ymin + (r.ymax - r.ymin) * i / 4;
         line(ctx, [[r.left, Y(e)], [r.right, Y(e)]], COLORS.grid, 1);
-        label('history-labels', `y${i}`, energyValue(e).toFixed(energyValue(r.ymax - r.ymin) < 1 ? 2 : 1), r.left - 25, Y(e), COLORS.muted, true);
+        if (Math.abs(Y(e) - Y(0)) >= 22) label('history-labels', `y${i}`, energyValue(e).toFixed(energyValue(r.ymax - r.ymin) < 1 ? 2 : 1), r.left - 25, Y(e), COLORS.muted, true);
       }
+      label('history-labels', 'y-zero', '0', r.left - 25, Y(0), COLORS.muted, true);
       label('history-labels', 'xunit', tex`t\,[\mathrm s]`, (r.left + r.right) / 2, h - 10);
       label('history-labels', 'yunit', `E\\,[${energyUnit()}]`, state.model === 'gravity' ? 98 : 36, 18);
       if (state.model === 'gravity') line(ctx, [[r.left,Y(0)], [r.right,Y(0)]], COLORS.muted, 1, [4, 4]);
@@ -1267,7 +1318,7 @@ async function startEnergyApp() {
       if (!state.playing || Math.abs(state.t - state.readoutTime) >= 1 / 15) {
         state.readoutTime = state.t;
         number($('time-readout'), state.t, 2, tex`\mathrm s`); number($('scene-time'), state.t, 2, tex`\mathrm s`);
-        if (state.model === 'oscillator') number($('position-readout'), sample.x, 2, tex`\mathrm m`);
+        if (isOscillator()) number($('position-readout'), sample.x, 2, tex`\mathrm m`);
         if (state.model === 'simple-pendulum') number($('position-readout'), Math.atan2(Math.sin(sample.theta), Math.cos(sample.theta)) * 180 / Math.PI, 2, tex`{}^\circ`);
         if (state.model === 'gravity') number($('position-readout'), sample.r, 2, tex`\mathrm m`);
         number($('kinetic-readout'), energyValue(sample.K), 3, energyReadoutUnit());
@@ -1299,12 +1350,12 @@ async function startEnergyApp() {
       }
       $('energy-stack').style.height = `${signed ? 100 : E0 > 1e-12 ? Math.min(100, 100 * budget / E0) : 0}%`;
       const scene = $('scene'); scene.setAttribute('aria-label', `${DEFINITIONS[state.model].title}. Instant ${state.t.toFixed(2)} s ; énergie cinétique ${sample.K.toFixed(3)} J ; énergie potentielle ${sample.U.toFixed(3)} J ; énergie dissipée ${sample.D.toFixed(3)} J.`);
-      scene.dataset.velocity = String(state.model === 'oscillator' && $('velocity-toggle').checked);
+      scene.dataset.velocity = String(isOscillator() && $('velocity-toggle').checked);
       if (scene.dataset.velocity === 'true') scene.setAttribute('aria-label', scene.getAttribute('aria-label') + ` Vitesse horizontale ${sample.v.toFixed(3)} m/s.`);
       if (state.model === 'gravity' && $('velocity-toggle').checked) scene.setAttribute('aria-label', scene.getAttribute('aria-label') +
         ` Vitesses dans le référentiel du centre de masse : premier corps (${sample.vx1.toFixed(3)}, ${sample.vz1.toFixed(3)}) m/s ; deuxième corps (${sample.vx2.toFixed(3)}, ${sample.vz2.toFixed(3)}) m/s.`);
       hideLabels('scene-labels');
-      if (state.model === 'oscillator') drawOscillator(sample);
+      if (isOscillator()) drawOscillator(sample);
       else if (state.model === 'simple-pendulum') drawSimplePendulum(sample);
       else if (state.model === 'gravity') drawGravity(sample);
       else drawPendulum(sample);
@@ -1331,9 +1382,9 @@ async function startEnergyApp() {
         const name = state.massPositions.length === 1 ? 'Masse' : i === 0 ? 'Première masse' : 'Deuxième masse';
         handle.setAttribute('aria-label', name + ' : faire glisser pour choisir la position initiale, ou utiliser les touches fléchées.');
       }
-      $('initial-position-hint').textContent = editable
+      $('initial-position-hint').textContent = (state.model === 'gravity' ? 'C représente le centre de masse. ' : '') + (editable
         ? (state.model === 'gravity' ? 'Avant de lire, faites glisser une masse : séparation et orientation changent autour du centre de masse.' : 'Avant de lire, faites glisser la masse ou les masses pour choisir leur position initiale.')
-        : 'Recommencer permet de déplacer les masses à leur position initiale.';
+        : 'Recommencer permet de déplacer les masses à leur position initiale.');
     }
     function syncInitialParameters() {
       for (const [key, , , , , , unit, displayScale = 1] of DEFINITIONS[state.model].fields) {
@@ -1347,7 +1398,7 @@ async function startEnergyApp() {
       state.p[key] = Number(Math.max(min, Math.min(max, snapped)).toFixed(8));
     }
     function moveInitialMass(index, screenX, screenY, geometry) {
-      if (state.model === 'oscillator') {
+      if (isOscillator()) {
         const left = 44, right = geometry.w - 28;
         initialParameter('x0', (screenX - (left + right) / 2) * 2 * geometry.range / (right - left));
       } else {
@@ -1424,7 +1475,11 @@ async function startEnergyApp() {
         const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[event.key];
         if (!direction || !canEditInitialPosition() || state.drag) return;
         event.preventDefault();
-        const point = state.massPositions[index], step = event.shiftKey ? 15 : 5;
+        const point = state.massPositions[index];
+        let step = event.shiftKey ? 15 : 5;
+        // At a close zoom, five pixels can be less than half a slider step.
+        // A keyboard action must still change the selected initial position.
+        if (isOscillator()) step = Math.max(step, .05 * (state.sceneGeometry.w - 72) / (2 * state.sceneGeometry.range) * (event.shiftKey ? 3 : 1));
         state.initialGeometry = state.sceneGeometry;
         moveInitialMass(index, point[0] + direction[0]*step, point[1] + direction[1]*step, state.sceneGeometry); rebuild();
       });
@@ -1499,6 +1554,7 @@ async function startEnergyApp() {
         <label class="field-label" for="model-select">Système</label>
         <select id="model-select">
           <option value="oscillator">Oscillateur harmonique</option>
+          <option value="anharmonic">Oscillateur anharmonique</option>
           <option value="simple-pendulum">Pendule simple</option>
           <option value="pendulum">Pendule double</option>
           <option value="gravity">Deux corps gravitationnels</option>
@@ -1560,6 +1616,11 @@ async function startEnergyApp() {
             <button id="mass-handle-1" class="mass-handle" type="button" aria-label="Déplacer la deuxième masse" aria-describedby="initial-position-hint" hidden></button>
             <div class="time-badge"><span data-tex="t="></span><span id="scene-time"></span></div>
             <div id="position-badge"><span id="position-symbol" data-tex="x="></span><span id="position-readout"></span></div>
+          </div>
+          <div id="period-info" class="period-info" hidden>
+            <span id="period-label">Période d’oscillation</span>
+            <span class="period-value"><span id="period-symbol" data-tex="T="></span><span id="period-readout"></span></span>
+            <span id="period-note" class="microcopy" hidden></span>
           </div>
           <p id="initial-position-hint" class="microcopy position-hint">Avant de lire, faites glisser les masses pour choisir leur position initiale.</p>
         </section>
