@@ -19,6 +19,7 @@ APPS = {
     "potentiel_force_webapp_fr": ("potential", "potentiel_force_webapp_fr_source"),
     "moment_cinetique_webapp_fr": ("angular", "moment_cinetique_webapp_fr_source"),
     "collisions_webapp_fr": ("collisions", "collisions_webapp_fr_source"),
+    "poulies_webapp_fr": ("pulleys", "poulies_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 
@@ -26,6 +27,10 @@ THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 def build(name, source, archive_root, app_kind):
     files = {str(path.relative_to(source)): path.read_bytes()
              for path in sorted(source.rglob("*")) if path.is_file()}
+    # A local source folder can also contain its generated standalone output.
+    # Do not recursively bundle the generated artifacts inside the source ZIP.
+    files.pop(f"{name}.html", None)
+    files.pop(f"{name}.zip", None)
     html = files["index.html"].decode("utf-8")
     if THEME_LINK not in html:
         html = html.replace('<link rel="stylesheet" href="./style.css" />',

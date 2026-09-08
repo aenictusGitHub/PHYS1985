@@ -11,6 +11,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - [Énergie potentielle et force](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html)
 - [Moment cinétique](https://aenictusgithub.github.io/PHYS1985/moment_cinetique_webapp_fr.html)
 - [Collisions](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html)
+- [Poulies](https://aenictusgithub.github.io/PHYS1985/poulies_webapp_fr.html)
 
 ## QR codes
 
@@ -38,6 +39,12 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 
 [QR code PNG](qr-codes/collisions.png) · [QR code SVG](qr-codes/collisions.svg).
 
+### Poulies
+
+[![QR code vers Poulies](qr-codes/poulies.png)](https://aenictusgithub.github.io/PHYS1985/poulies_webapp_fr.html)
+
+[QR code PNG](qr-codes/poulies.png) · [QR code SVG](qr-codes/poulies.svg).
+
 ## Fichiers
 
 - `cinematique_2d_webapp_fr.html` et `cinematique_3d_webapp_fr.html` : versions autonomes prêtes à ouvrir ;
@@ -48,6 +55,7 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - `potentiel_force_webapp_fr.html` et `potentiel_force_webapp_fr.zip` : animation autonome reliant potentiel et force, et archive de ses sources ;
 - `moment_cinetique_webapp_fr.html` et `moment_cinetique_webapp_fr.zip` : animation autonome sur le moment cinétique autour d’un axe fixe, et archive de ses sources ;
 - `collisions_webapp_fr.html` et `collisions_webapp_fr.zip` : animation autonome sur les chocs en 1D et 2D, et archive de ses sources et tests ;
+- `poulies_webapp_fr.html` et `poulies_webapp_fr.zip` : animation autonome sur les poulies et archive de ses sources et tests ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
@@ -55,11 +63,11 @@ Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/Ma
 
 ## Présentation commune
 
-Les sept applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
+Les applications et l’accueil partagent le thème `assets/phys1985-theme.css` : mêmes tailles de texte, de formules et de valeurs numériques, mêmes commandes et même palette scientifique. Le thème est intégré dans chaque HTML autonome et inclus dans chaque archive source; aucune connexion n’est nécessaire pour ouvrir les animations.
 
 Énergie mécanique, Moment cinétique et Collisions utilisent le même relief pour leurs corps sphériques : dégradé radial, reflet supérieur gauche et ombre légère. Les masses sont bleues ou vert clair ; la coquille rétractable est gris perle pour contraster avec sa vitesse bleue. Le relief est purement graphique et ne change pas les modèles physiques. Les marqueurs des graphes restent plats. `node tools/check_spheres.cjs` vérifie la cohérence des trois versions empaquetées.
 
-Pour reconstruire les sept applications à partir de leurs archives sources après une modification du thème :
+Pour reconstruire toutes les applications à partir de leurs archives sources après une modification du thème :
 
 ```sh
 python3 tools/build_apps.py
@@ -132,6 +140,17 @@ L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules ave
 
 L’archive source contient `check_physics.cjs` et `check_ui.cjs` : exécuter chacun avec Node.js depuis le dossier extrait. Vérifications de 218 configurations physiques et des commandes, du cadrage fixe, des flèches et des nombres LaTeX via un adaptateur, sans navigateur. Le test des commandes accepte `PHYS1985_MATHJAX_ROOT` pour le moteur MathJax réel.
 
+## Poulies
+
+- Poulie fixe, poulie mobile et palan réglable de deux à huit brins porteurs, avec une corde continue et rotation sans glissement.
+- Masse, hauteur de levage et vitesse de traction réglables ; déplacement manuel de la poignée ou de la charge, lecture et ralenti.
+- Affichage des tensions et forces, des déplacements, de l’effort et du poids ; graphes du travail fourni et de l’énergie potentielle gagnée.
+- Modèle idéal à vitesse constante : corde et poulies sans masse, sans frottement ; démarrage et arrêt négligés. L’effort diminue, mais la corde tirée s’allonge dans le même rapport : aucun gain de travail.
+
+L’archive source inclut les tests `check_physics.cjs` et `check_ui.cjs`, à exécuter avec Node.js. Ils vérifient notamment la conservation de la longueur de corde, les bilans et les interactions. La vidéo `Poulies.mp4` ayant inspiré l’app n’est pas redistribuée.
+
+`python3 tools/generate_pulleys_qr.py` (ReportLab et Pillow) régénère uniquement le QR code de Poulies au format commun.
+
 ## Mise à jour du 7 septembre 2026
 
 Les nouveaux oscillateur anharmonique et potentiel gravitationnel, les ajustements
@@ -145,10 +164,10 @@ vérifiée par `node tools/check_vertical_zeros.cjs`.
 Le prototype Frottements reste local et n’est pas inclus dans la publication.
 Tests des commandes de Collisions depuis le dépôt : `node tools/check_collisions.cjs`.
 
-Les sept QR codes partagent le même format : noir sur blanc, marge de cinq modules,
+Les QR codes partagent le même format : noir sur blanc, marge de cinq modules,
 SVG adaptatif à contours nets et PNG de 564 × 564 pixels. `node tools/format_qr.cjs`
 harmonise les trois derniers sans modifier leur matrice ni leur destination.
-`python3 tools/check_qr.py` (OpenCV) vérifie les sept destinations et l’accord SVG/PNG.
+`python3 tools/check_qr.py` (OpenCV) vérifie les destinations et l’accord SVG/PNG.
 
 ## Sauvegarde avant harmonisation
 

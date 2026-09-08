@@ -6,7 +6,7 @@ import cv2
 
 directory = Path(__file__).resolve().parent.parent / "qr-codes"
 for name in ["cinematique_2d", "cinematique_3d", "puissance_travail", "energie_mecanique",
-             "potentiel_force", "moment_cinetique", "collisions"]:
+             "potentiel_force", "moment_cinetique", "collisions", "poulies"]:
     image = cv2.imread(str(directory / f"{name}.png"))
     assert image is not None and image.shape == (564, 564, 3), name
     result, corners, _ = cv2.QRCodeDetector().detectAndDecode(image)
