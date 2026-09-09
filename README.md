@@ -168,7 +168,9 @@ L’archive source inclut les tests `check_physics.cjs` et `check_ui.cjs`, à ex
 - Barre homogène articulée en son centre, deux forces verticales : équilibres avec forces égales ou différentes, mise en rotation horaire ou antihoraire.
 - Intensités et distances au pivot réglables en direct ; points d’application déplaçables sur la barre à la souris ou au toucher, sans remise au repos pendant la lecture.
 - Moments notés `τ` et bilan `Στ = Iα` ; distinction entre équilibre statique et moment nul sur une barre déjà en mouvement.
-- Pivot idéal sans frottement. Les forces restent verticales ; leur moment varie lorsque la barre tourne. Le poids et la réaction passent par le pivot.
+- Moment total affiché dans la scène : ⊙ sortant du plan (antihoraire), ⊗ entrant dans le plan (horaire), avec sa valeur signée.
+- Pivot sans frottement par défaut ; option de frottement visqueux `τ_f = −bω`, réglable pendant la lecture sans remise au repos. Le moment de frottement est inclus dans le bilan et l’accélération ; aucun seuil statique n’est ajouté.
+- Les forces restent verticales ; leur moment varie lorsque la barre tourne. Le poids et la réaction passent par le pivot.
 
 L’archive inclut `check_physics.cjs` (2 000 bilans, sens de rotation et conservation d’énergie) et `check_ui.cjs` (commandes, glissement, formules et annotations avec MathJax réel en option). `python3 tools/generate_statics_qr.py` régénère son QR code au format commun.
 
