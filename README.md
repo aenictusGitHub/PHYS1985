@@ -1,6 +1,10 @@
-# PHYS1985 — Animations interactives de mécanique
+# PHYS1985 — Notes et animations interactives de mécanique
 
-Voici quelques animations interactives pour le cours PHYS1985 - Physique générale I (partie Concepts).
+Ressources pour le cours PHYS1985 - Physique générale I (partie Concepts).
+
+## Notes de cours
+
+- [Notes de cours 2026–2027 — version portable A4 (PDF, 83 pages)](https://aenictusgithub.github.io/PHYS1985/notes/Notes_2627_portable.pdf)
 
 ## Ouvrir les animations
 
@@ -47,6 +51,7 @@ Tous les QR codes ont la même taille d’affichage. Cliquez sur un code pour ou
 - `poulies_webapp_fr.html` et `poulies_webapp_fr.zip` : animation autonome sur les poulies et archive de ses sources et tests ;
 - `equilibres_statiques_webapp_fr.html` et `equilibres_statiques_webapp_fr.zip` : animation autonome sur l’équilibre et la rotation d’une barre, avec ses sources et tests ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
+- `notes/Notes_2627_portable.pdf` : notes de cours 2026–2027 au format A4 ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
 Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/MathJax-LICENSE.txt`.
