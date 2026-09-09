@@ -341,7 +341,16 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   font-weight: 700;
 }
 
-.viewport-toolbar { position: absolute; top: 1rem; right: 1rem; z-index: 2; }
+.viewport-toolbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
 .viewport-toolbar button {
   min-height: 2rem;
   padding: 0.35rem 0.65rem;
@@ -512,6 +521,40 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 #trail-duration-output {
   line-height: 1;
 }
+/* Osculating geometry uses the same physical scale as the trajectory. */
+.phys-app .curvature-details {
+  margin: 0.4rem 0 1rem 1.6rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid #268576;
+}
+.phys-app .curvature-details .microcopy {
+  margin: 0.5rem 0 0;
+}
+.phys-app .curvature-scientific {
+  display: inline-flex;
+  align-items: baseline;
+  margin-left: 0.15em;
+}
+.phys-app .curvature-scientific sup {
+  position: relative;
+  top: -0.5em;
+  font-size: 0.7em;
+}
+.phys-app .curvature-radius-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: #268576;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 3px;
+  padding: 0.1em 0.25em;
+  font-size: var(--text-ui, 1rem);
+  line-height: 1;
+}
+.phys-app .curvature-radius-label mjx-container { margin: 0 !important; }
+.phys-app .curvature-details[hidden],
+.phys-app .curvature-details [hidden],
+.phys-app .curvature-radius-label[hidden] { display: none !important; }
 
 </style>
   <style>
@@ -1028,16 +1071,28 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         </div>
 
         <label class="field-label compact" for="trail-duration">Traînée visible</label>
-        <input id="trail-duration" type="range" min="0.5" max="12" value="4" step="0.5" />
+        <input id="trail-duration" type="range" min="0.5" max="12" value="4" step="0.5" disabled />
         <div class="range-readout-row">
           <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
             <span id="trail-duration-output-digits" class="math-digits">4.0</span><span class="tex-math">\(\,\mathrm s\)</span>
           </output>
-          <label class="inline-check"><input id="full-trail" type="checkbox" /> Historique complet</label>
+          <label class="inline-check"><input id="full-trail" type="checkbox" checked /> Historique complet</label>
         </div>
 
         <label class="check-row solo-check">
-          <input id="projection-toggle" type="checkbox" checked />
+          <input id="osculating-toggle" type="checkbox" aria-controls="curvature-details" />
+          <span>Cercle osculateur et rayon <span class="tex-math">\(R_c\)</span></span>
+        </label>
+        <div id="curvature-details" class="curvature-details" hidden>
+          <output id="curvature-value" class="dynamic-math-output" aria-label="Rayon de courbure">
+            <span class="tex-math">\(R_c=\)</span><span id="curvature-digits" class="math-digits">0.00</span><span id="curvature-scientific" class="curvature-scientific" hidden><span class="tex-math">\(\times 10\)</span><sup id="curvature-exponent" class="math-digits"></sup></span><span class="tex-math">\( \,\mathrm m\)</span>
+          </output>
+          <p id="curvature-status" class="microcopy" hidden></p>
+          <p class="microcopy">Le cercle osculateur est le cercle qui épouse le mieux la courbe localement. Le rayon relie le mobile au centre du cercle. Le tracé garde l’échelle des positions, sans le facteur des vecteurs. En 3D, le cercle est dans le plan de la vitesse et de l’accélération centripète.</p>
+        </div>
+
+        <label class="check-row solo-check">
+          <input id="projection-toggle" type="checkbox" />
           <span>Afficher les projections orthogonales</span>
         </label>
       </section>
@@ -1070,11 +1125,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <div id="axis-ticks-z" class="axis-tick-layer" aria-hidden="true"></div>
 
         <div class="viewport-toolbar">
+          <button id="top-view" type="button">Vue du dessus</button>
           <button id="reset-view" type="button">Réinitialiser la vue</button>
         </div>
         <div class="time-badge" aria-label="Temps courant">
           <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
         </div>
+        <div id="radius-label" class="curvature-radius-label" aria-hidden="true" hidden><span class="tex-math">\(R_c\)</span></div>
         <div id="warning-badge" class="warning-badge" hidden></div>
       </div>
 
@@ -1096,7 +1153,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     tangential: '#b5688b',
     normal: '#268576',
     jerk: '#987125',
-    trail: [97, 120, 140],
+    trail: [137, 147, 157],
   });
 
   const PARAMETERS = Object.freeze({
@@ -1678,6 +1735,63 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     return jerkScales.get(item);
   }
 
+  // Physical geometry only: independent of camera and vector display scales.
+  function osculatingGeometry(data) {
+    const speed = norm(data.velocity);
+    if (!Number.isFinite(speed) || speed <= 1e-2) {
+      return { defined: false, reason: 'stationary' };
+    }
+    const tangent = scale(data.velocity, 1 / speed);
+    const normalAcceleration = sub(data.acceleration, scale(tangent, dot(data.acceleration, tangent)));
+    const normalMagnitude = norm(normalAcceleration);
+    // Suppress finite-difference roundoff at straight segments and inflections.
+    const tolerance = Math.max(1e-5, norm(data.acceleration) * 1e-7);
+    if (!Number.isFinite(normalMagnitude) || normalMagnitude <= tolerance) {
+      return { defined: false, reason: 'straight' };
+    }
+    const normal = scale(normalAcceleration, 1 / normalMagnitude);
+    const radius = speed * speed / normalMagnitude;
+    const center = add(data.position, scale(normal, radius));
+    if (!Number.isFinite(radius) || !Object.values(center).every(Number.isFinite)) {
+      return { defined: false, reason: 'unresolved' };
+    }
+    return { defined: true, radius, center, tangent, normal, position: data.position };
+  }
+
+  function osculatingPoint(circle, angle) {
+    // Anchored at the mobile: avoids center - radius cancellation for large radii.
+    return add(circle.position, add(
+      scale(circle.tangent, circle.radius * Math.sin(angle)),
+      scale(circle.normal, 2 * circle.radius * Math.sin(angle / 2) ** 2),
+    ));
+  }
+
+  function clipScreenSegment(a, b, bounds) {
+    if (![a?.x, a?.y, b?.x, b?.y].every(Number.isFinite)) return null;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    let first = 0;
+    let last = 1;
+    const edges = [
+      [-dx, a.x - bounds.left], [dx, bounds.right - a.x],
+      [-dy, a.y - bounds.top], [dy, bounds.bottom - a.y],
+    ];
+    for (const [p, q] of edges) {
+      if (p === 0) {
+        if (q < 0) return null;
+      } else {
+        const t = q / p;
+        if (p < 0) first = Math.max(first, t);
+        else last = Math.min(last, t);
+        if (first > last) return null;
+      }
+    }
+    return [
+      { x: a.x + first * dx, y: a.y + first * dy },
+      { x: a.x + last * dx, y: a.y + last * dy },
+    ];
+  }
+
   const viewport = document.getElementById('viewport');
   const loadingMessage = document.getElementById('loading-message');
   const canvas = document.createElement('canvas');
@@ -1693,8 +1807,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     loop: true,
     vectorScale: 1,
     trailDuration: 4,
-    fullTrail: false,
-    projections: true,
+    fullTrail: true,
+    projections: false,
   };
 
   const camera = {
@@ -1714,6 +1828,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     play: document.getElementById('play-button'),
     reset: document.getElementById('reset-button'),
     resetView: document.getElementById('reset-view'),
+    topView: document.getElementById('top-view'),
     speed: document.getElementById('speed-select'),
     timeSlider: document.getElementById('time-slider'),
     timeOutputDigits: document.getElementById('time-output-digits'),
@@ -1725,6 +1840,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     trailDurationOutputDigits: document.getElementById('trail-duration-output-digits'),
     fullTrail: document.getElementById('full-trail'),
     projections: document.getElementById('projection-toggle'),
+    osculating: document.getElementById('osculating-toggle'),
+    curvatureDetails: document.getElementById('curvature-details'),
+    curvatureValue: document.getElementById('curvature-value'),
+    curvatureDigits: document.getElementById('curvature-digits'),
+    curvatureScientific: document.getElementById('curvature-scientific'),
+    curvatureExponent: document.getElementById('curvature-exponent'),
+    curvatureStatus: document.getElementById('curvature-status'),
+    radiusLabel: document.getElementById('radius-label'),
     equations: document.getElementById('trajectory-equations'),
     vectorReadouts: document.getElementById('vector-readouts'),
     warning: document.getElementById('warning-badge'),
@@ -1947,8 +2070,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       cp * Math.cos(camera.yaw),
     ), camera.distance));
     const forward = normalize(sub(camera.target, cameraPosition));
-    let right = normalize(cross(forward, V(0, 1, 0)));
-    if (norm(right) < 1e-8) right = V(1, 0, 0);
+    // The yaw-defined horizontal axis remains continuous at both poles,
+    // where crossing the viewing direction with vertical would be singular.
+    const right = V(Math.cos(camera.yaw), 0, -Math.sin(camera.yaw));
     const up = normalize(cross(right, forward));
     const focal = 0.5 * viewportHeight / Math.tan(camera.fov / 2);
     return { cameraPosition, forward, right, up, focal };
@@ -2161,32 +2285,35 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
   }
 
-  function projectedSeparation(a, b, basis) {
-    const pa = projectWorld(a, basis);
-    const pb = projectWorld(b, basis);
-    if (!pa || !pb) return 0;
-    return Math.hypot(pb.x - pa.x, pb.y - pa.y);
+  function arrowMaterialColor(color, diffuse, specular = 0) {
+    const rgb = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16));
+    return 'rgb(' + rgb.map(value => Math.round(Math.min(255,
+      Math.max(0, value * diffuse + 255 * specular)))).join(',') + ')';
   }
 
   function drawDepthArrowMarker(p, color, towardCamera, radius) {
+    // Retain the dot/cross convention when the arrow is seen almost end-on.
+    // The cap is shaded, with no white border around the arrow.
     const r = Math.max(5.5, radius);
+    const gradient = ctx.createRadialGradient(p.x - r * 0.3, p.y - r * 0.35,
+      r * 0.08, p.x, p.y, r);
+    gradient.addColorStop(0, arrowMaterialColor(color, 1, 0.3));
+    gradient.addColorStop(0.4, color);
+    gradient.addColorStop(1, arrowMaterialColor(color, 0.55));
     ctx.save();
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
+    ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#fff';
-    ctx.stroke();
-    ctx.strokeStyle = '#fff';
-    ctx.fillStyle = '#fff';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.6;
     if (towardCamera) {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(2, 0.27 * r), 0, 2 * Math.PI);
+      ctx.arc(p.x, p.y, Math.max(1.5, 0.23 * r), 0, 2 * Math.PI);
       ctx.fill();
     } else {
-      const d = 0.4 * r;
+      const d = 0.34 * r;
       ctx.beginPath();
       ctx.moveTo(p.x - d, p.y - d);
       ctx.lineTo(p.x + d, p.y + d);
@@ -2197,87 +2324,114 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
   }
 
-  function drawArrow(originPhysical, vectorPhysical, lengthScale, color, basis) {
+  function buildArrowFaces(originPhysical, vectorPhysical, lengthScale, color, basis) {
     const originWorld = toWorld(originPhysical);
     const directionWorld = toWorld(scale(vectorPhysical, lengthScale));
     const shaftLength = norm(directionWorld);
-    if (!Number.isFinite(shaftLength) || shaftLength < 1e-7) return;
-
+    if (!Number.isFinite(shaftLength) || shaftLength < 1e-7) return [];
     const unit = scale(directionWorld, 1 / shaftLength);
     const shaftEndWorld = add(originWorld, directionWorld);
+    // Keep the previous endpoint convention and all physical/display scales.
     const headTipWorld = add(shaftEndWorld, scale(unit, ARROW.headLengthWorld));
-    const shaftMidWorld = add(originWorld, scale(directionWorld, 0.5));
-
-    let side = normalize(cross(unit, basis.forward));
-    if (norm(side) < 1e-7) side = { ...basis.right };
-
-    const shaftSide = scale(side, ARROW.shaftRadiusWorld);
-    const headSide = scale(side, ARROW.headRadiusWorld);
-
     const origin = projectWorld(originWorld, basis);
     const shaftEnd = projectWorld(shaftEndWorld, basis);
-    const headTip = projectWorld(headTipWorld, basis);
-    const headBasePlus = projectWorld(add(shaftEndWorld, headSide), basis);
-    const headBaseMinus = projectWorld(sub(shaftEndWorld, headSide), basis);
-    if (!origin || !shaftEnd || !headTip || !headBasePlus || !headBaseMinus) return;
+    const tip = projectWorld(headTipWorld, basis);
+    const mid = projectWorld(add(originWorld, scale(directionWorld, 0.5)), basis);
+    if (!origin || !shaftEnd || !tip || !mid) return [];
 
-    const shaftWidth = Math.max(
-      2,
-      projectedSeparation(
-        sub(shaftMidWorld, shaftSide),
-        add(shaftMidWorld, shaftSide),
-        basis,
-      ),
-    );
-    const projectedShaftLength = Math.hypot(shaftEnd.x - origin.x, shaftEnd.y - origin.y);
-    const projectedHeadRadius = 0.5 * Math.hypot(
-      headBasePlus.x - headBaseMinus.x,
-      headBasePlus.y - headBaseMinus.y,
-    );
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (projectedShaftLength > 0.4) {
-      ctx.beginPath();
-      ctx.moveTo(origin.x, origin.y);
-      ctx.lineTo(shaftEnd.x, shaftEnd.y);
-      ctx.lineWidth = shaftWidth + 3;
-      ctx.strokeStyle = 'rgba(255,255,255,0.80)';
-      ctx.stroke();
-      ctx.lineWidth = shaftWidth;
-      ctx.strokeStyle = color;
-      ctx.stroke();
+    const reference = Math.abs(unit.y) < 0.9 ? V(0, 1, 0) : V(1, 0, 0);
+    const side = normalize(cross(unit, reference));
+    const otherSide = normalize(cross(unit, side));
+    // Maintain legibility at distant zooms without changing axial lengths.
+    const shaftRadius = Math.max(ARROW.shaftRadiusWorld, 1.2 / mid.perspective);
+    const headRadius = Math.max(ARROW.headRadiusWorld,
+      shaftRadius * ARROW.headRadiusWorld / ARROW.shaftRadiusWorld,
+      3.6 / shaftEnd.perspective);
+    const segments = 24;
+    const radial = Array.from({ length: segments }, (_, i) => {
+      const angle = 2 * Math.PI * i / segments;
+      return add(scale(side, Math.cos(angle)), scale(otherSide, Math.sin(angle)));
+    });
+    const ring = (center, radius) => radial.map(n => add(center, scale(n, radius)));
+    const startRing = ring(originWorld, shaftRadius);
+    const shaftRing = ring(shaftEndWorld, shaftRadius);
+    const headRing = ring(shaftEndWorld, headRadius);
+    const light = normalize(add(add(scale(basis.right, -0.45),
+      scale(basis.up, 0.65)), scale(basis.forward, -0.8)));
+    const faces = [];
+    function face(vertices, normal, part) {
+      const center = scale(vertices.reduce((sum, p) => add(sum, p), V()), 1 / vertices.length);
+      const view = normalize(sub(basis.cameraPosition, center));
+      if (dot(normal, view) <= 1e-10) return;
+      const points = vertices.map(p => projectWorld(p, basis));
+      if (points.some(p => !p)) return;
+      const diffuse = 0.42 + 0.58 * Math.max(0, dot(normal, light));
+      const halfway = normalize(add(light, view));
+      const specular = 0.25 * Math.max(0, dot(normal, halfway)) ** 24;
+      faces.push({
+        kind: 'face', part, points, normal, vertices,
+        depth: points.reduce((sum, p) => sum + p.depth, 0) / points.length,
+        color: arrowMaterialColor(color, diffuse, specular),
+      });
     }
+    face(startRing, scale(unit, -1), 'tail');
+    for (let i = 0; i < segments; i += 1) {
+      const j = (i + 1) % segments;
+      const normal = normalize(add(radial[i], radial[j]));
+      face([startRing[i], startRing[j], shaftRing[j], shaftRing[i]], normal, 'shaft');
+      // Annular underside closes the cone around the cylindrical shaft.
+      face([shaftRing[i], shaftRing[j], headRing[j], headRing[i]], scale(unit, -1), 'shoulder');
+      const coneNormal = normalize(cross(sub(headRing[j], headRing[i]),
+        sub(headTipWorld, headRing[i])));
+      face([headRing[i], headRing[j], headTipWorld], coneNormal, 'head');
+    }
+    const projectedLength = Math.hypot(tip.x - origin.x, tip.y - origin.y);
+    const localView = normalize(sub(add(originWorld, scale(directionWorld, 0.5)),
+      basis.cameraPosition));
+    if (Math.abs(dot(unit, localView)) > 0.9975 || projectedLength < 1.5) {
+      const towardCamera = dot(unit, localView) < 0;
+      faces.push({ kind: 'depth-marker', depth: Math.min(origin.depth, tip.depth) - 0.01,
+        point: towardCamera ? tip : origin, color, towardCamera,
+        radius: Math.max(5.5, headRadius * shaftEnd.perspective) });
+    }
+    return faces;
+  }
 
-    const nearlyAlongView = Math.abs(dot(unit, basis.forward)) > 0.975;
-    const projectedHeadLength = Math.hypot(headTip.x - shaftEnd.x, headTip.y - shaftEnd.y);
-    if (nearlyAlongView || projectedHeadLength < 1.5) {
-      drawDepthArrowMarker(
-        headTip,
-        color,
-        dot(unit, basis.forward) < 0,
-        projectedHeadRadius,
-      );
-    } else {
+  function paintArrowFaces(faces) {
+    // Sort the faces of ALL selected vectors together, not one flat arrow at a time.
+    faces.sort((a, b) => b.depth - a.depth);
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.lineJoin = 'round';
+    for (const face of faces) {
+      if (face.kind === 'depth-marker') {
+        drawDepthArrowMarker(face.point, face.color, face.towardCamera, face.radius);
+        continue;
+      }
       ctx.beginPath();
-      ctx.moveTo(headTip.x, headTip.y);
-      ctx.lineTo(headBasePlus.x, headBasePlus.y);
-      ctx.lineTo(headBaseMinus.x, headBaseMinus.y);
+      ctx.moveTo(face.points[0].x, face.points[0].y);
+      for (const p of face.points.slice(1)) ctx.lineTo(p.x, p.y);
       ctx.closePath();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(255,255,255,0.82)';
-      ctx.stroke();
-      ctx.fillStyle = color;
+      ctx.fillStyle = face.color;
+      ctx.strokeStyle = face.color;
+      // Same-colour overlap covers subpixel seams between adjacent mesh faces.
+      ctx.lineWidth = 0.6;
       ctx.fill();
+      ctx.stroke();
     }
     ctx.restore();
+  }
+
+  function drawArrow(originPhysical, vectorPhysical, lengthScale, color, basis) {
+    paintArrowFaces(buildArrowFaces(originPhysical, vectorPhysical, lengthScale, color, basis));
   }
 
   function drawSelectedVectors(item, data, basis) {
     const selected = vectorSelection();
     const positionVector = data.position;
+    const faces = [];
+    const append = (origin, vector, factor, color) =>
+      faces.push(...buildArrowFaces(origin, vector, factor, color, basis));
 
     if (selected.position) {
       const positionLength = norm(positionVector);
@@ -2285,23 +2439,173 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       const displayedPosition = positionLength > 1e-9
         ? scale(positionVector, Math.max(0, positionLength - shortening) / positionLength)
         : V(0, 0, 0);
-      drawArrow(POSITION_VECTOR_ORIGIN, displayedPosition, 1, COLORS.position, basis);
+      append(POSITION_VECTOR_ORIGIN, displayedPosition, 1, COLORS.position);
     }
-    if (selected.acceleration) drawArrow(data.position, data.acceleration, item.scaleA * state.vectorScale, COLORS.acceleration, basis);
-    if (selected.normal && data.decompositionDefined) drawArrow(data.position, data.normal, item.scaleA * state.vectorScale, COLORS.normal, basis);
-    if (selected.tangential && data.decompositionDefined) drawArrow(data.position, data.tangential, item.scaleA * state.vectorScale, COLORS.tangential, basis);
-    if (selected.velocity) drawArrow(data.position, data.velocity, item.scaleV * state.vectorScale, COLORS.velocity, basis);
-    if (selected.jerk) drawArrow(data.position, data.jerk, jerkDisplayScale(item) * state.vectorScale, COLORS.jerk, basis);
+    if (selected.acceleration) append(data.position, data.acceleration, item.scaleA * state.vectorScale, COLORS.acceleration);
+    if (selected.normal && data.decompositionDefined) append(data.position, data.normal, item.scaleA * state.vectorScale, COLORS.normal);
+    if (selected.tangential && data.decompositionDefined) append(data.position, data.tangential, item.scaleA * state.vectorScale, COLORS.tangential);
+    if (selected.velocity) append(data.position, data.velocity, item.scaleV * state.vectorScale, COLORS.velocity);
+    if (selected.jerk) append(data.position, data.jerk, jerkDisplayScale(item) * state.vectorScale, COLORS.jerk);
+    paintArrowFaces(faces);
+  }
+
+  function drawOsculatingCircle(circle, basis) {
+    if (!circle) return;
+    const bounds = { left: 0, top: 0, right: viewportWidth, bottom: viewportHeight };
+    const halfX = viewportWidth / (2 * basis.focal);
+    const halfY = viewportHeight / (2 * basis.focal);
+    const planeNorms = [1, Math.hypot(1, halfX), Math.hypot(1, halfX),
+      Math.hypot(1, halfY), Math.hypot(1, halfY)];
+    const sample = (angle) => {
+      const physical = osculatingPoint(circle, angle);
+      const relative = sub(toWorld(physical), basis.cameraPosition);
+      const depth = dot(relative, basis.forward);
+      const x = dot(relative, basis.right);
+      const y = dot(relative, basis.up);
+      return {
+        projected: projectPhysical(physical, basis),
+        planes: [depth - 6, depth * halfX - x, depth * halfX + x,
+          depth * halfY - y, depth * halfY + y],
+      };
+    };
+    let last = null;
+    let nodes = 0;
+    const trace = (a, b, pa, pb, level) => {
+      // Sagitta bounds the distance from this arc to its chord in world space.
+      // Frustum culling prevents huge circles near inflections from wasting work
+      // or being joined across the camera's near plane.
+      const sagitta = 2 * circle.radius * Math.sin((b - a) / 4) ** 2;
+      if (pa.planes.some((d, i) => Math.max(d, pb.planes[i]) + sagitta * planeNorms[i] < 0)) {
+        last = null;
+        return;
+      }
+      if (++nodes > 8192) { last = null; return; }
+      const middle = (a + b) / 2;
+      const pm = sample(middle);
+      const p = pa.projected;
+      const q = pb.projected;
+      const m = pm.projected;
+      // Distance to the projected chord, not to its midpoint: perspective
+      // does not preserve the angular midpoint, even for an almost straight arc.
+      const lengthSquared = p && q ? (q.x - p.x) ** 2 + (q.y - p.y) ** 2 : 0;
+      const fraction = p && q && m && lengthSquared > 0
+        ? Math.max(0, Math.min(1, ((m.x - p.x) * (q.x - p.x) + (m.y - p.y) * (q.y - p.y)) / lengthSquared))
+        : 0;
+      const error = p && q && m
+        ? Math.hypot(m.x - p.x - fraction * (q.x - p.x), m.y - p.y - fraction * (q.y - p.y))
+        : Infinity;
+      if (error <= 0.5) {
+        const segment = clipScreenSegment(p, q, bounds);
+        if (!segment) { last = null; return; }
+        const [start, end] = segment;
+        if (!last || Math.hypot(start.x - last.x, start.y - last.y) > 0.01) ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        last = end;
+      } else if (level < 36) {
+        trace(a, middle, pa, pm, level + 1);
+        trace(middle, b, pm, pb, level + 1);
+      } else {
+        last = null; // Never draw an unresolved chord across the visible scene.
+      }
+    };
+    ctx.save();
+    ctx.strokeStyle = '#268576';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.8;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    for (let i = 0; i < 8; i += 1) {
+      const a = i * Math.PI / 4;
+      const b = (i + 1) * Math.PI / 4;
+      trace(a, b, sample(a), sample(b), 0);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Clip the radius in world space before perspective projection.
+    let start = toWorld(circle.position);
+    let end = toWorld(circle.center);
+    const startDepth = dot(sub(start, basis.cameraPosition), basis.forward);
+    const endDepth = dot(sub(end, basis.cameraPosition), basis.forward);
+    if (startDepth <= 6 && endDepth <= 6) return;
+    if (startDepth < 6) start = add(start, scale(sub(end, start), (6 - startDepth) / (endDepth - startDepth)));
+    if (endDepth < 6) end = add(start, scale(sub(end, start), (6 - startDepth) / (endDepth - startDepth)));
+    drawRadiusAnnotation(projectWorld(start, basis), projectWorld(end, basis), bounds, endDepth >= 6);
   }
 
   function drawScene(item, data) {
     ctx.clearRect(0, 0, viewportWidth, viewportHeight);
     const basis = cameraBasis();
     drawReferenceFrame(basis);
+    drawOsculatingCircle(updateCurvatureReadout(data), basis);
     drawTrail(item, basis);
     drawProjectionSystem(data.position, basis);
     drawSelectedVectors(item, data, basis);
     drawParticle(data.position, basis);
+  }
+
+  function updateCurvatureReadout(data) {
+    dom.radiusLabel.hidden = true;
+    dom.curvatureDetails.hidden = !dom.osculating.checked;
+    if (!dom.osculating.checked) return null;
+    const circle = osculatingGeometry(data);
+    dom.curvatureValue.hidden = !circle.defined;
+    dom.curvatureStatus.hidden = circle.defined;
+    if (!circle.defined) {
+      const messages = {
+        stationary: 'Vitesse quasi nulle : le cercle osculateur et son rayon sont indéfinis.',
+        straight: 'Courbure quasi nulle : le rayon tend vers l’infini ; aucun cercle fini n’est tracé.',
+        unresolved: 'Le rayon de courbure ne peut pas être résolu à cet instant.',
+      };
+      dom.curvatureStatus.textContent = messages[circle.reason];
+      return null;
+    }
+    const scientific = circle.radius >= 1e5 || circle.radius < 0.01;
+    dom.curvatureScientific.hidden = !scientific;
+    if (scientific) {
+      const [mantissa, exponent] = circle.radius.toExponential(2).split('e');
+      setMathDigits(dom.curvatureDigits, mantissa);
+      setMathDigits(dom.curvatureExponent, String(Number(exponent)));
+    } else {
+      setMathDigits(dom.curvatureDigits, circle.radius.toFixed(2));
+    }
+    dom.curvatureValue.setAttribute('aria-label', 'Rayon de courbure : ' + circle.radius.toPrecision(5) + ' mètres');
+    return circle;
+  }
+
+  function drawRadiusAnnotation(start, center, bounds, centerVisible = true) {
+    const segment = clipScreenSegment(start, center, bounds);
+    if (!segment) return;
+    const [a, b] = segment;
+    ctx.save();
+    ctx.strokeStyle = '#268576';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // A small cross marks the actual center, never an artificially clipped endpoint.
+    if (centerVisible && center.x > bounds.left + 5 && center.x < bounds.right - 5
+      && center.y > bounds.top + 5 && center.y < bounds.bottom - 5) {
+      ctx.beginPath();
+      ctx.moveTo(center.x - 4, center.y);
+      ctx.lineTo(center.x + 4, center.y);
+      ctx.moveTo(center.x, center.y - 4);
+      ctx.lineTo(center.x, center.y + 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 36) return;
+    const x = (a.x + b.x) / 2 - 14 * dy / length;
+    const y = (a.y + b.y) / 2 + 14 * dx / length;
+    if (x < bounds.left + 20 || x > bounds.right - 20 || y < bounds.top + 20 || y > bounds.bottom - 20) return;
+    dom.radiusLabel.hidden = false;
+    dom.radiusLabel.style.left = x + 'px';
+    dom.radiusLabel.style.top = y + 'px';
   }
 
   function updateReadouts(data) {
@@ -2442,7 +2746,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       camera.target = add(camera.target, translation);
     } else {
       camera.yaw -= dx * 0.006;
-      camera.pitch = Math.max(-1.18, Math.min(1.18, camera.pitch + dy * 0.006));
+      camera.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.pitch + dy * 0.006));
     }
     updateAndDraw();
   });
@@ -2473,6 +2777,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     resetCamera();
     updateAndDraw();
   });
+  dom.topView.addEventListener('click', () => {
+    camera.pitch = Math.PI / 2;
+    updateAndDraw();
+  });
   dom.speed.addEventListener('change', () => { state.playbackSpeed = Number(dom.speed.value); });
   dom.loop.addEventListener('change', () => { state.loop = dom.loop.checked; });
   dom.vectorScale.addEventListener('input', () => {
@@ -2490,6 +2798,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.trailDuration.disabled = state.fullTrail;
     updateAndDraw();
   });
+  dom.osculating.addEventListener('change', updateAndDraw);
   dom.projections.addEventListener('change', () => {
     state.projections = dom.projections.checked;
     updateAndDraw();
@@ -2548,6 +2857,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   async function initializeApplication() {
     dom.trajectory.value = state.trajectoryKey;
+    dom.fullTrail.checked = state.fullTrail;
+    dom.trailDuration.disabled = state.fullTrail;
+    dom.projections.checked = state.projections;
     configureTimelineForCurrentTrajectory();
     updateEquationPanel();
     resizeCanvas();

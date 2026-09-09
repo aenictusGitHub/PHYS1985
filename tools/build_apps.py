@@ -20,6 +20,8 @@ APPS = {
     "moment_cinetique_webapp_fr": ("angular", "moment_cinetique_webapp_fr_source"),
     "collisions_webapp_fr": ("collisions", "collisions_webapp_fr_source"),
     "poulies_webapp_fr": ("pulleys", "poulies_webapp_fr_source"),
+    "frottements_solides_webapp_fr": ("friction", "frottements_solides_webapp_fr_source"),
+    "equilibres_statiques_webapp_fr": ("statics", "equilibres_statiques_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 

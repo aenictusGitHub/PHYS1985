@@ -6,6 +6,11 @@ const zip=path.join(__dirname,'..','potentiel_force_webapp_fr.zip');
 const read=file=>execFileSync('unzip',['-p',zip,'potentiel_force_webapp_fr_source/'+file],{encoding:'utf8'});
 const source=read('app.js'),html=read('index.html');
 const models=vm.runInNewContext(source.split("if (typeof document")[0]+';PotentialModels');
+assert.equal(models.stability(1),'stable');
+assert.equal(models.stability(-1),'unstable');
+assert.equal(models.stability(0),'inconclusive','Zero curvature does not establish stability');
+assert.equal(models.stability(-0),'inconclusive');
+assert.throws(()=>models.stability(NaN));
 const near=(a,b,tol=1e-8)=>assert(Math.abs(a-b)<=tol,`${a} != ${b}`);
 for(const model of ['wells','pair','gravity']) {
   const d=models.definitions[model];
@@ -24,6 +29,12 @@ for(const model of ['wells','pair','gravity']) {
       const before=models.evaluate(model,eq.q-.001,energy,length),after=models.evaluate(model,eq.q+.001,energy,length);
       assert(eq.stable ? before.F>0&&after.F<0 : before.F<0&&after.F>0);
       assert.equal(s.curvature>0,eq.stable);
+      assert.equal(eq.stability,models.stability(s.curvature));
+      near(models.quadratic(s,s.position)/energy,s.U/energy,1e-12);
+      const offset=.03*length;
+      const quadraticLeft=models.quadratic(s,s.position-offset),quadraticRight=models.quadratic(s,s.position+offset);
+      near(quadraticLeft/energy,quadraticRight/energy,1e-12,'Horizontal tangent at equilibrium');
+      near((quadraticRight-s.U)/energy,.5*s.curvature*offset**2/energy,1e-12);
       if(model==='pair')near(s.U,-energy);
     }
   }
@@ -47,6 +58,9 @@ const argon=models.definitions.pair,eqArgon=models.equilibria('pair')[0].q;
 near(argon.length/1e-9,.3405,1e-12);near(argon.energy/1e-21,1.654,1e-12);
 near(models.evaluate('pair',eqArgon).position/1e-9,.3821983274493415,1e-12);
 near(models.evaluate('pair',eqArgon).U/argon.energy,-1,1e-12);
+const atomicEquilibrium=models.evaluate('pair',eqArgon),atomicOffset=.02*argon.length;
+near((models.quadratic(atomicEquilibrium,atomicEquilibrium.position+atomicOffset)-atomicEquilibrium.U)/argon.energy,
+  .5*atomicEquilibrium.curvature*atomicOffset**2/argon.energy,1e-12);
 for(const energy of [.5e-21,argon.energy,4e-21])for(const length of [.25e-9,argon.length,.5e-9]) {
   for(let i=0;i<=100;i++) {
     const q=argon.min+(argon.max-argon.min)*i/100,h=1e-5;
@@ -69,7 +83,8 @@ function canvasContext(id) {
       if(key==='beginPath')points=[];
       if(key==='moveTo'||key==='lineTo')points.push([...args]);
       if(key==='arc')circles.push([...args]);
-      if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth});
+      if(key==='setLineDash')target.dash=[...args[0]];
+      if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth,dash:target.dash});
     };
   }});plots.set(id,{context,strokes,circles});return context;
 }
@@ -119,6 +134,32 @@ const tick=t=>{const callbacks=[...frames.values()];frames.clear();callbacks.for
 const value=id=>parseFloat($(id).dataset.number);
 const forceArrows=()=>plots.get('stage-canvas').strokes.filter(s=>s.color==='#7758a6'&&s.width===2.5);
 const arrowLength=shaft=>Math.abs(shaft.points[1][0]-shaft.points[0][0]);
+const parabolas=kind=>plots.get(kind+'-canvas').strokes.filter(s=>s.color==='#2775b6'&&s.width===2.2);
+function checkParabola(stable) {
+  assert(!$('quadratic-legend').hidden && !$('quadratic-note').hidden);
+  assert.equal(parabolas('potential').length,1);
+  assert.equal(parabolas('force').length,0,'No approximation on the force curve');
+  const p=parabolas('potential')[0],center=plots.get('potential-canvas').circles.at(-1);
+  assert.equal(p.points.length,81);
+  assert.deepEqual([...p.dash],[6,4]);
+  near(p.points[40][0],center[0],1e-5);near(p.points[40][1],center[1],1e-5);
+  for (const i of [0,80]) assert(stable?p.points[i][1]<center[1]:p.points[i][1]>center[1]);
+  assert(p.points.every(([x])=>x>=64&&x<=width-24));
+  const coefficient=(p.points[80][1]-center[1])/(p.points[80][0]-center[0])**2;
+  for (const i of [10,25,55,70]) near(p.points[i][1]-center[1],coefficient*(p.points[i][0]-center[0])**2,1e-8);
+}
+function checkEquilibriumCaptions(model,energy=models.definitions[model].energy,length=models.definitions[model].length) {
+  const eq=models.equilibria(model),c=models.definitions[model].coordinate;
+  assert.equal($('equilibrium-buttons').children.length,eq.length);
+  $('equilibrium-buttons').children.forEach((button,i)=>{
+    const curvature=models.evaluate(model,eq[i].q,energy,length).curvature;
+    const formula=button.children[2].dataset.math;
+    assert(formula.startsWith("U''("+c+"_e)="+curvature.toFixed(3)));
+    assert(formula.includes(String.raw`\mathrm{N\,m^{-1}}`));
+    assert(formula.endsWith(curvature>0?' > 0':' < 0'));
+    assert.equal(button.dataset.stability,eq[i].stability);
+  });
+}
 function checkArrowGeometry(F,model) {
   const forceUnit=model==='pair'?1e-12:1;
   const arrows=forceArrows(),factor=parseFloat($('force-scale-arrow').style.width)/(value('force-scale-value')*forceUnit);
@@ -145,6 +186,13 @@ async function checkUI(){
     assert.equal($('body-1').hidden,model==='wells');
     assert.equal($('argon-reference').hidden,model!=='pair');
     assert.equal($('no-equilibrium').hidden,model!=='gravity');
+    const c=models.definitions[model].coordinate;
+    assert.equal($('equilibrium-condition').dataset.math,"U'("+c+"_e)=0");
+    assert.equal($('stability-positive').dataset.math,"U''("+c+"_e)>0");
+    assert.equal($('stability-negative').dataset.math,"U''("+c+"_e)<0");
+    assert.equal($('stability-zero').dataset.math,"U''("+c+"_e)=0");
+    assert($('stability-linear-force').dataset.math.includes("-U''("+c+"_e)"));
+    checkEquilibriumCaptions(model);
     let fixedFactor;
     const d=models.definitions[model],u=model==='pair'?{energy:1e-21,length:1e-9,force:1e-12}:{energy:1,length:1,force:1};
     const initialPosition=d.start*d.length/u.length, ys={potential:[],force:[]};
@@ -153,6 +201,8 @@ async function checkUI(){
     near(value('length-value'),d.length/u.length,1e-12);
     for(const q of [d.min,d.start,d.max,...Array.from({length:31},(_,i)=>d.min+(d.max-d.min)*(i+.37)/31)]) {
       $('position').value=q;$('position').fire('input');const s=models.evaluate(model,q);
+      assert($('quadratic-legend').hidden && $('quadratic-note').hidden);
+      assert.equal(parabolas('potential').length,0,'Parabola appears only at equilibrium');
       near(value('force-value'),s.F/u.force,.00051);near(value('potential-value'),s.U/u.energy,.00051);near(value('slope-value'),-s.F/u.force,.00051);
       near(value('position-value'),s.position/u.length,.00051);
       for(const kind of ['potential','force'])ys[kind].push(plots.get(kind+'-canvas').circles.at(-1)[1]);
@@ -177,9 +227,20 @@ async function checkUI(){
       assert($('length-value').dataset.number.startsWith('0.3405|'));
     }
     const eq=models.equilibria(model);
-    $('equilibrium-buttons').children.forEach((button,i)=>{button.click();near(value('force-value'),0);assert($('state-badge').textContent.includes(eq[i].stable?'stable':'instable'));assert.equal(forceArrows().length,0);});
+    $('equilibrium-buttons').children.forEach((button,i)=>{
+      button.click();near(value('force-value'),0);
+      assert.equal($('state-badge').textContent,eq[i].stable?'Équilibre stable':'Équilibre instable');
+      assert.equal(forceArrows().length,0);
+      assert(!$('equilibrium-curvature').hidden);
+      assert.equal($('equilibrium-curvature').dataset.math,button.children[2].dataset.math);
+      assert($('observation-text').textContent.includes(eq[i].stable?'positive':'négative'));
+      checkParabola(eq[i].stable);
+      assert($('quadratic-formula').dataset.math.includes("U''("+d.coordinate+"_e)"));
+    });
     if(model==='pair') {near(value('position-value'),.382,.0001);near(value('potential-value'),-1.654,.0001);}
     $('restart').click();const old=value('force-value');
+    assert($('equilibrium-curvature').hidden,'No equilibrium criterion is applied away from equilibrium');
+    assert($('quadratic-note').hidden && parabolas('potential').length===0,'Leave equilibrium: hide parabola');
     $('energy-scale').value=2*d.energy/u.energy;$('energy-scale').fire('input');near(value('force-value'),old*2,.002);
     $('length-scale').value=1.2*d.length/u.length;$('length-scale').fire('input');near(value('force-value'),old*2/1.2,.002);near(value('position-value'),initialPosition*1.2,.001);
     // Changing physical parameters may fit a new scale, but never individual
@@ -187,6 +248,7 @@ async function checkUI(){
     for(const energy of [Number($('energy-scale').min),Number($('energy-scale').max)])for(const length of [Number($('length-scale').min),Number($('length-scale').max)]) {
       $('energy-scale').value=energy;$('energy-scale').fire('input');
       $('length-scale').value=length;$('length-scale').fire('input');
+      checkEquilibriumCaptions(model,energy*u.energy,length*u.length);
       let scale;
       for(const q of [d.min,d.max,d.start,...eq.map(e=>e.q+.0001)]) {
         $('position').value=q;$('position').fire('input');

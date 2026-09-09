@@ -46,14 +46,9 @@ for (const name of ['cinematique_2d_webapp_fr', 'cinematique_3d_webapp_fr']) {
   }
   console.log(name + ': one zero at the power sign change.');
 }
-for (const name of ['energie_mecanique_webapp_fr', 'potentiel_force_webapp_fr', 'moment_cinetique_webapp_fr', 'collisions_webapp_fr']) {
+for (const name of ['energie_mecanique_webapp_fr', 'potentiel_force_webapp_fr', 'moment_cinetique_webapp_fr', 'collisions_webapp_fr', 'frottements_solides_webapp_fr']) {
   const code = source(name);
   assert(/['"]y-zero['"],\s*(?:['"]0['"]|0),/.test(code), name + ': explicit zero label');
   assert(/Math\.abs\([^\n]*Y\(0\)[^\n]*>=\s*22/.test(code), name + ': nearby labels separated');
 }
-const frictionPath = path.join(project, '_prototypes/frottements_solides/app.js');
-if (fs.existsSync(frictionPath)) {
-  assert(fs.readFileSync(frictionPath, 'utf8').includes("'y-zero',0"), 'Friction: explicit zero label');
-  console.log('Local, unpublished friction prototype: explicit zero audited.');
-}
-console.log('Explicit vertical zeros audited in all seven packaged apps.');
+console.log('Explicit vertical zeros audited in all eight packaged apps.');

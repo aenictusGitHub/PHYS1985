@@ -17,9 +17,14 @@ button, select, input { font: inherit; }
 output { font-size: var(--text-value); }
 .phys-app .equilibrium-heading { margin-top: 1.25rem; }
 .equilibrium-buttons { display: grid; gap: .4rem; }
-.equilibrium-buttons button { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; text-align: left; }
+.equilibrium-buttons button { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: baseline; gap: .45rem .5rem; text-align: left; }
 .equilibrium-buttons button[data-selected="true"] { border-color: var(--accent); background: #edf3f8; }
 .equilibrium-buttons .eq-position { white-space: nowrap; font-size: var(--text-value); }
+.eq-curvature { grid-column: 1 / -1; font-size: var(--text-formula); color: var(--muted); }
+.stability-guide { margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+.stability-guide h3 { font-size: var(--text-ui); margin: 0 0 .7rem; }
+.stability-guide p { margin: .65rem 0; line-height: 1.55; }
+#equilibrium-curvature { margin-right: .6rem; color: var(--ink); }
 .equation { margin: .75rem 0; padding: .15rem 0; overflow-x: auto; }
 .equations mjx-container { margin: 0 !important; }
 .phys-app mjx-assistive-mml { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; overflow: hidden !important; clip: rect(1px,1px,1px,1px) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
@@ -32,6 +37,10 @@ output { font-size: var(--text-value); }
 .legend-mark { display: inline-block; width: 1.4rem; border-top: 2px solid; }
 .potential-mark { color: #b5688b; }
 .tangent-mark { margin-left: .8rem; color: #bc8b3b; }
+.quadratic-legend { display: inline-flex; align-items: center; gap: .4rem; margin-left: .8rem; }
+.quadratic-mark { color: #2775b6; border-top-style: dashed; }
+.quadratic-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .8rem; margin: 0; padding: .5rem 1rem .8rem; font-size: var(--text-formula); }
+#quadratic-formula { color: #2775b6; }
 .force-mark { color: var(--force); }
 .force-heading { border-top: 1px solid var(--line); }
 #force-sign { margin-left: auto; }
@@ -482,20 +491,32 @@ const PotentialModels = (() => {
     const {u,du,d2u} = reduced(model,q);
     return {q, position:q*length, U:energy*u, slope:energy/length*du, F:-energy/length*du, curvature:energy/length**2*d2u};
   }
+  function stability(curvature) {
+    if (!Number.isFinite(curvature)) throw new Error('Dérivée seconde non valide.');
+    return curvature > 0 ? 'stable' : curvature < 0 ? 'unstable' : 'inconclusive';
+  }
+  function quadratic(equilibrium, position) {
+    // Second-order Taylor approximation in the physical coordinate (metres).
+    const delta=position-equilibrium.position;
+    return equilibrium.U+.5*equilibrium.curvature*delta*delta;
+  }
   function equilibria(model) {
     if (model === 'gravity') return [];
     const roots = model === 'pair' ? [2**(1/6)] : [[-1.65,-.6],[-.6,.6],[.6,1.65]].map(([lo,hi]) => {
       for (let i=0;i<60;i++) { const mid=(lo+hi)/2; if (reduced(model,lo).du*reduced(model,mid).du <= 0) hi=mid; else lo=mid; }
       return (lo+hi)/2;
     });
-    return roots.map(q => ({q,stable:reduced(model,q).d2u > 0}));
+    return roots.map(q => {
+      const kind=stability(reduced(model,q).d2u);
+      return {q,stable:kind==='stable',stability:kind};
+    });
   }
   function sweep(q, direction, delta, min, max) {
     const span=max-min, period=2*span;
     const phase=((direction > 0 ? q-min : period-(q-min))+delta)%period;
     return phase <= span ? {q:min+phase,direction:1} : {q:min+period-phase,direction:-1};
   }
-  return {definitions,reduced,evaluate,equilibria,sweep};
+  return {definitions,reduced,evaluate,stability,quadratic,equilibria,sweep};
 })();
 
 if (typeof document !== 'undefined') {
@@ -507,7 +528,7 @@ async function startPotentialApp() {
   const $ = id => document.getElementById(id), tex = String.raw;
   try {
     await MathJax.startup.promise;
-    const colors = {U:'#b5688b',tangent:'#bc8b3b',F:'#7758a6',stable:'#268576',unstable:'#b5687b',body:'#2775b6',body2:'#74c9b2',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
+    const colors = {U:'#b5688b',tangent:'#bc8b3b',quadratic:'#2775b6',F:'#7758a6',stable:'#268576',unstable:'#b5687b',body:'#2775b6',body2:'#74c9b2',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
     const state = {model:'wells',q:.55,energy:1,length:1,playing:false,frame:0,last:null,direction:1,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(), units=new Map(), labels=new Map();
     let arrowScaleCache=null;
@@ -557,6 +578,11 @@ async function startPotentialApp() {
     }
     function definition() { return PotentialModels.definitions[state.model]; }
     function sample(q=state.q) { return PotentialModels.evaluate(state.model,q,state.energy,state.length); }
+    function curvatureMath(q) {
+      const curvature=sample(q).curvature;
+      return "U''("+definition().coordinate+'_e)='+curvature.toFixed(3)
+        +tex`\,\mathrm{N\,m^{-1}}`+(curvature>0?' > 0':curvature<0?' < 0':'');
+    }
     function setPlaying(on) {
       state.playing=on; state.last=null;
       $('play').textContent=on?'Pause':'Balayer'; $('play').setAttribute('aria-pressed',String(on));
@@ -596,8 +622,17 @@ async function startPotentialApp() {
         tex`F_r=-\frac{\mathrm dU}{\mathrm dr}`, tex`\vec F_2=F_r\vec e_r,\quad\vec F_1=-\vec F_2`,
         tex`r_{\mathrm{eq}}=2^{1/6}\sigma,\quad U_{\min}=-\epsilon`]
         : [tex`q=\frac{x}{L_0},\quad U(x)=U_0\!\left[(q^2-1)^2-\frac q3\right]`,
-          tex`F_x=-\frac{\mathrm dU}{\mathrm dx}`,tex`\vec F=F_x\vec e_x`,tex`U'(x_e)=0,\quad U''(x_e)>0\;\Rightarrow\;\text{stable}`];
+          tex`F_x=-\frac{\mathrm dU}{\mathrm dx}`,tex`\vec F=F_x\vec e_x`];
       $('relations').replaceChildren(...equations.map(value=>{ const el=document.createElement('div');el.className='equation';math(el,value);return el; }));
+      const eqCoordinate=c+'_e';
+      math($('quadratic-formula'),'U('+c+tex`)\simeq U(`+eqCoordinate
+        +tex`)+\frac12 U''(`+eqCoordinate+')('+c+'-'+eqCoordinate+')^2');
+      math($('equilibrium-condition'),"U'("+eqCoordinate+")=0");
+      math($('stability-positive'),"U''("+eqCoordinate+")>0");
+      math($('stability-negative'),"U''("+eqCoordinate+")<0");
+      math($('stability-zero'),"U''("+eqCoordinate+")=0");
+      math($('stability-linear-force'),(radial?'F_r':'F_x')+'('+eqCoordinate
+        +tex`+\delta `+c+tex`)\simeq-U''(`+eqCoordinate+tex`)\,\delta `+c);
       $('reference-note').textContent=gravity
         ? 'Masses ponctuelles ; la distance est mesurée entre leurs centres. Les échelles U₀ et L₀ fixent le produit Gm₁m₂ = U₀L₀. Le potentiel appartient à la paire et n’est compté qu’une fois. La force est toujours attractive : il n’existe pas de position d’équilibre à distance finie. Le schéma est symbolique.'
         : pair
@@ -615,10 +650,12 @@ async function startPotentialApp() {
     }
     function buildEquilibria() {
       $('equilibrium-buttons').replaceChildren(...PotentialModels.equilibria(state.model).map((eq,i)=>{
-        const button=document.createElement('button'), name=document.createElement('span'), value=document.createElement('span');
+        const button=document.createElement('button'), name=document.createElement('span'), value=document.createElement('span'), curvature=document.createElement('span');
         button.type='button';button.dataset.q=String(eq.q); value.className='eq-position';
+        curvature.className='eq-curvature';button.dataset.stability=eq.stability;
         name.textContent=state.model==='pair'?'Distance stable':i===1?'Maximum — instable':i===0?'Minimum gauche — stable':'Minimum droit — stable';
-        number(value,eq.q*state.length/display().length,3,display().lengthTex); button.append(name,value);
+        number(value,eq.q*state.length/display().length,3,display().lengthTex);
+        math(curvature,curvatureMath(eq.q));button.append(name,value,curvature);
         button.addEventListener('click',()=>setPosition(eq.q));return button;
       }));
     }
@@ -641,7 +678,7 @@ async function startPotentialApp() {
       el.style.left=x+'px';el.style.top=y+'px';el.style.color=color;return el;
     }
     function geometry(w,h) {return {left:64,right:Math.max(80,w-24),top:32,bottom:h-46};}
-    function drawCurve(kind) {
+    function drawCurve(kind,equilibrium=null) {
       const {ctx,w,h}=surface(kind+'-canvas'), r=geometry(w,h), {min,max,coordinate}=definition(), layer=kind+'-labels';
       for (const el of $(layer).children) el.hidden=true;
       const points=Array.from({length:501},(_,i)=>sample(min+(max-min)*i/500));
@@ -670,6 +707,16 @@ async function startPotentialApp() {
       label(layer,'unitX',coordinate+tex`\,[${u.lengthTex}]`,(r.left+r.right)/2,h-9);
       ctx.save();ctx.beginPath();ctx.rect(r.left,r.top,r.right-r.left,r.bottom-r.top);ctx.clip();
       line(ctx,points.map(s=>[X(s.q),Y(s[key])]),kind==='potential'?colors.U:colors.F,2.2);
+      if (kind==='potential' && equilibrium) {
+        // Keep the approximation local and preserve the potential's axis range.
+        const half=Math.min(.12*(max-min),isRadial() ? .12*equilibrium.q : Infinity);
+        const left=Math.max(min,equilibrium.q-half),right=Math.min(max,equilibrium.q+half);
+        const qs=Array.from({length:81},(_,i)=>i<=40
+          ? left+(equilibrium.q-left)*i/40
+          : equilibrium.q+(right-equilibrium.q)*(i-40)/40);
+        const parabola=qs.map(q=>[X(q),Y(PotentialModels.quadratic(equilibrium,q*state.length))]);
+        line(ctx,parabola,colors.quadratic,2.2,[6,4]);
+      }
       const current=sample(), x=X(state.q), y=Y(current[key]);
       if ($('equilibria').checked) {
         for (const eq of PotentialModels.equilibria(state.model)) {
@@ -758,7 +805,11 @@ async function startPotentialApp() {
       $('stage').setAttribute('aria-label',pair?'Séparation '+positionText(current.position)+'. Force sur le deuxième corps : '+forceText+' ; force opposée sur le premier.':'Position '+positionText(current.position)+'. Force : '+forceText+'.');
     }
     function render(readouts=true) {
-      const current=sample(), pair=state.model==='pair', radial=isRadial(), zero=Math.abs(current.F)<1e-7*state.energy/state.length;
+      const current=sample(), pair=state.model==='pair', radial=isRadial();
+      const selected=PotentialModels.equilibria(state.model).find(eq=>Math.abs(eq.q-state.q)<1e-7);
+      const equilibrium=selected?sample(selected.q):null,zero=Boolean(equilibrium);
+      $('quadratic-legend').hidden=!equilibrium;
+      $('quadratic-note').hidden=!equilibrium;
       const u=display();
       $('position').value=state.q;
       $('position').setAttribute('aria-valuetext',positionText(current.position));
@@ -772,12 +823,17 @@ async function startPotentialApp() {
       }
       $('force-sign').textContent=zero?'Force nulle':current.F>0?'Force positive':'Force négative';
       $('force-sign').className='sign-badge '+(zero?'neutral':current.F>0?'positive':'negative');
-      $('state-badge').textContent=zero?(current.curvature>0?'Équilibre stable':'Équilibre instable'):radial?(current.F>0?'Répulsion':'Attraction'):(current.F>0?'Vers la droite':'Vers la gauche');
-      $('observation').textContent=zero
-        ? (current.curvature>0?'Au minimum du potentiel, la force est nulle. Un petit déplacement fait apparaître une force qui ramène vers l’équilibre.':'Au maximum du potentiel, la force est nulle. Un petit déplacement fait apparaître une force qui éloigne de l’équilibre.')
+      const stability=PotentialModels.stability(current.curvature);
+      $('state-badge').textContent=zero?(stability==='stable'?'Équilibre stable':stability==='unstable'?'Équilibre instable':'Équilibre — critère insuffisant'):radial?(current.F>0?'Répulsion':'Attraction'):(current.F>0?'Vers la droite':'Vers la gauche');
+      $('equilibrium-curvature').hidden=!zero;
+      if (zero) math($('equilibrium-curvature'),curvatureMath(state.q));
+      $('observation-text').textContent=zero
+        ? (stability==='stable'?'La dérivée seconde est positive : le potentiel présente un minimum local. Un petit déplacement fait apparaître une force de rappel vers l’équilibre.'
+          :stability==='unstable'?'La dérivée seconde est négative : le potentiel présente un maximum local. Un petit déplacement fait apparaître une force qui éloigne de l’équilibre.'
+          :'La dérivée seconde est nulle : ce critère ne permet pas de conclure. Il faut examiner le potentiel au voisinage de l’équilibre.')
         : radial?(current.F>0?'La pente est négative : la force radiale est positive. Les deux particules se repoussent.':'La pente est positive : la force radiale est négative. Les deux particules s’attirent.')
         : current.F>0?'Le potentiel décroît vers la droite : sa pente est négative et la force est dirigée vers la droite.':'Le potentiel croît vers la droite : sa pente est positive et la force est dirigée vers la gauche.';
-      drawCurve('potential');drawCurve('force');drawStage(current,zero);
+      drawCurve('potential',equilibrium);drawCurve('force');drawStage(current,zero);
     }
     function frame(now) {
       state.frame=0;if (!state.playing) return;
@@ -880,6 +936,16 @@ async function startPotentialApp() {
       <section class="panel-section equation-section">
         <h2>Relations</h2>
         <div id="relations" class="equations"></div>
+        <div class="stability-guide">
+          <h3>Stabilité des équilibres</h3>
+          <p class="microcopy">À un point d’équilibre, <span id="equilibrium-condition"></span>. On examine alors la dérivée seconde :</p>
+          <p><span id="stability-positive"></span> : minimum local, équilibre stable.</p>
+          <p><span id="stability-negative"></span> : maximum local, équilibre instable.</p>
+          <p><span id="stability-zero"></span> : critère insuffisant ; il faut examiner le potentiel au voisinage du point.</p>
+          <p class="microcopy">Pour un petit déplacement autour de l’équilibre :</p>
+          <div id="stability-linear-force" class="equation"></div>
+          <p class="microcopy">Une dérivée seconde positive donne une force de rappel ; une dérivée seconde négative donne une force qui éloigne de l’équilibre. Ce critère concerne la coordonnée représentée : position sur l’axe ou séparation radiale.</p>
+        </div>
         <p id="reference-note" class="microcopy"></p>
         <p id="argon-reference" class="microcopy" hidden>Référence argon : <span data-tex="\sigma=0.3405\,\mathrm{nm}"></span> et <span data-tex="\epsilon\simeq1.654\times10^{-21}\,\mathrm J"></span>. La distance d’équilibre du modèle vaut alors <span data-tex="r_{\mathrm{eq}}=2^{1/6}\sigma\simeq0.382\,\mathrm{nm}"></span>. <span data-tex="1\,\mathrm{pN}=10^{-12}\,\mathrm N"></span>. <a href="https://doi.org/10.1002/pssb.202000344" target="_blank" rel="noopener noreferrer">Paramètres de référence</a>.</p>
       </section>
@@ -889,10 +955,11 @@ async function startPotentialApp() {
       <p id="loading" role="status">Préparation de l’animation et du rendu LaTeX…</p>
       <section class="visual-card curves-card">
         <header class="card-heading"><h2>Du potentiel à la force</h2><span id="force-relation" class="relation-badge" data-tex="F_x=-\frac{\mathrm dU}{\mathrm dx}"></span></header>
-        <div class="plot-heading"><span class="legend-mark potential-mark"></span><span>Énergie potentielle</span><span class="legend-mark tangent-mark"></span><span>Tangente</span></div>
+        <div class="plot-heading"><span class="legend-mark potential-mark"></span><span>Énergie potentielle</span><span class="legend-mark tangent-mark"></span><span>Tangente</span><span id="quadratic-legend" class="quadratic-legend" hidden><span class="legend-mark quadratic-mark"></span><span>Parabole locale</span></span></div>
         <div id="potential-plot" class="plot-wrap" tabindex="0" role="slider" aria-label="Position sur la courbe d’énergie potentielle" aria-valuemin="-1.65" aria-valuemax="1.65" aria-valuenow="0.55">
           <canvas id="potential-canvas" aria-hidden="true"></canvas><div id="potential-labels" class="plot-labels" aria-hidden="true"></div>
         </div>
+        <p id="quadratic-note" class="quadratic-note" hidden><span id="quadratic-formula"></span><span class="microcopy">Approximation locale à l’ordre 2, uniquement au point d’équilibre sélectionné.</span></p>
         <div class="plot-heading force-heading"><span class="legend-mark force-mark"></span><span>Composante de la force</span><span id="force-sign" class="sign-badge"></span></div>
         <div id="force-plot" class="plot-wrap" tabindex="0" role="slider" aria-label="Position sur la courbe de force" aria-valuemin="-1.65" aria-valuemax="1.65" aria-valuenow="0.55">
           <canvas id="force-canvas" aria-hidden="true"></canvas><div id="force-labels" class="plot-labels" aria-hidden="true"></div>
@@ -913,7 +980,7 @@ async function startPotentialApp() {
         </div>
         <p id="stage-note" class="microcopy stage-note">Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. La longueur de la flèche est proportionnelle au module de la force ; l’échelle reste fixe pour les paramètres choisis.</p>
       </section>
-      <p id="observation" class="observation"></p>
+      <p id="observation" class="observation"><span id="equilibrium-curvature" hidden></span><span id="observation-text"></span></p>
     </main>
   </div>
 </body>

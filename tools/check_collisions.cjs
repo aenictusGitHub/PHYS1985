@@ -15,7 +15,13 @@ class Element{
   cloneNode(deep){const el=new Element(this.tag);el.attrs={...this.attrs};el.style={...this.style};el.dataset={...this.dataset};if(deep)el.children=this.children.map(c=>typeof c==='string'?c:c.cloneNode(true));return el;}
   addEventListener(k,fn){this.events[k]=fn;}fire(k,args={}){this.events[k]?.({target:this,preventDefault(){},...args});}click(){this.fire('click');}closest(){return null;}
   setPointerCapture(id){this.capture=id;}hasPointerCapture(id){return this.capture===id;}releasePointerCapture(){this.capture=undefined;}
-  getBoundingClientRect(){return {left:0,top:0,width,height:this.id?.startsWith('scene')?(width<=480?345:385):255};}
+  getBoundingClientRect(){
+    if(this.className?.startsWith('plot-label')){
+      const text=this.dataset.math||'',w=text.includes('=')?68:text.includes('V_C')?44:30,h=32;
+      return {left:parseFloat(this.style.left)-w/2,top:parseFloat(this.style.top)-h/2,width:w,height:h};
+    }
+    return {left:0,top:0,width,height:this.id?.startsWith('scene')?(width<=480?345:385):255};
+  }
   getContext(){return plots.get(this.id)?.context||canvasContext(this.id);}
 }
 for(const m of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const el=new Element(m[1]);el.id=m[3];el.value=/\bvalue="([^"]*)"/.exec(m[2])?.[1]||'';el.checked=/\bchecked\b/.test(m[2]);el.hidden=/\bhidden\b/.test(m[2]);}
@@ -37,17 +43,62 @@ const change=(id,v)=>{$(id).value=v;$(id).fire('change');};
 const tick=()=>{clock+=1000/60;const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(clock));};
 function advance(seconds){tick();for(let i=0;i<Math.ceil(seconds*60);i++)tick();}
 const read=()=>tools.get('read_collision_experiment').execute({});
+function assertClearSceneLabels(fixtureBalls){
+  const items=$('scene-labels').children.filter(el=>!el.hidden&&el.dataset.sceneAnnotation).map(el=>({
+    name:el.dataset.sceneAnnotation,x:parseFloat(el.style.left),y:parseFloat(el.style.top),
+    hw:Number(el.dataset.layoutWidth)/2,hh:Number(el.dataset.layoutHeight)/2,
+  }));
+  const balls=fixtureBalls||plots.get('scene-canvas').fills.filter(p=>p.color?.type==='radial').map(p=>p.points[0]);
+  for(let i=0;i<items.length;i++){
+    const a=items[i];
+    assert(a.x-a.hw>=7&&a.x+a.hw<=width-7,'Annotation stays inside viewport: '+a.name);
+    for(const b of items.slice(i+1)){
+      assert(Math.abs(a.x-b.x)>=a.hw+b.hw+8||Math.abs(a.y-b.y)>=a.hh+b.hh+8,
+        'Overlapping annotations: '+a.name+' / '+b.name+' at '+JSON.stringify(read().state));
+    }
+    for(const b of balls){
+      const distance=Math.hypot(Math.max(0,Math.abs(b[0]-a.x)-a.hw),Math.max(0,Math.abs(b[1]-a.y)-a.hh));
+      assert(distance>=b[2]+6,'Annotation crosses a sphere: '+a.name);
+    }
+  }
+}
 async function main(){
-  vm.runInNewContext(source,context);await new Promise(r=>setImmediate(r));assert.deepEqual(errors,[]);assert($('loading').hidden);assert.equal(frames.size,0);assert.equal(tools.size,3);
+  const instrumented=source.replace('    function drawScene(s){','    window.testSceneLabelLayout=placeSceneLabels;\n    function drawScene(s){');
+  vm.runInNewContext(instrumented,context);await new Promise(r=>setImmediate(r));assert.deepEqual(errors,[]);assert($('loading').hidden);assert.equal(frames.size,0);assert.equal(tools.size,3);
+  // Reproduce the supplied crop: touching large spheres, v1 near m2, C at contact.
+  width=458;
+  for(const el of $('scene-labels').children)el.hidden=true;
+  const requests=[
+    {key:'center',symbol:'C',anchor:[228,194],direction:[0,1],gap:23,color:'#607185'},
+    {key:'m1',symbol:'m_1',anchor:[170,194],direction:[0,1],gap:77,color:'#2775b6'},
+    {key:'m2',symbol:'m_2',anchor:[286,194],direction:[0,-1],gap:77,color:'#429b88'},
+    {key:'vector1',symbol:'\\vec v_1',anchor:[248,194],direction:[0,-1],gap:24,color:'#2775b6'},
+    {key:'vector2',symbol:'\\vec v_2',anchor:[364,194],direction:[0,1],gap:24,color:'#429b88'},
+  ];
+  context.window.testSceneLabelLayout(plots.get('scene-canvas').context,requests,[[170,194],[286,194]],57,[[[170,194],[248,194]],[[286,194],[364,194]]],458,385);
+  assertClearSceneLabels([[170,194,57],[286,194,57]]);
+  width=700;
   const choose=tools.get('select_collision_example'),jump=tools.get('seek_collision_experiment');
   // Fit the entire selected duration before playback, then keep both the scale
   // and origin fixed, regardless of time, collision mode or display options.
   const camera=()=>{const q=read().state,balls=plots.get('scene-canvas').fills.filter(p=>p.color?.type==='radial').map(p=>p.points[0]),scale=balls[0][2]/.35;return {scale,x:balls[0][0]-q.r1[0]*scale,y:balls[0][1]+q.r1[1]*scale};};
   for(const viewport of [280,700])for(const dimension of ['line','plane'])for(const mode of ['elastic','inelastic','sticking'])for(const example of (dimension==='line'?['target','headon','chase','miss']:['offset','headon','cross','miss']))for(const duration of [2,5,12]){
-    width=viewport;choose.execute({dimension,example,mode});input('duration',duration);const opening=camera();
+    width=viewport;choose.execute({dimension,example,mode});input('duration',duration);const opening=camera(),labelHistory=new Map();
     const times=Array.from({length:13},(_,i)=>i*duration/12);if(read().collisionTime!==null&&read().collisionTime<=duration)times.push(read().collisionTime);
     for(const time of times){
-      jump.execute({time});const current=camera();near(current.scale,opening.scale);near(current.x,opening.x);near(current.y,opening.y);
+      jump.execute({time});assertClearSceneLabels();const current=camera();near(current.scale,opening.scale);near(current.x,opening.x);near(current.y,opening.y);
+      const sample=read().state;
+      for(const el of $('scene-labels').children.filter(el=>!el.hidden&&el.dataset.sceneAnnotation)){
+        const key=el.dataset.sceneAnnotation,body=key==='m1'||key==='vector1'?sample.r1:key==='m2'||key==='vector2'?sample.r2:sample.C;
+        const anchor=key==='normal'?[0,0]:[current.x+body[0]*current.scale,current.y-body[1]*current.scale];
+        const q=[parseFloat(el.style.left),parseFloat(el.style.top)],previous=labelHistory.get(key);
+        if(previous){
+          assert.equal(el.dataset.layoutOffset,previous.offset,'No side switching in motion: '+key);
+          assert.equal(el.dataset.layoutFixed,previous.fixed,'No changing label dock in motion: '+key);
+          assert(Math.hypot(q[0]-previous.q[0],q[1]-previous.q[1])<=Math.hypot(anchor[0]-previous.anchor[0],anchor[1]-previous.anchor[1])+1e-6,'Label movement cannot jump ahead of its body: '+key);
+        }
+        labelHistory.set(key,{q,anchor,offset:el.dataset.layoutOffset,fixed:el.dataset.layoutFixed});
+      }
       const height=width<=480?345:385;
       for(const ball of plots.get('scene-canvas').fills.filter(p=>p.color?.type==='radial').map(p=>p.points[0]))assert(ball[0]-ball[2]>=0&&ball[0]+ball[2]<=width&&ball[1]-ball[2]>=0&&ball[1]+ball[2]<=height,'entire ball remains in the fixed frame');
       if(!(dimension==='plane'&&read().state.stuck)){

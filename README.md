@@ -12,38 +12,26 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - [Moment cinétique](https://aenictusgithub.github.io/PHYS1985/moment_cinetique_webapp_fr.html)
 - [Collisions](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html)
 - [Poulies](https://aenictusgithub.github.io/PHYS1985/poulies_webapp_fr.html)
+- [Frottements solides](https://aenictusgithub.github.io/PHYS1985/frottements_solides_webapp_fr.html)
+- [Équilibre et rotation](https://aenictusgithub.github.io/PHYS1985/equilibres_statiques_webapp_fr.html)
 
 ## QR codes
 
-| Cinématique 2D | Cinématique 3D | Travail et puissance | Énergie mécanique |
-| --- | --- | --- | --- |
-| [![QR code vers l’animation 2D](qr-codes/cinematique_2d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html) | [![QR code vers l’animation 3D](qr-codes/cinematique_3d.png)](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html) | [![QR code vers l’animation Travail et puissance](qr-codes/puissance_travail.png)](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html) | [![QR code vers l’animation Énergie mécanique](qr-codes/energie_mecanique.png)](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) |
+Tous les QR codes ont la même taille d’affichage. Cliquez sur un code pour ouvrir l’animation, ou téléchargez le PNG/SVG en pleine résolution.
 
-Énergie mécanique : [QR code PNG](qr-codes/energie_mecanique.png) · [QR code SVG](qr-codes/energie_mecanique.svg).
-
-### Énergie potentielle et force
-
-[![QR code vers Énergie potentielle et force](qr-codes/potentiel_force.png)](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html)
-
-[QR code PNG](qr-codes/potentiel_force.png) · [QR code SVG](qr-codes/potentiel_force.svg).
-
-### Moment cinétique
-
-[![QR code vers Moment cinétique](qr-codes/moment_cinetique.png)](https://aenictusgithub.github.io/PHYS1985/moment_cinetique_webapp_fr.html)
-
-[QR code PNG](qr-codes/moment_cinetique.png) · [QR code SVG](qr-codes/moment_cinetique.svg).
-
-### Collisions
-
-[![QR code vers Collisions](qr-codes/collisions.png)](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html)
-
-[QR code PNG](qr-codes/collisions.png) · [QR code SVG](qr-codes/collisions.svg).
-
-### Poulies
-
-[![QR code vers Poulies](qr-codes/poulies.png)](https://aenictusgithub.github.io/PHYS1985/poulies_webapp_fr.html)
-
-[QR code PNG](qr-codes/poulies.png) · [QR code SVG](qr-codes/poulies.svg).
+| Cinématique 2D | Cinématique 3D | Travail et puissance |
+| :---: | :---: | :---: |
+| [<img src="qr-codes/cinematique_2d.png" alt="QR code Cinématique 2D" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/cinematique_2d_webapp_fr.html) | [<img src="qr-codes/cinematique_3d.png" alt="QR code Cinématique 3D" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/cinematique_3d_webapp_fr.html) | [<img src="qr-codes/puissance_travail.png" alt="QR code Travail et puissance" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/puissance_travail_webapp_fr.html) |
+| [PNG](qr-codes/cinematique_2d.png) · [SVG](qr-codes/cinematique_2d.svg) | [PNG](qr-codes/cinematique_3d.png) · [SVG](qr-codes/cinematique_3d.svg) | [PNG](qr-codes/puissance_travail.png) · [SVG](qr-codes/puissance_travail.svg) |
+| **Énergie mécanique** | **Énergie potentielle et force** | **Moment cinétique** |
+| [<img src="qr-codes/energie_mecanique.png" alt="QR code Énergie mécanique" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/energie_mecanique_webapp_fr.html) | [<img src="qr-codes/potentiel_force.png" alt="QR code Énergie potentielle et force" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/potentiel_force_webapp_fr.html) | [<img src="qr-codes/moment_cinetique.png" alt="QR code Moment cinétique" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/moment_cinetique_webapp_fr.html) |
+| [PNG](qr-codes/energie_mecanique.png) · [SVG](qr-codes/energie_mecanique.svg) | [PNG](qr-codes/potentiel_force.png) · [SVG](qr-codes/potentiel_force.svg) | [PNG](qr-codes/moment_cinetique.png) · [SVG](qr-codes/moment_cinetique.svg) |
+| **Collisions** | **Poulies** | **Frottements solides** |
+| [<img src="qr-codes/collisions.png" alt="QR code Collisions" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/collisions_webapp_fr.html) | [<img src="qr-codes/poulies.png" alt="QR code Poulies" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/poulies_webapp_fr.html) | [<img src="qr-codes/frottements_solides.png" alt="QR code Frottements solides" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/frottements_solides_webapp_fr.html) |
+| [PNG](qr-codes/collisions.png) · [SVG](qr-codes/collisions.svg) | [PNG](qr-codes/poulies.png) · [SVG](qr-codes/poulies.svg) | [PNG](qr-codes/frottements_solides.png) · [SVG](qr-codes/frottements_solides.svg) |
+| **Équilibre et rotation** | | |
+| [<img src="qr-codes/equilibres_statiques.png" alt="QR code Équilibre et rotation" width="180" height="180">](https://aenictusgithub.github.io/PHYS1985/equilibres_statiques_webapp_fr.html) | | |
+| [PNG](qr-codes/equilibres_statiques.png) · [SVG](qr-codes/equilibres_statiques.svg) | | |
 
 ## Fichiers
 
@@ -55,7 +43,9 @@ Voici quelques animations interactives pour le cours PHYS1985 - Physique génér
 - `potentiel_force_webapp_fr.html` et `potentiel_force_webapp_fr.zip` : animation autonome reliant potentiel et force, et archive de ses sources ;
 - `moment_cinetique_webapp_fr.html` et `moment_cinetique_webapp_fr.zip` : animation autonome sur le moment cinétique autour d’un axe fixe, et archive de ses sources ;
 - `collisions_webapp_fr.html` et `collisions_webapp_fr.zip` : animation autonome sur les chocs en 1D et 2D, et archive de ses sources et tests ;
+- `frottements_solides_webapp_fr.html` et `frottements_solides_webapp_fr.zip` : animation autonome sur les frottements solides, et archive de ses sources et tests ;
 - `poulies_webapp_fr.html` et `poulies_webapp_fr.zip` : animation autonome sur les poulies et archive de ses sources et tests ;
+- `equilibres_statiques_webapp_fr.html` et `equilibres_statiques_webapp_fr.zip` : animation autonome sur l’équilibre et la rotation d’une barre, avec ses sources et tests ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
@@ -76,6 +66,15 @@ python3 tools/build_apps.py
 Pour reconstruire aussi depuis un dossier source modifié, ajouter `--source nom_application=/chemin/du/dossier` (le nom est le nom du fichier HTML sans extension). Les calculs physiques sont conservés lors de l’harmonisation graphique.
 
 L’option `--app nom_application` limite la reconstruction à une application; elle peut être répétée. Les calculs d’à-coup des deux archives sources sont vérifiables avec `python3 tools/check_jerk.py` (Node.js ou JavaScript système de macOS).
+
+## Cinématique 2D et 3D
+
+- Historique complet de la trajectoire visible par défaut, dans un gris clair.
+- Cercle osculateur instantané et rayon `R_c` affichables en option : le cercle épouse au mieux la trajectoire localement.
+- Pointes de flèches raccordées aux tiges sans espace blanc ; en 3D, tiges cylindriques et pointes coniques avec relief.
+- Vue complète du dessus disponible en 3D ; projections orthogonales désactivées par défaut.
+
+Vérifications de géométrie, des trajectoires et des commandes : `node tools/check_osculating.cjs` et `node tools/check_3d_arrows.cjs`.
 
 ## Énergie mécanique
 
@@ -105,6 +104,8 @@ Le double puits utilise des échelles pédagogiques ; la paire prend les paramè
 
 - Courbes du potentiel et de la composante de force avec le même axe horizontal.
 - Point de lecture et tangente déplaçables, choix direct des équilibres stables ou instables.
+- Stabilité des équilibres reliée à la dérivée seconde du potentiel : positive pour un minimum stable, négative pour un maximum instable ; une dérivée seconde nulle ne permet pas de conclure seule.
+- Parabole d’approximation locale affichée uniquement lorsqu’un point d’équilibre est sélectionné, avec sa formule et sans modifier les échelles du graphe.
 - Vecteurs de longueur proportionnelle au module des forces, avec une échelle de référence ; forces égales et opposées sur les deux corps.
 - Lennard–Jones : paramètres de référence de l’argon, distance d’équilibre d’environ 0.382 nm ; distances en nm, énergies en 10⁻²¹ J et forces en pN.
 - Échelles d’énergie et de longueur réglables ; valeurs et unités LaTeX avec décimales à point.
@@ -135,10 +136,21 @@ L’option `PHYS1985_MATHJAX_ROOT` vérifie également le rendu des formules ave
 - Masses et vitesses initiales réglables, exemples frontaux et décentrés, rattrapage ou absence de rencontre. En 2D, modules et angles des vitesses sont modifiables.
 - Deux vitesses affichées avec une échelle commune ; impulsion totale dans un diagramme séparé. Bilan avant/après, énergie dissipée et courbes temporelles.
 - Cadrage fixé dès le départ en fonction de toute la durée choisie, sans dézoom pendant la lecture. En 1D comme en 2D, les vitesses partent du centre des corps, au premier plan. Les trajectoires sont tracées depuis l’instant initial.
+- Positions des symboles planifiées pour toute l’animation : pas de changements brusques de côté pendant le mouvement.
 - C désigne le centre de masse, également dans l’app Énergie mécanique. Après un choc 2D parfaitement inélastique, l’affichage remplace les vitesses individuelles par la vitesse de translation du centre de masse et la vitesse angulaire signée de l’ensemble.
 - Contact et propagation analytiques. Une paire soudée après un choc décentré translate et tourne pour conserver aussi le moment cinétique. Les corps sont des disques homogènes dans le modèle mécanique, malgré leur relief graphique.
 
 L’archive source contient `check_physics.cjs` et `check_ui.cjs` : exécuter chacun avec Node.js depuis le dossier extrait. Vérifications de 218 configurations physiques et des commandes, du cadrage fixe, des flèches et des nombres LaTeX via un adaptateur, sans navigateur. Le test des commandes accepte `PHYS1985_MATHJAX_ROOT` pour le moteur MathJax réel.
+
+## Frottements solides
+
+- Trois systèmes : corps sur une surface horizontale, plan incliné et deux corps empilés avec sol sans frottement.
+- Frottement de Coulomb : adhérence tant que la force requise reste sous le seuil statique, puis frottement cinétique opposé au glissement relatif. Arrêts et reprises du mouvement sont résolus explicitement.
+- Force appliquée et coefficients réglables pendant la lecture ; inclinaison de −60° à +60°, sans remise à zéro du temps ni de l’historique. Le modèle néglige les effets de rotation du support : vitesses et travaux sont relatifs au plan.
+- Vitesse initiale réglable et bouton « Lancer le bloc », blocs texturés, forces et vitesse avec facteur d’échelle, annotations reliées au milieu des flèches.
+- Graphiques du frottement en fonction du temps, des vitesses ou des travaux ; retour dans l’historique, dissipation et bilan énergétique. Le cas empilé s’arrête avant la perte de support complet.
+
+L’archive source contient `check_physics.cjs` et `check_ui.cjs`, à exécuter avec Node.js depuis le dossier extrait. Les tests couvrent les seuils, les arrêts, les changements de force et d’angle en direct, les travaux, l’historique et les commandes. Le test des commandes accepte `PHYS1985_MATHJAX_ROOT` pour vérifier les formules avec MathJax réel.
 
 ## Poulies
 
@@ -151,23 +163,33 @@ L’archive source inclut les tests `check_physics.cjs` et `check_ui.cjs`, à ex
 
 `python3 tools/generate_pulleys_qr.py` (ReportLab et Pillow) régénère uniquement le QR code de Poulies au format commun.
 
+## Équilibre et rotation
+
+- Barre homogène articulée en son centre, deux forces verticales : équilibres avec forces égales ou différentes, mise en rotation horaire ou antihoraire.
+- Intensités et distances au pivot réglables en direct ; points d’application déplaçables sur la barre à la souris ou au toucher, sans remise au repos pendant la lecture.
+- Moments notés `τ` et bilan `Στ = Iα` ; distinction entre équilibre statique et moment nul sur une barre déjà en mouvement.
+- Pivot idéal sans frottement. Les forces restent verticales ; leur moment varie lorsque la barre tourne. Le poids et la réaction passent par le pivot.
+
+L’archive inclut `check_physics.cjs` (2 000 bilans, sens de rotation et conservation d’énergie) et `check_ui.cjs` (commandes, glissement, formules et annotations avec MathJax réel en option). `python3 tools/generate_statics_qr.py` régénère son QR code au format commun.
+
 ## Mise à jour du 7 septembre 2026
 
 Les nouveaux oscillateur anharmonique et potentiel gravitationnel, les ajustements
 de Collisions et les repères verticaux « 0 » sont disponibles dans les fichiers
 autonomes et leurs archives sources. Les graphes d’Énergie mécanique, Potentiel et
-force, Moment cinétique, Collisions et du prototype Frottements portent désormais
+force, Moment cinétique, Collisions et Frottements portent désormais
 un zéro explicite, sans doublon avec les graduations voisines. Les deux apps de
 cinématique et Travail et puissance le possédaient déjà ; leur présence est
 vérifiée par `node tools/check_vertical_zeros.cjs`.
 
-Le prototype Frottements reste local et n’est pas inclus dans la publication.
+Frottements, encore local le 7 septembre, est ajouté à la publication du 9 septembre 2026, avec son QR code et des annotations séparées pour les corps empilés.
 Tests des commandes de Collisions depuis le dépôt : `node tools/check_collisions.cjs`.
 
 Les QR codes partagent le même format : noir sur blanc, marge de cinq modules,
 SVG adaptatif à contours nets et PNG de 564 × 564 pixels. `node tools/format_qr.cjs`
-harmonise les trois derniers sans modifier leur matrice ni leur destination.
+harmonise ceux de Potentiel, Moment cinétique et Collisions sans modifier leur matrice ni leur destination.
 `python3 tools/check_qr.py` (OpenCV) vérifie les destinations et l’accord SVG/PNG.
+`python3 tools/generate_friction_qr.py` (ReportLab et Pillow) régénère uniquement le QR code de Frottements.
 
 ## Sauvegarde avant harmonisation
 

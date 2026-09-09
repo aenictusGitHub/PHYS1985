@@ -456,6 +456,40 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   .readout-panel { grid-template-columns: 1fr; }
   .vector-readouts { grid-template-columns: repeat(2, minmax(105px, 1fr)); }
 }
+/* Osculating geometry uses the same physical scale as the trajectory. */
+.phys-app .curvature-details {
+  margin: 0.4rem 0 1rem 1.6rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid #268576;
+}
+.phys-app .curvature-details .microcopy {
+  margin: 0.5rem 0 0;
+}
+.phys-app .curvature-scientific {
+  display: inline-flex;
+  align-items: baseline;
+  margin-left: 0.15em;
+}
+.phys-app .curvature-scientific sup {
+  position: relative;
+  top: -0.5em;
+  font-size: 0.7em;
+}
+.phys-app .curvature-radius-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: #268576;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 3px;
+  padding: 0.1em 0.25em;
+  font-size: var(--text-ui, 1rem);
+  line-height: 1;
+}
+.phys-app .curvature-radius-label mjx-container { margin: 0 !important; }
+.phys-app .curvature-details[hidden],
+.phys-app .curvature-details [hidden],
+.phys-app .curvature-radius-label[hidden] { display: none !important; }
 
 </style>
   <style>
@@ -972,12 +1006,24 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         </div>
 
         <label class="field-label compact" for="trail-duration">Traînée visible</label>
-        <input id="trail-duration" type="range" min="0.5" max="12" value="4" step="0.5" />
+        <input id="trail-duration" type="range" min="0.5" max="12" value="10" step="0.5" disabled />
         <div class="range-readout-row">
           <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
-            <span id="trail-duration-output-digits" class="math-digits">4.0</span><span class="tex-math">\(\,\mathrm s\)</span>
+            <span id="trail-duration-output-digits" class="math-digits">10.0</span><span class="tex-math">\(\,\mathrm s\)</span>
           </output>
-          <label class="inline-check"><input id="full-trail" type="checkbox" /> Historique complet</label>
+          <label class="inline-check"><input id="full-trail" type="checkbox" checked /> Historique complet</label>
+        </div>
+
+        <label class="check-row solo-check">
+          <input id="osculating-toggle" type="checkbox" aria-controls="curvature-details" />
+          <span>Cercle osculateur et rayon <span class="tex-math">\(R_c\)</span></span>
+        </label>
+        <div id="curvature-details" class="curvature-details" hidden>
+          <output id="curvature-value" class="dynamic-math-output" aria-label="Rayon de courbure">
+            <span class="tex-math">\(R_c=\)</span><span id="curvature-digits" class="math-digits">0.00</span><span id="curvature-scientific" class="curvature-scientific" hidden><span class="tex-math">\(\times 10\)</span><sup id="curvature-exponent" class="math-digits"></sup></span><span class="tex-math">\( \,\mathrm m\)</span>
+          </output>
+          <p id="curvature-status" class="microcopy" hidden></p>
+          <p class="microcopy">Le cercle osculateur est le cercle qui épouse le mieux la courbe localement. Le rayon relie le mobile au centre du cercle. Le tracé garde l’échelle des positions, sans le facteur des vecteurs.</p>
         </div>
 
         <label class="check-row solo-check">
@@ -1022,6 +1068,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <div class="time-badge" aria-label="Temps courant">
           <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
         </div>
+        <div id="radius-label" class="curvature-radius-label" aria-hidden="true" hidden><span class="tex-math">\(R_c\)</span></div>
         <div id="warning-badge" class="warning-badge" hidden></div>
       </div>
 
@@ -1043,7 +1090,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     tangential: '#b5688b',
     centripetal: '#268576',
     jerk: '#987125',
-    trail: [97, 120, 140],
+    trail: [137, 147, 157],
     projection: [217, 104, 59],
   });
 
@@ -1068,9 +1115,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   const ARROW = Object.freeze({
     shaftWidthPx: 3.2,
-    haloWidthPx: 6.4,
-    headLengthPx: 16,
-    headHalfWidthPx: 8,
+    headLengthPx: 18,
+    headHalfWidthPx: 7,
     minimumLengthPx: 3,
   });
 
@@ -1533,6 +1579,63 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     return jerkScales.get(item);
   }
 
+  // Physical geometry only: independent of camera and vector display scales.
+  function osculatingGeometry(data) {
+    const speed = norm(data.velocity);
+    if (!Number.isFinite(speed) || speed <= 1e-2) {
+      return { defined: false, reason: 'stationary' };
+    }
+    const tangent = scale(data.velocity, 1 / speed);
+    const normalAcceleration = sub(data.acceleration, scale(tangent, dot(data.acceleration, tangent)));
+    const normalMagnitude = norm(normalAcceleration);
+    // Suppress finite-difference roundoff at straight segments and inflections.
+    const tolerance = Math.max(1e-5, norm(data.acceleration) * 1e-7);
+    if (!Number.isFinite(normalMagnitude) || normalMagnitude <= tolerance) {
+      return { defined: false, reason: 'straight' };
+    }
+    const normal = scale(normalAcceleration, 1 / normalMagnitude);
+    const radius = speed * speed / normalMagnitude;
+    const center = add(data.position, scale(normal, radius));
+    if (!Number.isFinite(radius) || !Object.values(center).every(Number.isFinite)) {
+      return { defined: false, reason: 'unresolved' };
+    }
+    return { defined: true, radius, center, tangent, normal, position: data.position };
+  }
+
+  function osculatingPoint(circle, angle) {
+    // Anchored at the mobile: avoids center - radius cancellation for large radii.
+    return add(circle.position, add(
+      scale(circle.tangent, circle.radius * Math.sin(angle)),
+      scale(circle.normal, 2 * circle.radius * Math.sin(angle / 2) ** 2),
+    ));
+  }
+
+  function clipScreenSegment(a, b, bounds) {
+    if (![a?.x, a?.y, b?.x, b?.y].every(Number.isFinite)) return null;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    let first = 0;
+    let last = 1;
+    const edges = [
+      [-dx, a.x - bounds.left], [dx, bounds.right - a.x],
+      [-dy, a.y - bounds.top], [dy, bounds.bottom - a.y],
+    ];
+    for (const [p, q] of edges) {
+      if (p === 0) {
+        if (q < 0) return null;
+      } else {
+        const t = q / p;
+        if (p < 0) first = Math.max(first, t);
+        else last = Math.min(last, t);
+        if (first > last) return null;
+      }
+    }
+    return [
+      { x: a.x + first * dx, y: a.y + first * dy },
+      { x: a.x + last * dx, y: a.y + last * dy },
+    ];
+  }
+
   const viewport = document.getElementById('viewport');
   const canvas = document.getElementById('scene-canvas');
   const ctx = canvas.getContext('2d', { alpha: true });
@@ -1555,6 +1658,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     trailDurationOutputDigits: document.getElementById('trail-duration-output-digits'),
     fullTrail: document.getElementById('full-trail'),
     projections: document.getElementById('projection-toggle'),
+    osculating: document.getElementById('osculating-toggle'),
+    curvatureDetails: document.getElementById('curvature-details'),
+    curvatureValue: document.getElementById('curvature-value'),
+    curvatureDigits: document.getElementById('curvature-digits'),
+    curvatureScientific: document.getElementById('curvature-scientific'),
+    curvatureExponent: document.getElementById('curvature-exponent'),
+    curvatureStatus: document.getElementById('curvature-status'),
+    radiusLabel: document.getElementById('radius-label'),
     grid: document.getElementById('grid-toggle'),
     warning: document.getElementById('warning-badge'),
     clearVectors: document.getElementById('clear-vectors'),
@@ -1651,8 +1762,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     playbackSpeed: 1,
     loop: true,
     vectorScale: 1,
-    trailDuration: 4,
-    fullTrail: false,
+    trailDuration: 10,
+    fullTrail: true,
     projections: true,
     grid: true,
   };
@@ -2002,37 +2113,29 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     const length = Math.hypot(dx, dy);
     if (!Number.isFinite(length) || length < ARROW.minimumLengthPx) return;
 
-    const ux = dx / length;
-    const uy = dy / length;
-    const headBase = V(end.x - ARROW.headLengthPx * ux, end.y - ARROW.headLengthPx * uy);
-    const perpendicular = V(-uy, ux);
-    const headLeft = add(headBase, scale(perpendicular, ARROW.headHalfWidthPx));
-    const headRight = sub(headBase, scale(perpendicular, ARROW.headHalfWidthPx));
-
+    const direction = V(dx / length, dy / length);
+    const perpendicular = V(-direction.y, direction.x);
+    const headLength = Math.min(ARROW.headLengthPx, length * 0.65);
+    const headHalfWidth = Math.min(ARROW.headHalfWidthPx, headLength * 0.38);
+    const shaftHalfWidth = Math.min(ARROW.shaftWidthPx / 2, headHalfWidth * 0.55);
+    const headBase = sub(end, scale(direction, headLength));
+    const neck = sub(end, scale(direction, headLength * 0.72));
+    // One continuous silhouette: swept-back wings and a seamless shaft,
+    // without a white outline crossing their junction.
+    const outline = [
+      add(start, scale(perpendicular, shaftHalfWidth)),
+      add(neck, scale(perpendicular, shaftHalfWidth)),
+      add(headBase, scale(perpendicular, headHalfWidth)),
+      end,
+      sub(headBase, scale(perpendicular, headHalfWidth)),
+      sub(neck, scale(perpendicular, shaftHalfWidth)),
+      sub(start, scale(perpendicular, shaftHalfWidth)),
+    ];
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
-    ctx.lineWidth = ARROW.haloWidthPx;
     ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(headBase.x, headBase.y);
-    ctx.stroke();
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = ARROW.shaftWidthPx;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(headBase.x, headBase.y);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(end.x, end.y);
-    ctx.lineTo(headLeft.x, headLeft.y);
-    ctx.lineTo(headRight.x, headRight.y);
+    ctx.moveTo(outline[0].x, outline[0].y);
+    for (const point of outline.slice(1)) ctx.lineTo(point.x, point.y);
     ctx.closePath();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
-    ctx.stroke();
     ctx.fillStyle = color;
     ctx.fill();
     ctx.restore();
@@ -2075,13 +2178,126 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
   }
 
+  function drawOsculatingCircle(circle) {
+    if (!circle) return;
+    const center = worldToScreen(circle.center);
+    const radius = circle.radius * plotRect.width / (view.xmax - view.xmin);
+    let last = null;
+    let nodes = 0;
+    const trace = (a, b, p, q, level) => {
+      const sagitta = 2 * radius * Math.sin((b - a) / 4) ** 2;
+      if (Math.max(p.x, q.x) + sagitta < plotRect.left || Math.min(p.x, q.x) - sagitta > plotRect.right
+        || Math.max(p.y, q.y) + sagitta < plotRect.top || Math.min(p.y, q.y) - sagitta > plotRect.bottom) {
+        last = null;
+        return;
+      }
+      if (++nodes > 8192) { last = null; return; }
+      if (sagitta <= 0.35) {
+        const segment = clipScreenSegment(p, q, plotRect);
+        if (!segment) { last = null; return; }
+        const [start, end] = segment;
+        if (!last || Math.hypot(start.x - last.x, start.y - last.y) > 0.01) ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        last = end;
+      } else if (level < 36) {
+        const middle = (a + b) / 2;
+        const m = worldToScreen(osculatingPoint(circle, middle));
+        trace(a, middle, p, m, level + 1);
+        trace(middle, b, m, q, level + 1);
+      } else last = null;
+    };
+    clipToPlot(() => {
+      ctx.save();
+      ctx.strokeStyle = '#268576';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.8;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      // Tessellation anchored at the mobile also keeps very large circles
+      // accurate on canvas implementations that store paths as 32-bit floats.
+      for (let i = 0; i < 8; i += 1) {
+        const a = i * Math.PI / 4;
+        const b = (i + 1) * Math.PI / 4;
+        trace(a, b, worldToScreen(osculatingPoint(circle, a)), worldToScreen(osculatingPoint(circle, b)), 0);
+      }
+      ctx.stroke();
+      ctx.restore();
+      drawRadiusAnnotation(worldToScreen(circle.position), center, plotRect);
+    });
+  }
+
   function drawScene(item, data) {
     ctx.clearRect(0, 0, viewportWidth, viewportHeight);
     drawAxes();
+    drawOsculatingCircle(updateCurvatureReadout(data));
     drawTrail(item);
     drawProjectionSystem(data.position);
     drawSelectedVectors(item, data);
     drawParticle(data.position);
+  }
+
+  function updateCurvatureReadout(data) {
+    dom.radiusLabel.hidden = true;
+    dom.curvatureDetails.hidden = !dom.osculating.checked;
+    if (!dom.osculating.checked) return null;
+    const circle = osculatingGeometry(data);
+    dom.curvatureValue.hidden = !circle.defined;
+    dom.curvatureStatus.hidden = circle.defined;
+    if (!circle.defined) {
+      const messages = {
+        stationary: 'Vitesse quasi nulle : le cercle osculateur et son rayon sont indéfinis.',
+        straight: 'Courbure quasi nulle : le rayon tend vers l’infini ; aucun cercle fini n’est tracé.',
+        unresolved: 'Le rayon de courbure ne peut pas être résolu à cet instant.',
+      };
+      dom.curvatureStatus.textContent = messages[circle.reason];
+      return null;
+    }
+    const scientific = circle.radius >= 1e5 || circle.radius < 0.01;
+    dom.curvatureScientific.hidden = !scientific;
+    if (scientific) {
+      const [mantissa, exponent] = circle.radius.toExponential(2).split('e');
+      setMathDigits(dom.curvatureDigits, mantissa);
+      setMathDigits(dom.curvatureExponent, String(Number(exponent)));
+    } else {
+      setMathDigits(dom.curvatureDigits, circle.radius.toFixed(2));
+    }
+    dom.curvatureValue.setAttribute('aria-label', 'Rayon de courbure : ' + circle.radius.toPrecision(5) + ' mètres');
+    return circle;
+  }
+
+  function drawRadiusAnnotation(start, center, bounds) {
+    const segment = clipScreenSegment(start, center, bounds);
+    if (!segment) return;
+    const [a, b] = segment;
+    ctx.save();
+    ctx.strokeStyle = '#268576';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // A small cross marks the actual center, never an artificially clipped endpoint.
+    if (center.x > bounds.left + 5 && center.x < bounds.right - 5
+      && center.y > bounds.top + 5 && center.y < bounds.bottom - 5) {
+      ctx.beginPath();
+      ctx.moveTo(center.x - 4, center.y);
+      ctx.lineTo(center.x + 4, center.y);
+      ctx.moveTo(center.x, center.y - 4);
+      ctx.lineTo(center.x, center.y + 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 36) return;
+    const x = (a.x + b.x) / 2 - 14 * dy / length;
+    const y = (a.y + b.y) / 2 + 14 * dx / length;
+    if (x < bounds.left + 20 || x > bounds.right - 20 || y < bounds.top + 20 || y > bounds.bottom - 20) return;
+    dom.radiusLabel.hidden = false;
+    dom.radiusLabel.style.left = x + 'px';
+    dom.radiusLabel.style.top = y + 'px';
   }
 
   function updateReadouts(data) {
@@ -2239,6 +2455,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.trailDuration.disabled = state.fullTrail;
     updateAndDraw();
   });
+  dom.osculating.addEventListener('change', updateAndDraw);
   dom.projections.addEventListener('change', () => {
     state.projections = dom.projections.checked;
     updateAndDraw();
@@ -2355,6 +2572,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   async function initializeApplication() {
     dom.trajectory.value = state.trajectoryKey;
+    dom.fullTrail.checked = state.fullTrail;
+    dom.trailDuration.disabled = state.fullTrail;
     dom.timeSlider.max = String(trajectoryTimeMax(currentTrajectory()));
     updateEquationPanel();
     resizeCanvas();
