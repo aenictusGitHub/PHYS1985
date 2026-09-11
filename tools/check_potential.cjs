@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),vm=require('node:vm'),path=require('n
 const {execFileSync}=require('node:child_process');
 const zip=path.join(__dirname,'..','potentiel_force_webapp_fr.zip');
 const read=file=>execFileSync('unzip',['-p',zip,'potentiel_force_webapp_fr_source/'+file],{encoding:'utf8'});
-const source=read('app.js'),html=read('index.html');
+const source=read('physics.js')+'\n'+read('app.js'),html=read('index.html');
 const models=vm.runInNewContext(source.split("if (typeof document")[0]+';PotentialModels');
 assert.equal(models.stability(1),'stable');
 assert.equal(models.stability(-1),'unstable');
@@ -71,22 +71,69 @@ for(const energy of [.5e-21,argon.energy,4e-21])for(const length of [.25e-9,argo
 }
 console.log('Potential physics: analytical gradients, curvature, stable/unstable equilibria, pair minimum and bounded sweep passed.');
 
+const plane=vm.runInNewContext(read('physics.js')+';PotentialPlane');
+for(const model of Object.keys(plane.definitions))for(const energy of [.2,1,4])for(const length of [.5,1,2]){
+  for(let i=0;i<40;i++){
+    const x=-1.6+3.2*i/39,y=1.5*Math.sin(i),s=plane.evaluate(model,x,y,energy,length),h=1e-5;
+    const xp=plane.evaluate(model,x+h,y,energy,length),xm=plane.evaluate(model,x-h,y,energy,length),yp=plane.evaluate(model,x,y+h,energy,length),ym=plane.evaluate(model,x,y-h,energy,length);
+    near(s.Fx,-(xp.U-xm.U)/(2*h*length),1e-6);near(s.Fy,-(yp.U-ym.U)/(2*h*length),1e-6);
+    near(s.Hxx,-(xp.Fx-xm.Fx)/(2*h*length),1e-6);near(s.Hyy,-(yp.Fy-ym.Fy)/(2*h*length),1e-6);near(s.Hxy,-(xp.Fy-xm.Fy)/(2*h*length),1e-6);near(s.Hxy,-(yp.Fx-ym.Fx)/(2*h*length),1e-6);
+    assert(s.Fx*(-s.Fx)+s.Fy*(-s.Fy)<=0,'force points down the gradient');
+  }
+  const eq=plane.equilibria(model,energy,length);assert.equal(eq.length,model==='double'?3:1);
+  for(const e of eq){near(e.Fx,0);near(e.Fy,0);near(e.eigen[0]*e.eigen[1],e.Hxx*e.Hyy-e.Hxy**2,1e-8);assert.equal(e.stable,model==='bowl'||model==='double'&&e.qx!==0);assert.equal(e.saddle,!e.stable);}
+}
+const segments=plane.contours(Array.from({length:9},(_,j)=>Array.from({length:9},(_,i)=>i+2*j)),7.5);assert(segments.length);
+for(const segment of segments)for(const [x,y]of segment)near(x+2*y,7.5,1e-12);
+for(const bad of [['bad',0,0],['bowl',NaN,0],['bowl',0,0,0,1]])assert.throws(()=>plane.evaluate(...bad));
+console.log('2D physics: partial derivatives, Hessian, minima/saddles, physical units and contour interpolation passed.');
+
+const heightField=vm.runInNewContext(read('physics.js')+';PotentialSurface');
+for(const model of Object.keys(plane.definitions))for(const viewport of [240,640,1100]){
+  const m=heightField.mesh(model,2);
+  assert.equal(m.triangles.length,3200);
+  for(const row of m.vertices)for(const v of row)near(v.u,plane.evaluate(model,v.x,v.y,2).U);
+  for(const camera of [heightField.initial,{azimuth:0,elevation:Math.PI/2},{azimuth:2.3,elevation:.18},{azimuth:-2,elevation:1.1}]){
+    const pr=heightField.projection(viewport,400,m.low,m.high,camera),scene=heightField.scene(m,pr);
+    const forceScale=heightField.forceFactor(m,model,2,1,pr,viewport,400);assert(forceScale>0);
+    for(const row of m.vertices)for(const v of row){
+      const s=plane.evaluate(model,v.x,v.y,2),tip=pr.project(v.x+forceScale*s.Fx,v.y+forceScale*s.Fy,s.U);
+      assert(tip[0]>=28&&tip[0]<=viewport-28&&tip[1]>=28&&tip[1]<=372,'Force endpoint fits without moving or rescaling the surface');
+    }
+    for(const x of [-1.6,0,1.6])for(const y of [-1.6,0,1.6])for(const u of [pr.base,0,pr.top]){
+      const p=pr.project(x,y,u);assert(p.every(Number.isFinite));assert(p[0]>40&&p[0]<viewport-35);assert(p[1]>30&&p[1]<370);
+    }
+    // A 3D orthogonal change of basis, with one common x/y spatial scale.
+    const o=pr.project(0,0,0),a=pr.project(1,0,0),b=pr.project(0,1,0);
+    const length=v=>Math.hypot(v[0]-o[0],v[1]-o[1],pr.scale*(v[2]-o[2]));near(length(a),pr.scale);near(length(b),pr.scale);
+    // Picking returns the nearest visible surface, never a far-side face.
+    for(const f of scene.faces.filter((_,i)=>i%119===0)){
+      const p=[0,1,2].map(k=>f.screen.reduce((s,v)=>s+v[k]/3,0)),hit=scene.pick(p[0],p[1]);assert(hit);assert(hit.depth>=p[2]-1e-8);assert(Math.abs(hit.x)<=1.600001&&Math.abs(hit.y)<=1.600001);
+    }
+    if(camera.elevation===Math.PI/2)for(const [x,y]of [[.3,.7],[-1.2,.2],[1.4,-1.3]]){
+      const p=pr.project(x,y,plane.evaluate(model,x,y,2).U),hit=scene.pick(p[0],p[1]);near(hit.x,x);near(hit.y,y);
+    }
+  }
+}
+console.log('3D surface: analytical heights, orthographic camera, common spatial scale, bounds and front-surface picking passed.');
+
 let width=640,frameId=0,typesetCount=0;
 const nodes=new Map(),frames=new Map(),errors=[],docEvents={},plots=new Map();
 function canvasContext(id) {
-  let points=[];const strokes=[],circles=[];
+  let points=[];const strokes=[],circles=[],fills=[];
   const context=new Proxy({}, {get(target,key){
     if(key in target)return target[key];
     return (...args)=>{
       for(const n of args.flat())if(typeof n==='number')assert(Number.isFinite(n),'finite canvas coordinate');
-      if(key==='clearRect'){strokes.length=0;circles.length=0;}
+      if(key==='clearRect'){strokes.length=0;circles.length=0;fills.length=0;}
       if(key==='beginPath')points=[];
       if(key==='moveTo'||key==='lineTo')points.push([...args]);
       if(key==='arc')circles.push([...args]);
       if(key==='setLineDash')target.dash=[...args[0]];
       if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth,dash:target.dash});
+      if(key==='fill')fills.push({points,color:target.fillStyle});
     };
-  }});plots.set(id,{context,strokes,circles});return context;
+  }});plots.set(id,{context,strokes,circles,fills});return context;
 }
 class Element {
   constructor(tag='span'){this.tag=tag;this.children=[];this.dataset={};this.style={};this.attrs={};this.events={};this.classList={add(){}};this.hidden=false;this.value='';this.checked=false;}
@@ -97,7 +144,7 @@ class Element {
   cloneNode(deep){const el=new Element(this.tag);el.attrs={...this.attrs};el.style={...this.style};el.dataset={...this.dataset};if(deep)el.children=this.children.map(c=>typeof c==='string'?c:c.cloneNode(true));return el;}
   addEventListener(k,fn){this.events[k]=fn;}fire(k,args={}){this.events[k]?.({target:this,preventDefault(){},...args});}click(){this.fire('click');}
   closest(){return null;}setPointerCapture(id){this.capture=id;}hasPointerCapture(id){return this.capture===id;}releasePointerCapture(){this.capture=undefined;}
-  getBoundingClientRect(){return {left:0,top:0,width,height:this.id?.startsWith('stage')?150:this.id?.startsWith('force')?215:255};}
+  getBoundingClientRect(){return {left:0,top:0,width,height:['plane-surface','surface-canvas'].includes(this.id)?Math.min(500,Math.max(320,width-20)):['plane-map','plane-canvas'].includes(this.id)?Math.min(460,Math.max(260,width-40)):this.id?.startsWith('stage')?150:this.id?.startsWith('force')?215:255};}
   getContext(){return plots.get(this.id)?.context||canvasContext(this.id);}
 }
 for(const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
@@ -107,7 +154,7 @@ for(const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
 }
 const $=id=>{assert(nodes.has(id),'missing '+id);return nodes.get(id);};
 const staticMath=[...html.matchAll(/\bdata-tex="([^"]*)"/g)].map(match=>{const el=new Element();el.dataset.tex=match[1];return el;});
-$('model-select').value='wells';$('speed').value='1';
+$('model-select').value='wells';$('speed').value='1';$('dimension').value='1';$('plane-model').value='bowl';
 let convertTex;
 if(process.env.PHYS1985_MATHJAX_ROOT) {
   const root=process.env.PHYS1985_MATHJAX_ROOT;
@@ -288,6 +335,63 @@ async function checkUI(){
   // Switching out of the atomic example must not leak nanometre defaults.
   $('model-select').value='wells';$('model-select').fire('change');near(value('length-value'),1);near(value('energy-value'),1);assert(!$('position-value').dataset.number.includes('nm'));
   $('play').click();document.hidden=true;docEvents.visibilitychange();assert.equal(frames.size,0);assert.equal($('play').textContent,'Balayer');
+  document.hidden=false;
+  const oldPosition=value('position-value');$('dimension').value='2';$('dimension').fire('change');
+  assert($('view-1d').hidden&&$('controls-1d').hidden&&!$('view-2d').hidden&&!$('controls-2d').hidden);assert.equal(frames.size,0);
+  const set=(id,v)=>{$(id).value=v;$(id).fire('input');};
+  for(const model of Object.keys(plane.definitions))for(const viewport of [240,640,1100]){
+    width=viewport;$('plane-model').value=model;$('plane-model').fire('change');let fixedScale;
+    for(const [x,y]of [[.7,.4],[-1.6,-1.6],[1.6,1.6],[-1.6,1.6],[0,.6]]){
+      set('plane-x',x);set('plane-y',y);const s=plane.evaluate(model,x,y);
+      near(value('plane-U'),s.U,.00051);near(value('plane-Fx'),s.Fx,.00051);near(value('plane-Fy'),s.Fy,.00051);near(value('plane-norm'),Math.hypot(s.Fx,s.Fy),.00051);
+      const k=parseFloat($('plane-scale-arrow').style.width)/value('plane-scale-value');if(fixedScale===undefined)fixedScale=k;else near(k,fixedScale,1e-9);
+      const map=plots.get('plane-canvas'),point=map.circles.at(-1),g=plane.geometry(width,$('plane-map').getBoundingClientRect().height,model==='saddle'?48:0);near(point[0],g.X(x));near(point[1],g.Y(y));
+      if(model==='saddle'&&x===.7&&y===.4)assert(k*Math.hypot(s.Fx,s.Fy)>(width<450?13:26),'Saddle force remains clearly visible at a typical non-equilibrium point');
+      const head=map.fills.find(f=>f.color==='#7758a6');assert(head);near(head.points[0][0],point[0]+k*s.Fx,1e-8);near(head.points[0][1],point[1]-k*s.Fy,1e-8);
+      for(const [px,py]of head.points){assert(px>=0&&px<=width);assert(py>=0&&py<=$('plane-map').getBoundingClientRect().height);}
+      assert($('plane-hessian').hidden);
+      for(const axis of ['x','y']){assert.equal(parabolas('plane-'+axis).length,0);const zero=$('plane-'+axis+'-labels').children.filter(n=>!n.hidden&&n.dataset.math==='0'&&parseFloat(n.style.left)===37);assert.equal(zero.length,1);}
+    }
+    $('plane-equilibria').children.forEach((button,i)=>{button.click();near(value('plane-norm'),0);assert(!$('plane-hessian').hidden);assert.equal(parabolas('plane-x').length,1);assert.equal(parabolas('plane-y').length,1);assert(!$('plane-eigenvalues').dataset.math.includes('NaN'));assert($('plane-status').textContent.includes(plane.equilibria(model)[i].stable?'stable':'Col'));});
+    assert($('plane-slope-explanation').hidden,'Hide the generic slope sentence at an equilibrium');
+    set('plane-x',.7);set('plane-y',.4);set('plane-energy',2);set('plane-length',1.5);const s=plane.evaluate(model,.7,.4,2,1.5);near(value('plane-Fx'),s.Fx,.00051);near(value('plane-Fy'),s.Fy,.00051);near(value('plane-x-value'),1.05);near(value('plane-y-value'),.6);
+    const stable=[$('plane-U').dataset.number,$('plane-Fx').dataset.number,$('plane-Fy').dataset.number,...plots.get('plane-canvas').circles.at(-1)];
+    $('plane-force').checked=false;$('plane-force').fire('change');assert($('plane-scale-key').hidden);assert(!plots.get('plane-canvas').fills.some(f=>f.color==='#7758a6'));
+    $('plane-contours').checked=false;$('plane-contours').fire('change');assert.deepEqual([$('plane-U').dataset.number,$('plane-Fx').dataset.number,$('plane-Fy').dataset.number,...plots.get('plane-canvas').circles.at(-1)],stable);
+    $('plane-force').checked=true;$('plane-contours').checked=true;$('plane-force').fire('change');
+    const g=plane.geometry(width,$('plane-map').getBoundingClientRect().height,model==='saddle'?48:0),map=$('plane-map');map.fire('pointerdown',{pointerId:27,button:0,clientX:g.X(-.3),clientY:g.Y(.2)});near(value('plane-x-value'),-.45);near(value('plane-y-value'),.3);map.fire('pointermove',{pointerId:27,clientX:g.X(.5),clientY:g.Y(-.4)});near(value('plane-x-value'),.75);near(value('plane-y-value'),-.6);map.fire('pointercancel',{pointerId:27});assert.equal(map.capture,undefined);
+    map.fire('keydown',{key:'ArrowUp'});near(value('plane-y-value'),-.57);map.fire('keydown',{key:'Home'});near(value('plane-x-value'),0);near(value('plane-y-value'),0);
+    $('plane-x-plot').fire('keydown',{key:'End'});near(value('plane-x-value'),2.4);$('plane-y-plot').fire('keydown',{key:'Home'});near(value('plane-y-value'),-2.4);
+    $('plane-reset').click();near(value('plane-energy-value'),1);near(value('plane-length-value'),1);
+  }
+  assert(!$('plane-slope-explanation').hidden);assert(staticMath.some(el=>el.dataset.tex==='-F_x'));assert(staticMath.some(el=>el.dataset.tex==='-F_y'));
+  assert($('plane-surface-card').hidden,'3D surface is optional');
+  $('plane-show-surface').checked=true;$('plane-show-surface').fire('change');assert(!$('plane-surface-card').hidden);
+  for(const model of Object.keys(plane.definitions))for(const viewport of [240,640,1100]){
+    width=viewport;$('plane-model').value=model;$('plane-model').fire('change');
+    const before=['plane-U','plane-Fx','plane-Fy'].map(id=>$(id).dataset.number),surfaceEl=$('plane-surface');
+    surfaceEl.fire('pointerdown',{pointerId:88,button:0,clientX:width/2,clientY:120});surfaceEl.fire('pointermove',{pointerId:88,clientX:width/2+50,clientY:140});surfaceEl.fire('pointerup',{pointerId:88,clientX:width/2+50,clientY:140});assert.equal(surfaceEl.capture,undefined);assert.deepEqual(['plane-U','plane-Fx','plane-Fy'].map(id=>$(id).dataset.number),before,'Rotating does not select or alter the potential');
+    $('surface-reset').click();
+    const labels=$('surface-labels').children.filter(el=>!el.hidden);assert(labels.some(el=>el.dataset.math==='0'),'Energy zero is labelled in the perspective view');
+    $('surface-top').click();const mesh=heightField.mesh(model,1),pr=heightField.projection(width,surfaceEl.getBoundingClientRect().height,mesh.low,mesh.high,{azimuth:0,elevation:Math.PI/2}),p=pr.project(.32,-.24,plane.evaluate(model,.32,-.24).U);
+    surfaceEl.fire('pointerdown',{pointerId:89,button:0,clientX:p[0],clientY:p[1]});surfaceEl.fire('pointerup',{pointerId:89,clientX:p[0],clientY:p[1]});near(value('plane-x-value'),.32);near(value('plane-y-value'),-.24);near(value('plane-U'),plane.evaluate(model,.32,-.24).U,.00051);assert($('surface-point-note').hidden);
+    const marker=plots.get('surface-canvas').circles.at(-1);near(marker[0],p[0]);near(marker[1],p[1]);
+    const forceScale=heightField.forceFactor(mesh,model,1,1,pr,width,surfaceEl.getBoundingClientRect().height),s=plane.evaluate(model,.32,-.24),tip=pr.project(.32+forceScale*s.Fx,-.24+forceScale*s.Fy,s.U),drawing=plots.get('surface-canvas');
+    const head=drawing.fills.find(f=>f.color==='#7758a6');assert(head,'Force appears on the surface');near(head.points[0][0],tip[0]);near(head.points[0][1],tip[1]);
+    const shaft=drawing.strokes.find(f=>f.color==='#7758a6'&&f.width===3.5);near(shaft.points[0][0],p[0]);near(shaft.points[0][1],p[1]);
+    $('plane-components').checked=false;$('plane-components').fire('change');assert(drawing.fills.some(f=>f.color==='#7758a6'));assert(!drawing.fills.some(f=>['#2775b6','#268576'].includes(f.color)&&f.points.length===4),'Component arrows follow the common option');
+    $('plane-force').checked=false;$('plane-force').fire('change');assert(!drawing.fills.some(f=>f.color==='#7758a6'));assert($('surface-force-key').hidden);near(value('plane-U'),s.U,.00051);
+    $('plane-force').checked=true;$('plane-components').checked=true;$('plane-force').fire('change');assert(!$('surface-force-key').hidden);
+    const after=value('plane-U');surfaceEl.fire('keydown',{key:'ArrowLeft'});near(value('plane-U'),after);surfaceEl.fire('keydown',{key:'Home'});near(value('plane-U'),after);
+    surfaceEl.fire('pointerdown',{pointerId:90,button:0,clientX:10,clientY:10});surfaceEl.fire('pointercancel',{pointerId:90});assert.equal(surfaceEl.capture,undefined);near(value('plane-U'),after);
+    set('plane-energy',2);set('plane-length',1.5);near(value('plane-U'),2*plane.evaluate(model,.32,-.24).U,.00051);near(value('plane-x-value'),.48);
+    $('plane-equilibria').children[0].click();near(value('plane-norm'),0);assert.equal(parabolas('plane-x').length,1);
+    assert(!plots.get('surface-canvas').fills.some(f=>f.color==='#7758a6'),'No artificial arrow at zero force');assert.equal($('surface-force-caption').dataset.math,String.raw`\vec F=\vec 0`);
+  }
+  $('plane-show-surface').checked=false;$('plane-show-surface').fire('change');assert($('plane-surface-card').hidden);
+  console.log('3D controller: optional view, mouse/keyboard rotation, reset/top view, point selection, synchronization and physical scale changes passed.');
+  $('dimension').value='1';$('dimension').fire('change');assert(!$('view-1d').hidden&&$('view-2d').hidden);near(value('position-value'),oldPosition);
+  console.log('2D controller: point/cuts/force synchronization, linear arrows, stability, independent scales, keyboard, drag and 1D return passed.');
   assert.deepEqual(errors,[]);
   console.log('Potential controllers: synchronized plots, arrows, equilibria, scales, pointer/keyboard input, display options, numeric baselines and continuous sweep passed'+(convertTex?' with real MathJax SVG.':'.'));
 }

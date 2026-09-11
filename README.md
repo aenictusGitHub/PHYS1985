@@ -103,7 +103,7 @@ Tests unitaires des commandes (avec un adaptateur DOM/canvas minimal, sans navig
 ## Énergie potentielle et force
 
 Cette application s’inspire de `Potential Energy Force.mp4`, sans redistribuer la vidéo.
-Trois exemples : un double puits asymétrique original, une paire de particules
+En une dimension, trois exemples : un double puits asymétrique original, une paire de particules
 avec un [potentiel de Lennard–Jones](https://docs.lammps.org/pair_lj.html) non tronqué, et le potentiel gravitationnel universel `U = −Gm₁m₂/r`.
 Le double puits utilise des échelles pédagogiques ; la paire prend les paramètres de l’argon comme référence.
 
@@ -115,6 +115,9 @@ Le double puits utilise des échelles pédagogiques ; la paire prend les paramè
 - Lennard–Jones : paramètres de référence de l’argon, distance d’équilibre d’environ 0.382 nm ; distances en nm, énergies en 10⁻²¹ J et forces en pN.
 - Échelles d’énergie et de longueur réglables ; valeurs et unités LaTeX avec décimales à point.
 - Exploration par curseur, souris, toucher ou clavier. Le balayage automatique explore les positions ; ce n’est pas une simulation de mouvement.
+- Mode 2D : puits elliptique incliné, col et double puits couplé. Carte du potentiel avec équipotentielles, point déplaçable en x et y, force `F = −grad U` et ses composantes avec échelle explicite.
+- Surface 3D optionnelle du potentiel 2D : rotation souris/tactile/clavier, vue du dessus, sélection d’un point sur la surface et coupes synchronisées. La hauteur représente l’énergie en joules ; la force est reportée au point choisi parallèlement au plan physique (x, y), avec ses composantes optionnelles.
+- Deux coupes synchronisées expliquent `Fx = −∂U/∂x` et `Fy = −∂U/∂y`. La stabilité est reliée aux valeurs propres de la Hessienne ; les approximations quadratiques locales apparaissent seulement aux équilibres.
 
 Vérifications des dérivées analytiques, équilibres, commandes, flèches et balayage :
 `node tools/check_potential.cjs`. La variable optionnelle `PHYS1985_MATHJAX_ROOT`
