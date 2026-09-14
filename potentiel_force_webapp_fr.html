@@ -67,6 +67,9 @@ canvas { display: block; width: 100%; height: 100%; }
 .number { display: inline-block; white-space: nowrap; font-weight: 400; }
 .number > svg { overflow: visible; }
 .dimension-control{border-bottom:2px solid var(--line)}
+.motion-settings summary{cursor:pointer;color:var(--ink);font-size:var(--text-ui)}.motion-settings[open]{padding-bottom:.6rem}.motion-summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:.65rem 1.3rem;background:white;border:1px solid var(--line);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:.85rem;font-size:var(--text-formula)}.motion-summary>span{display:inline-flex;align-items:baseline;gap:.25rem}.motion-summary small{font-family:var(--ui-font);font-size:var(--text-secondary);color:var(--muted)}.motion-summary small[data-warning="true"]{color:#aa4057}.motion-controls .microcopy{line-height:1.5}
+.plane-slices .card-heading>span{display:inline-flex;align-items:baseline;gap:.25rem}.plot-label output{margin-left:.2rem}
+.phys-app .motion-controls .transport-row{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}.phys-app .motion-controls #motion-rate{grid-column:1/-1}
 .plane-map{position:relative;height:460px;height:clamp(260px,calc(100cqw - 40px),460px);touch-action:none;cursor:crosshair;background:#fbfcfe}
 .surface-card{margin-bottom:.85rem}.surface-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;padding:.7rem 1rem;font-size:var(--text-secondary);color:var(--muted)}.surface-toolbar>span{display:inline-flex;align-items:center;gap:.5rem}.surface-toolbar i{display:inline-block;width:1.4rem;border-top:2px solid}.surface-cut-x{color:#2775b6}.surface-cut-y{color:#268576}.surface-toolbar button{font-size:var(--text-secondary)}.surface-toolbar #surface-top{margin-left:auto}.plane-surface{position:relative;height:clamp(320px,calc(100cqw - 20px),500px);background:#fbfcfe;touch-action:none;cursor:grab}.plane-surface[data-dragging="true"]{cursor:grabbing}.plane-surface:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .plane-key{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem 1rem;padding:.8rem 1rem 0;font-size:var(--text-secondary);color:var(--muted)}.plane-key>span{display:inline-flex;align-items:center;gap:.5rem}.plane-force-line{width:1.5rem;border-top:3px solid #7758a6}.plane-key svg{height:12px;width:40px;fill:none;stroke:#7758a6;stroke-width:2;overflow:visible}.plane-key #plane-status{margin-left:auto}
@@ -603,18 +606,121 @@ const PotentialSurface=(()=>{
   return {initial,color,mesh,projection,barycentric,scene,forceFactor};
 })();
 
+// Integrate dimensionless Newton equations, q'' = -grad(u), with velocity
+// Verlet. Physical time is restored with L0*sqrt(m_eff/U0), including atomic
+// scales. Domain exits are events, not artificial reflecting walls.
+const PotentialDynamics=(()=>{
+  'use strict';
+  function create(q,w,sample){
+    if(q.length!==w.length||!q.concat(w).every(Number.isFinite))throw new Error('État initial non valide.');
+    const r=sample(q);return {q:[...q],w:[...w],t:0,E0:r.u+.5*w.reduce((s,v)=>s+v*v,0),ended:false};
+  }
+  function advance(s,dt,sample,bounds){
+    if(!Number.isFinite(dt)||dt<0||dt>4)throw new Error('Pas de temps non valide.');
+    let remaining=dt,steps=0;
+    const inside=q=>q.every((v,i)=>Number.isFinite(v)&&v>=bounds[i][0]&&v<=bounds[i][1]);
+    if(!inside(s.q))throw new Error('Position hors du domaine.');
+    while(remaining>1e-13&&!s.ended){
+      if(++steps>10000)throw new Error('Trop de sous-pas.');
+      let h=Math.min(.001,remaining);const r=sample(s.q),position=t=>s.q.map((v,i)=>v+t*s.w[i]+.5*t*t*r.a[i]);let next=position(h);
+      if(!inside(next)){
+        let lo=0,hi=h;for(let i=0;i<45;i++){const mid=(lo+hi)/2;if(inside(position(mid)))lo=mid;else hi=mid;}h=lo;next=position(h);s.ended=true;
+      }
+      const end=sample(next);s.w=s.w.map((v,i)=>v+.5*h*(r.a[i]+end.a[i]));s.q=next;s.t+=h;remaining-=h;
+      if(!s.q.concat(s.w,s.t).every(Number.isFinite))throw new Error('Évolution non finie.');
+    }
+    return s;
+  }
+  function energy(s,sample){return sample(s.q).u+.5*s.w.reduce((sum,v)=>sum+v*v,0);}
+  return {create,advance,energy};
+})();
+
+function createPotentialMotion(helpers){
+  'use strict';
+  const {$,math,number,read,apply,stopSweep}=helpers,tex=String.raw,D=PotentialDynamics;
+  const settings={mass:1,v0:0,angle:0};let config=null,system=null,run=null,initial=null,trail=[],playing=false,frameId=0,last=null;
+  $('motion-rate').value='1';
+  function setup(c){
+    const pair=c.dimension===1&&c.model==='pair',gravity=c.dimension===1&&c.model==='gravity',radial=pair||gravity;
+    // Equal masses and a stationary centre of mass in the radial examples.
+    // U0*L0 = G*m_body^2 fixes the equal gravitational masses, not inertia
+    // chosen independently from the gravitational potential.
+    const bodyMass=pair?6.63e-26:gravity?Math.sqrt(c.energy*c.length/6.67430e-11):settings.mass,mass=radial?bodyMass/2:bodyMass;
+    const timeScale=c.length*Math.sqrt(mass/c.energy),timeUnit=pair?1e-12:1,timeRate=pair?1e-12:gravity?100:1;
+    const sample=q=>{
+      if(c.dimension===2){const s=PotentialPlane.reduced(c.model,q[0],q[1]);return {u:s.u,a:[-s.gx,-s.gy]};}
+      const s=PotentialModels.reduced(c.model,q[0]);return {u:s.u,a:[-s.du]};
+    };
+    return {sample,mass,bodyMass,pair,gravity,radial,timeScale,timeUnit,timeRate,vScale:Math.sqrt(c.energy/mass),energyUnit:pair?1e-21:1,energyTex:pair?tex`\times10^{-21}\,\mathrm J`:tex`\mathrm J`};
+  }
+  function pause(){if(playing)$('motion-status').textContent='En pause — Lire reprend le mouvement.';playing=false;last=null;if(frameId)cancelAnimationFrame(frameId);frameId=0;$('motion-play').textContent='Lire';$('motion-play').setAttribute('aria-pressed','false');}
+  function readouts(){
+    if(!run)return;const K=.5*run.w.reduce((s,v)=>s+v*v,0)*config.energy,E=D.energy(run,system.sample)*config.energy,drift=Math.abs(E/config.energy-run.E0)/Math.max(1,Math.abs(run.E0));
+    number($('motion-time'),run.t*system.timeScale/system.timeUnit,2,system.pair?tex`\mathrm{ps}`:tex`\mathrm s`);
+    number($('motion-kinetic'),K/system.energyUnit,3,system.energyTex);number($('motion-energy'),E/system.energyUnit,3,system.energyTex);
+    $('motion-energy-check').textContent=run.t>0?'Écart énergétique : '+(100*drift).toFixed(4)+' %':'Sans frottement';$('motion-energy-check').dataset.warning=String(drift>1e-3);
+    number($('motion-v0-value'),settings.v0,system.gravity?4:system.pair?0:2,tex`\mathrm{m\,s^{-1}}`);number($('motion-angle-value'),settings.angle,0,tex`{}^\circ`);
+    if(system.pair)math($('motion-mass-value'),tex`6.63\times10^{-26}\,\mathrm{kg}`);else number($('motion-mass-value'),system.bodyMass,2,tex`\mathrm{kg}`);
+  }
+  function seed(q){
+    const speed=settings.v0/system.vScale,angle=settings.angle*Math.PI/180,w=config.dimension===2?[speed*Math.cos(angle),speed*Math.sin(angle)]:[speed];
+    run=D.create(q,w,system.sample);trail=[[...q]];initial=[...q];
+  }
+  function resetAtPoint(resetSettings=false,repaint=true){
+    pause();const next=read(),changed=!config||config.dimension!==next.dimension||config.model!==next.model;config=next;
+    if(changed||resetSettings){settings.mass=1;settings.v0=0;settings.angle=0;}
+    system=setup(config);seed(config.q);
+    const max=system.pair?400:system.gravity?.02:3;
+    $('motion-mass').hidden=system.radial;$('motion-mass').disabled=system.radial;$('motion-mass').value=settings.mass;
+    math($('motion-mass-symbol'),system.radial?'m_1=m_2':'m');
+    $('motion-v0').min=config.dimension===2?0:-max;$('motion-v0').max=max;$('motion-v0').step=system.gravity?.0001:system.pair?1:.01;$('motion-v0').value=settings.v0;
+    $('motion-angle').value=settings.angle;$('motion-angle-row').hidden=config.dimension!==2;
+    $('motion-v0-label').textContent=config.dimension===2?'Module de la vitesse initiale':system.radial?'Vitesse relative initiale':'Vitesse initiale';
+    math($('motion-v0-symbol'),config.dimension===2?tex`|\vec v_0|`:system.radial?tex`\dot r_0`:tex`v_{x0}`);
+    $('motion-mass-note').textContent=system.radial?(system.gravity?'Deux masses égales, fixées par les échelles du potentiel. ':'Deux atomes de même masse. ')+'Le centre de masse reste au repos ; le mouvement relatif utilise la moitié de la masse d’un corps. Une vitesse relative positive les éloigne.':'Modifier une position ou un paramètre redéfinit les conditions initiales.'+(config.dimension===2?' L’angle est mesuré depuis +x vers +y.':'');
+    $('motion-clock-note').textContent=system.pair?'Lecture normale : 1 ps simulée par seconde à l’écran.':system.gravity?'Lecture normale : 100 s simulées par seconde à l’écran.':'Lecture normale : 1 s simulée par seconde à l’écran.';
+    $('motion-status').textContent='Choisissez la position initiale, puis appuyez sur Lire.';
+    readouts();if(repaint)apply(run.q,trail);
+  }
+  function frame(now){
+    frameId=0;if(!playing)return;const elapsed=last===null?0:Math.max(0,Math.min(.05,(now-last)/1000));last=now;
+    try{
+      const dt=elapsed*Number($('motion-rate').value)*system.timeRate/system.timeScale;
+      D.advance(run,dt,system.sample,config.bounds);
+      if(elapsed>0){trail.push([...run.q]);if(trail.length>1800)trail=trail.filter((_,i)=>i===0||i%2===0||i===trail.length-1);}
+      readouts();apply(run.q,trail);
+      if(run.ended){pause();$('motion-status').textContent='La particule a atteint le bord du domaine représenté. Recommencez ou choisissez une autre position initiale.';return;}
+      const drift=Math.abs(D.energy(run,system.sample)-run.E0)/Math.max(1,Math.abs(run.E0));
+      if(drift>.01)throw new Error('précision énergétique insuffisante');
+    }catch(error){pause();readouts();$('motion-status').textContent='Simulation arrêtée : '+error.message+'.';return;}
+    frameId=requestAnimationFrame(frame);
+  }
+  function toggle(){
+    if(playing){pause();readouts();$('motion-status').textContent='En pause — Lire reprend le mouvement.';return;}
+    stopSweep();const position=read().q;if(!run||position.some((q,i)=>Math.abs(q-run.q[i])>1e-10))resetAtPoint();
+    if(run.ended){$('motion-status').textContent='Bord du domaine atteint. Appuyez sur Recommencer ou déplacez le point.';return;}
+    playing=true;last=null;$('motion-play').textContent='Pause';$('motion-play').setAttribute('aria-pressed','true');$('motion-status').textContent='Mouvement sous l’action de la force, sans frottement.';frameId=requestAnimationFrame(frame);
+  }
+  function restart(){pause();stopSweep();seed(initial||read().q);readouts();apply(run.q,trail);$('motion-status').textContent='Retour aux conditions initiales.';}
+  $('motion-play').addEventListener('click',toggle);$('motion-restart').addEventListener('click',restart);
+  for(const key of ['mass','v0','angle'])$('motion-'+key).addEventListener('input',()=>{
+    const el=$('motion-'+key),v=Number(el.value);if(!Number.isFinite(v))return;settings[key]=Math.max(Number(el.min),Math.min(Number(el.max),v));stopSweep();resetAtPoint();
+  });
+  resetAtPoint();return {pause,toggle,restart,resetAtPoint};
+}
+
 function createPotentialPlane(helpers){
   'use strict';
-  const {$,math,number,label,surface,line,dot,colors}=helpers;
+  const {$,math,number,label,surface,line,dot,colors,onChange=()=>{}}=helpers;
   const P=PotentialPlane,B=P.bound,tex=String.raw;
   const state={model:'bowl',qx:.85,qy:.5,energy:1,length:1,active:false};
-  let cache=null,surfaceMesh=null,surfaceCache=null;
+  let cache=null,surfaceMesh=null,surfaceCache=null,trajectory=[];
   const camera={...PotentialSurface.initial};
   const sample=(x=state.qx,y=state.qy)=>P.evaluate(state.model,x,y,state.energy,state.length);
   const clear=layer=>{for(const el of $(layer).children)el.hidden=true;};
   const clip=q=>Math.max(-B,Math.min(B,q));
   const mapGeometry=(w,h)=>P.geometry(w,h,state.model==='saddle'?48:0);
-  function choose(x,y){if(![x,y].every(Number.isFinite))return;state.qx=clip(x);state.qy=clip(y);render();}
+  function choose(x,y){if(![x,y].every(Number.isFinite))return;state.qx=clip(x);state.qy=clip(y);onChange(false);render();}
   function configure(reset=false){
     if(reset){state.energy=1;state.length=1;[state.qx,state.qy]=P.definitions[state.model].start;}
     $('plane-model-note').textContent=P.definitions[state.model].note;math($('plane-formula'),P.definitions[state.model].formula);
@@ -622,7 +728,7 @@ function createPotentialPlane(helpers){
     $('plane-equilibria').replaceChildren(...P.equilibria(state.model,state.energy,state.length).map((eq,i)=>{
       const button=document.createElement('button'),name=document.createElement('span'),value=document.createElement('span');button.type='button';button.dataset.qx=eq.qx;button.dataset.qy=eq.qy;button.dataset.stability=eq.stable?'stable':'unstable';
       name.textContent=eq.stable?'Minimum — stable':'Col — instable';value.className='eq-position';math(value,tex`(${eq.x.toFixed(2)},\,${eq.y.toFixed(2)})\,\mathrm m`);button.append(name,value);button.addEventListener('click',()=>choose(eq.qx,eq.qy));return button;
-    }));render();
+    }));onChange(reset);render();
   }
   function arrow(ctx,a,b,color,width=2.5){
     const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);if(length<.05)return;
@@ -662,6 +768,7 @@ function createPotentialPlane(helpers){
     const a=[g.X(state.qx),g.Y(state.qy)],b=[a[0]+k*s.Fx,a[1]-k*s.Fy];
     line(ctx,[[g.left,a[1]],[g.right,a[1]]],colors.body,1,[5,5]);line(ctx,[[a[0],g.top],[a[0],g.bottom]],colors.stable,1,[5,5]);
     for(const eq of P.equilibria(state.model,state.energy,state.length)){dot(ctx,g.X(eq.qx),g.Y(eq.qy),4,eq.stable?colors.stable:colors.unstable);}
+    if(trajectory.length>1)line(ctx,trajectory.map(q=>[g.X(q[0]),g.Y(q[1])]),'#8495a7',2);
     if($('plane-force').checked){
       if($('plane-components').checked){arrow(ctx,a,[b[0],a[1]],colors.body,1.8);arrow(ctx,a,[a[0],b[1]],colors.stable,1.8);line(ctx,[[b[0],a[1]],b,[a[0],b[1]]],colors.muted,1,[2,4]);}
       arrow(ctx,a,b,colors.F,3);
@@ -724,6 +831,10 @@ function createPotentialPlane(helpers){
       }flush();
     }
     for(const eq of P.equilibria(state.model,state.energy,state.length)){const p=project(eq.qx,eq.qy,eq.U);if(bg.scene.visible(p))dot(ctx,p[0],p[1],3.5,eq.stable?colors.stable:colors.unstable);}
+    if(trajectory.length>1){
+      let segment=[];const flush=()=>{line(ctx,segment,'#8495a7',2);segment=[];};
+      for(const q of trajectory){const p=project(q[0],q[1],sample(q[0],q[1]).U);if(bg.scene.visible(p))segment.push(p.slice(0,2));else flush();}flush();
+    }
     const point=project(state.qx,state.qy,s.U),visible=bg.scene.visible(point),showForce=$('plane-force').checked,norm=Math.hypot(s.Fx,s.Fy);
     $('surface-force-key').hidden=!showForce;$('surface-point-note').hidden=visible;
     $('surface-point-note').textContent=showForce?'Le point choisi est derrière le relief ; le point et la force sont montrés au premier plan.':'Le point choisi est masqué par le relief. Faites pivoter la vue pour le retrouver.';
@@ -759,7 +870,9 @@ function createPotentialPlane(helpers){
     line(ctx,[[X(q-half),Y(s.U-slope*half*state.length)],[X(q+half),Y(s.U+slope*half*state.length)]],colors.tangent,2);
     if(eq){const H=axis==='x'?eq.Hxx:eq.Hyy;line(ctx,Array.from({length:61},(_,i)=>{const delta=(i-30)*.012;return [X(q+delta),Y(eq.U+.5*H*(delta*state.length)**2)];}),colors.quadratic,2.2,[6,4]);}
     dot(ctx,X(q),Y(s.U),5,colors.body);ctx.restore();
-    math($('plane-cut-'+axis),(axis==='x'?'y':'x')+'='+s[axis==='x'?'y':'x'].toFixed(2)+tex`\,\mathrm m`);
+    const heading=$('plane-cut-'+axis);let value=heading.querySelector('output');
+    if(!value){const prefix=document.createElement('span');math(prefix,(axis==='x'?'y':'x')+'=');value=document.createElement('output');heading.replaceChildren(prefix,value);}
+    number(value,s[axis==='x'?'y':'x'],2,tex`\mathrm m`);
     const plot=$('plane-'+axis+'-plot');plot.setAttribute('aria-valuemin',-B*state.length);plot.setAttribute('aria-valuemax',B*state.length);plot.setAttribute('aria-valuenow',s[axis]);plot.setAttribute('aria-valuetext',axis+' = '+s[axis].toFixed(3)+' m');
   }
   function render(){
@@ -822,7 +935,10 @@ function createPotentialPlane(helpers){
     }
   });
   configure();
-  return {activate:on=>{state.active=on;render();},render};
+  return {activate:on=>{state.active=on;render();},render,
+    configuration:()=>({dimension:2,model:state.model,energy:state.energy,length:state.length,q:[state.qx,state.qy],bounds:[[-B,B],[-B,B]]}),
+    move:(q,trail)=>{[state.qx,state.qy]=q;trajectory=trail;render();}
+  };
 }
 
 </script>
@@ -889,7 +1005,7 @@ async function startPotentialApp() {
     const colors = {U:'#b5688b',tangent:'#bc8b3b',quadratic:'#2775b6',F:'#7758a6',stable:'#268576',unstable:'#b5687b',body:'#2775b6',body2:'#74c9b2',ink:'#233449',muted:'#607185',grid:'#dce4ec'};
     const state = {model:'wells',q:.55,energy:1,length:1,playing:false,frame:0,last:null,direction:1,lastReadout:-Infinity,drag:null};
     const glyphs=new Map(), units=new Map(), labels=new Map();
-    let arrowScaleCache=null;
+    let arrowScaleCache=null,motion=null;
     const displayUnits={
       wells:{length:1,energy:1,force:1,lengthTex:tex`\mathrm m`,lengthText:'m',energyTex:tex`\mathrm J`,energyAxis:tex`\mathrm J`,energyText:'J',forceTex:tex`\mathrm N`,forceText:'N',slopeTex:tex`\mathrm{J\,m^{-1}}`},
       pair:{length:1e-9,energy:1e-21,force:1e-12,lengthTex:tex`\mathrm{nm}`,lengthText:'nm',energyTex:tex`\times10^{-21}\,\mathrm J`,energyAxis:tex`10^{-21}\,\mathrm J`,energyText:'× 10^-21 J',forceTex:tex`\mathrm{pN}`,forceText:'pN',slopeTex:tex`\mathrm{pN}`},
@@ -942,6 +1058,7 @@ async function startPotentialApp() {
         +tex`\,\mathrm{N\,m^{-1}}`+(curvature>0?' > 0':curvature<0?' < 0':'');
     }
     function setPlaying(on) {
+      if(on)motion?.pause();
       state.playing=on; state.last=null;
       $('play').textContent=on?'Pause':'Balayer'; $('play').setAttribute('aria-pressed',String(on));
       if (!on && state.frame) { cancelAnimationFrame(state.frame); state.frame=0; }
@@ -949,7 +1066,7 @@ async function startPotentialApp() {
     }
     function setPosition(q) {
       if (!Number.isFinite(q)) throw new Error('Position non valide.');
-      setPlaying(false); state.q=Math.max(definition().min,Math.min(definition().max,q)); render();
+      setPlaying(false); state.q=Math.max(definition().min,Math.min(definition().max,q));motion?.resetAtPoint();render();
     }
     function configure(model=state.model, reset=false) {
       const changed=model!==state.model;
@@ -1004,7 +1121,7 @@ async function startPotentialApp() {
         : 'Le mouvement se fait sur l’axe horizontal, pas le long du dessin du potentiel. La longueur de la flèche est proportionnelle au module de la force ; l’échelle reste fixe pour les paramètres choisis.';
       $('body-1').hidden=!radial;
       $('body-0').setAttribute('aria-label',radial?'Déplacer la première particule pour changer la séparation':'Déplacer la particule');
-      buildEquilibria(); render();
+      buildEquilibria();motion?.resetAtPoint(changed||reset);render();
     }
     function buildEquilibria() {
       $('equilibrium-buttons').replaceChildren(...PotentialModels.equilibria(state.model).map((eq,i)=>{
@@ -1144,7 +1261,8 @@ async function startPotentialApp() {
       } else {
         line(ctx,[[centers[0][0],y+34],[centers[1][0],y+34]],colors.muted,1);
         for (const [x] of centers) line(ctx,[[x,y+29],[x,y+39]],colors.muted,1);
-        label('stage-labels','distance',tex`r=${(current.position/u.length).toFixed(3)}\,${u.lengthTex}`,w/2,y+50);
+        const distance=label('stage-labels','distance','r=',w/2,y+50);let value=distance.querySelector('output');
+        if(!value){value=document.createElement('output');distance.append(value);}number(value,current.position/u.length,3,u.lengthTex);
       }
       for (const [i,[x,y]] of centers.entries()) {
         dot(ctx,x,y,bodyRadius,i?colors.body2:colors.body);
@@ -1199,15 +1317,16 @@ async function startPotentialApp() {
       const dt=state.last===null?0:Math.max(0,Math.min(.1,(now-state.last)/1000));state.last=now;
       const d=definition();Object.assign(state,PotentialModels.sweep(state.q,state.direction,dt*(d.max-d.min)/12*Number($('speed').value),d.min,d.max));
       const update=now-state.lastReadout>=65;if(update)state.lastReadout=now;
+      if(update)motion?.resetAtPoint(false,false);
       try { render(update); } catch(error) {setPlaying(false);$('loading').hidden=false;$('loading').textContent='Le balayage a été interrompu. '+error.message;console.error(error);return;}
       state.frame=requestAnimationFrame(frame);
     }
     $('model-select').addEventListener('change',()=>configure($('model-select').value));
     $('position').addEventListener('input',()=>setPosition(Number($('position').value)));
-    for (const [id,key] of [['energy-scale','energy'],['length-scale','length']]) $(id).addEventListener('input',()=>{setPlaying(false);state[key]=Number($(id).value)*display()[key];buildEquilibria();render();});
+    for (const [id,key] of [['energy-scale','energy'],['length-scale','length']]) $(id).addEventListener('input',()=>{setPlaying(false);state[key]=Number($(id).value)*display()[key];buildEquilibria();motion?.resetAtPoint();render();});
     $('reset').addEventListener('click',()=>configure(state.model,true));
     $('restart').addEventListener('click',()=>{state.direction=1;setPosition(definition().start);});
-    $('play').addEventListener('click',()=>{setPlaying(!state.playing);if(!state.playing)render();});
+    $('play').addEventListener('click',()=>{setPlaying(!state.playing);if(!state.playing){motion?.resetAtPoint();render();}});
     for (const id of ['tangent','equilibria','forces']) $(id).addEventListener('change',()=>render());
     function keyboard(event,sign=1) {
       const delta={ArrowRight:.02,ArrowLeft:-.02,ArrowUp:.02,ArrowDown:-.02};
@@ -1239,19 +1358,22 @@ async function startPotentialApp() {
       body.addEventListener('keydown',event=>keyboard(event,isRadial()&&index===0?-1:1));
     }
     document.addEventListener('keydown',event=>{
-      if($('dimension').value==='2')return;
       if(event.target.closest('input,select,button,[role="slider"]')||event.ctrlKey||event.metaKey||event.altKey)return;
-      if(event.code==='Space'){event.preventDefault();$('play').click();}
-      if(event.key.toLowerCase()==='r')$('restart').click();
+      if(event.code==='Space'){event.preventDefault();motion?.toggle();}
+      if(event.key.toLowerCase()==='r')motion?.restart();
     });
-    document.addEventListener('visibilitychange',()=>{if(document.hidden){setPlaying(false);render();}});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){setPlaying(false);motion?.pause();render();}});
     new ResizeObserver(()=>render()).observe($('potential-plot'));
-    const plane=createPotentialPlane({$,math,number,label,surface,line,dot,colors});
+    const plane=createPotentialPlane({$,math,number,label,surface,line,dot,colors,onChange:reset=>motion?.resetAtPoint(reset)});
+    motion=createPotentialMotion({$,math,number,stopSweep:()=>setPlaying(false),
+      read:()=>$('dimension').value==='2'?plane.configuration():{dimension:1,model:state.model,energy:state.energy,length:state.length,q:[state.q],bounds:[[definition().min,definition().max]]},
+      apply:(q,trail)=>{if($('dimension').value==='2')plane.move(q,trail);else{state.q=q[0];render();}}
+    });
     $('dimension').addEventListener('change',()=>{
-      setPlaying(false);state.drag=null;const two=$('dimension').value==='2';
+      setPlaying(false);motion.pause();state.drag=null;const two=$('dimension').value==='2';
       $('controls-1d').hidden=two;$('view-1d').hidden=two;$('controls-2d').hidden=!two;$('view-2d').hidden=!two;
-      $('keyboard-note').textContent=two?'Flèches : déplacer le point':'Espace : balayage · R : au départ';
-      plane.activate(two);if(!two)render();
+      $('keyboard-note').textContent=two?'Espace : lire · Flèches : position':'Espace : lire · R : recommencer';
+      plane.activate(two);motion.resetAtPoint(true);if(!two)render();
     });
     configure();$('loading').hidden=true;
   } catch(error) {$('loading').hidden=false;$('loading').textContent='L’animation n’a pas pu démarrer. '+error.message;console.error(error);}
@@ -1270,6 +1392,18 @@ async function startPotentialApp() {
       <section class="panel-section dimension-control">
         <label class="field-label" for="dimension">Dimensions du potentiel</label>
         <select id="dimension"><option value="1">Une dimension — U(x) ou U(r)</option><option value="2">Deux dimensions — U(x, y)</option></select>
+      </section>
+      <section class="panel-section motion-controls">
+        <h2>Mouvement de la particule</h2>
+        <div class="transport-row"><button id="motion-play" class="primary-button" type="button" aria-pressed="false">Lire</button><button id="motion-restart" type="button">Recommencer</button><select id="motion-rate" aria-label="Vitesse de lecture"><option value="0.5">Lent</option><option value="1" selected>Normal</option><option value="2">Rapide</option></select></div>
+        <p id="motion-status" class="microcopy" role="status">Choisissez la position initiale, puis appuyez sur Lire.</p>
+        <details class="motion-settings"><summary>Conditions initiales</summary>
+          <label class="field-label compact" for="motion-mass">Masse <span id="motion-mass-symbol" data-tex="m"></span></label><input id="motion-mass" type="range" min="0.2" max="5" step="0.1" value="1" /><output id="motion-mass-value" for="motion-mass"></output>
+          <label class="field-label compact" for="motion-v0"><span id="motion-v0-label">Vitesse initiale</span> <span id="motion-v0-symbol" data-tex="v_{x0}"></span></label><input id="motion-v0" type="range" min="-3" max="3" step="0.01" value="0" /><output id="motion-v0-value" for="motion-v0"></output>
+          <div id="motion-angle-row" hidden><label class="field-label compact" for="motion-angle">Angle initial <span data-tex="\alpha_0"></span></label><input id="motion-angle" type="range" min="-180" max="180" step="1" value="0" /><output id="motion-angle-value" for="motion-angle"></output></div>
+          <p id="motion-mass-note" class="microcopy"></p>
+        </details>
+        <p id="motion-clock-note" class="microcopy"></p>
       </section>
       <div id="controls-1d">
       <section class="panel-section">
@@ -1329,7 +1463,7 @@ async function startPotentialApp() {
           <p id="plane-model-note" class="microcopy"></p>
           <label class="field-label" for="plane-x">Position <span data-tex="x"></span></label><input id="plane-x" type="range" min="-1.6" max="1.6" step="0.001" value="0.85" /><output id="plane-x-value" for="plane-x"></output>
           <label class="field-label compact" for="plane-y">Position <span data-tex="y"></span></label><input id="plane-y" type="range" min="-1.6" max="1.6" step="0.001" value="0.5" /><output id="plane-y-value" for="plane-y"></output>
-          <p class="microcopy">Cliquez ou faites glisser le point sur la carte. Les touches fléchées règlent x et y. Il s’agit d’un point de lecture, pas d’une trajectoire simulée.</p>
+          <p class="microcopy">Cliquez ou faites glisser le point sur la carte pour choisir la position initiale, puis appuyez sur Lire. Les touches fléchées règlent x et y.</p>
           <h2 class="equilibrium-heading">Points d’équilibre</h2><div id="plane-equilibria" class="equilibrium-buttons"></div>
         </section>
         <section class="panel-section">
@@ -1351,10 +1485,16 @@ async function startPotentialApp() {
           <p class="microcopy">Deux valeurs propres positives de H : minimum stable. Au moins une valeur propre négative : équilibre instable, notamment un col. Une valeur propre nulle peut rendre le critère insuffisant.</p>
         </section>
       </div>
-      <footer class="panel-footer"><span>© J. Martin</span><span id="keyboard-note">Espace : balayage · R : au départ</span></footer>
+      <footer class="panel-footer"><span>© J. Martin</span><span id="keyboard-note">Espace : lire · R : recommencer</span></footer>
     </aside>
     <main class="visualization-panel">
       <p id="loading" role="status">Préparation de l’animation et du rendu LaTeX…</p>
+      <section class="motion-summary" aria-label="État du mouvement">
+        <span><span data-tex="t="></span><span id="motion-time"></span></span>
+        <span><span data-tex="K="></span><span id="motion-kinetic"></span></span>
+        <span><span data-tex="E=K+U="></span><span id="motion-energy"></span></span>
+        <small id="motion-energy-check">Sans frottement</small>
+      </section>
       <div id="view-1d">
       <section class="visual-card curves-card">
         <header class="card-heading"><h2>Du potentiel à la force</h2><span id="force-relation" class="relation-badge" data-tex="F_x=-\frac{\mathrm dU}{\mathrm dx}"></span></header>

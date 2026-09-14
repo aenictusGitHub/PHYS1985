@@ -118,6 +118,7 @@ Le double puits utilise des échelles pédagogiques ; la paire prend les paramè
 - Mode 2D : puits elliptique incliné, col et double puits couplé. Carte du potentiel avec équipotentielles, point déplaçable en x et y, force `F = −grad U` et ses composantes avec échelle explicite.
 - Surface 3D optionnelle du potentiel 2D : rotation souris/tactile/clavier, vue du dessus, sélection d’un point sur la surface et coupes synchronisées. La hauteur représente l’énergie en joules ; la force est reportée au point choisi parallèlement au plan physique (x, y), avec ses composantes optionnelles.
 - Deux coupes synchronisées expliquent `Fx = −∂U/∂x` et `Fy = −∂U/∂y`. La stabilité est reliée aux valeurs propres de la Hessienne ; les approximations quadratiques locales apparaissent seulement aux équilibres.
+- Bouton « Lire » pour le mouvement newtonien en 1D/2D, pause/reprise, retour à la position initiale, vitesse initiale réglable, trajectoire 2D et suivi de l’énergie. Le balayage exploratoire reste distinct ; la simulation s’arrête explicitement au bord du domaine.
 
 Vérifications des dérivées analytiques, équilibres, commandes, flèches et balayage :
 `node tools/check_potential.cjs`. La variable optionnelle `PHYS1985_MATHJAX_ROOT`

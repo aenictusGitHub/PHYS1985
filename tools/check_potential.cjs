@@ -117,6 +117,33 @@ for(const model of Object.keys(plane.definitions))for(const viewport of [240,640
 }
 console.log('3D surface: analytical heights, orthographic camera, common spatial scale, bounds and front-surface picking passed.');
 
+const dynamics=vm.runInNewContext(read('physics.js')+';PotentialDynamics');
+const harmonic=q=>({u:.5*q[0]**2,a:[-q[0]]});
+for(const hz of [30,60,120]){
+  const s=dynamics.create([.7],[.2],harmonic);
+  for(let i=0;i<hz*20;i++)dynamics.advance(s,1/hz,harmonic,[[-2,2]]);
+  near(s.q[0],.7*Math.cos(20)+.2*Math.sin(20),2e-6);near(s.w[0],-.7*Math.sin(20)+.2*Math.cos(20),2e-6);near(dynamics.energy(s,harmonic),s.E0,2e-7);
+}
+for(const model of ['wells','pair','gravity']){
+  const d=models.definitions[model],sample=q=>{const r=models.reduced(model,q[0]);return {u:r.u,a:[-r.du]};},s=dynamics.create([d.start],[0],sample);
+  let maxDrift=0;
+  for(let i=0;i<1500&&!s.ended;i++){dynamics.advance(s,.02,sample,[[d.min,d.max]]);maxDrift=Math.max(maxDrift,Math.abs(dynamics.energy(s,sample)-s.E0));}
+  assert(maxDrift<.0002,model+' conserved energy: '+maxDrift);
+  if(model==='gravity'){
+    assert(s.ended&&s.w[0]<0);near(s.q[0],d.min,1e-12);
+    const ratio=d.min/d.start,t=Math.sqrt(d.start**3/2)*(Math.acos(Math.sqrt(ratio))+Math.sqrt(ratio*(1-ratio)));near(s.t,t,2e-6);
+  }else assert(!s.ended,model+' oscillates within the plotted domain');
+}
+for(const model of Object.keys(plane.definitions)){
+  const sample=q=>{const r=plane.reduced(model,...q);return {u:r.u,a:[-r.gx,-r.gy]};},s=dynamics.create([...plane.definitions[model].start],[0,0],sample);
+  for(let i=0;i<1000&&!s.ended;i++){dynamics.advance(s,.02,sample,[[-1.6,1.6],[-1.6,1.6]]);assert(Math.abs(dynamics.energy(s,sample)-s.E0)<.0002);}
+  if(model==='saddle')assert(s.ended,'Unstable motion stops at the domain edge, without bouncing');
+  const eq=plane.equilibria(model)[0],rest=dynamics.create([eq.qx,eq.qy],[0,0],sample);dynamics.advance(rest,2,sample,[[-1.6,1.6],[-1.6,1.6]]);near(rest.q[0],eq.qx);near(rest.q[1],eq.qy);
+}
+const outward=dynamics.create([2],[1],harmonic);dynamics.advance(outward,.1,harmonic,[[-2,2]]);assert(outward.ended);near(outward.t,0);near(outward.w[0],1);
+assert.throws(()=>dynamics.advance(dynamics.create([0],[0],harmonic),NaN,harmonic,[[-2,2]]));
+console.log('Particle dynamics: analytic harmonic motion, energy conservation, two-dimensional equilibria, atomic oscillations and exact boundary events passed.');
+
 let width=640,frameId=0,typesetCount=0;
 const nodes=new Map(),frames=new Map(),errors=[],docEvents={},plots=new Map();
 function canvasContext(id) {
@@ -150,6 +177,7 @@ class Element {
 for(const match of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
   const el=new Element(match[1]);el.id=match[3];el.value=/\bvalue="([^"]*)"/.exec(match[2])?.[1]||'';
   el.checked=/\bchecked\b/.test(match[2]);el.hidden=/\bhidden\b/.test(match[2]);
+  for(const attr of ['min','max','step'])el[attr]=new RegExp('\\b'+attr+'="([^"]*)"').exec(match[2])?.[1]||'';
   el.dataset.tex=/\bdata-tex="([^"]*)"/.exec(match[2])?.[1];
 }
 const $=id=>{assert(nodes.has(id),'missing '+id);return nodes.get(id);};
@@ -392,6 +420,34 @@ async function checkUI(){
   console.log('3D controller: optional view, mouse/keyboard rotation, reset/top view, point selection, synchronization and physical scale changes passed.');
   $('dimension').value='1';$('dimension').fire('change');assert(!$('view-1d').hidden&&$('view-2d').hidden);near(value('position-value'),oldPosition);
   console.log('2D controller: point/cuts/force synchronization, linear arrows, stability, independent scales, keyboard, drag and 1D return passed.');
+  // Real motion is independent of the exploratory sweep, and shares one clock
+  // and the same selected point in every view.
+  width=640;$('model-select').value='wells';$('model-select').fire('change');
+  set('motion-mass',2);set('motion-v0',.4);const x0=value('position-value'),E0=value('motion-energy');
+  near(value('motion-kinetic'),.16);$('motion-play').click();tick(0);for(let i=1;i<=120;i++)tick(i*1000/60);
+  assert.equal($('motion-play').textContent,'Pause');assert.equal(frames.size,1);assert(Math.abs(value('position-value')-x0)>.01);near(value('motion-time'),2,.02);near(value('motion-energy'),E0,.002);
+  $('motion-play').click();const pausedX=value('position-value'),pausedT=value('motion-time');assert.equal(frames.size,0);tick(5000);near(value('position-value'),pausedX);near(value('motion-time'),pausedT);
+  $('motion-play').click();tick(6000);tick(6016);$('motion-play').click();assert(value('motion-time')>pausedT,'Pause resumes without resetting time');
+  $('motion-restart').click();near(value('position-value'),x0);near(value('motion-time'),0);near(value('motion-kinetic'),.16);
+  $('motion-play').click();tick(0);tick(20);$('position').value=.4;$('position').fire('input');assert.equal(frames.size,0);near(value('motion-time'),0);$('motion-play').click();document.hidden=true;docEvents.visibilitychange();assert.equal(frames.size,0);document.hidden=false;
+  for(const model of ['pair','gravity']){
+    $('model-select').value=model;$('model-select').fire('change');const start=value('position-value');assert($('motion-mass').hidden);near(value('motion-kinetic'),0);
+    $('motion-play').click();tick(0);for(let i=1;i<=30;i++)tick(i*1000/60);$('motion-play').click();
+    assert(value('position-value')<start,'Attraction drives the separation, not the sweep');near(value('motion-time'),model==='pair'?.5:50,.02);
+    $('motion-restart').click();near(value('position-value'),start);near(value('motion-time'),0);
+  }
+  $('dimension').value='2';$('dimension').fire('change');$('plane-model').value='bowl';$('plane-model').fire('change');
+  $('plane-show-surface').checked=true;$('plane-show-surface').fire('change');set('motion-mass',1);set('motion-v0',.3);set('motion-angle',90);
+  const initialXY=[value('plane-x-value'),value('plane-y-value')];near(value('motion-kinetic'),.045);$('motion-play').click();tick(0);for(let i=1;i<=60;i++)tick(i*1000/60);
+  const trajectory=plots.get('plane-canvas').strokes.find(s=>s.color==='#8495a7');assert(trajectory&&trajectory.points.length>30);assert(plots.get('surface-canvas').strokes.some(s=>s.color==='#8495a7'));
+  const g=plane.geometry(width,$('plane-map').getBoundingClientRect().height);near(trajectory.points[0][0],g.X(initialXY[0]));near(trajectory.points[0][1],g.Y(initialXY[1]));
+  const movingT=value('motion-time');$('surface-top').click();assert.equal($('motion-play').textContent,'Pause');near(value('motion-time'),movingT,1e-9);
+  $('motion-play').click();$('motion-restart').click();near(value('plane-x-value'),initialXY[0]);near(value('plane-y-value'),initialXY[1]);
+  $('plane-model').value='saddle';$('plane-model').fire('change');set('plane-x',0);set('plane-y',1.5);set('motion-v0',3);set('motion-angle',90);$('motion-play').click();tick(0);tick(50);
+  assert.equal(frames.size,0);assert.equal($('motion-play').textContent,'Lire');near(value('plane-y-value'),1.6,.001);assert($('motion-status').textContent.includes('bord'));$('motion-play').click();assert.equal(frames.size,0);
+  $('motion-restart').click();near(value('plane-y-value'),1.5);near(value('motion-time'),0);
+  $('motion-play').click();$('dimension').value='1';$('dimension').fire('change');assert.equal(frames.size,0,'Switching dimensions pauses motion');
+  console.log('Dynamics UI: physical play/pause/resume, initial velocity and mass, restart, atomic/gravity clocks, synchronized trajectory, camera interaction and boundary stop passed.');
   assert.deepEqual(errors,[]);
   console.log('Potential controllers: synchronized plots, arrows, equilibria, scales, pointer/keyboard input, display options, numeric baselines and continuous sweep passed'+(convertTex?' with real MathJax SVG.':'.'));
 }
