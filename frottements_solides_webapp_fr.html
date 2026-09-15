@@ -46,6 +46,11 @@ canvas { display: block; width: 100%; height: 100%; }
 .readout-card strong { overflow-x: auto; }
 .readout-card small { color: var(--muted); }
 .history-wrap { height: 250px; cursor: ew-resize; touch-action: pan-y; }
+#force-history { cursor: default; }
+.force-response-card { margin-top: .85rem; }
+.phys-app #drive-control[hidden], .phys-app #ramp-settings[hidden] { display: none !important; }
+.phys-app input:disabled { opacity: .5; }
+.phys-app #ramp-status { min-height: 3em; }
 #chart-select { max-width: 16rem; }
 .chart-key { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .5rem 1.2rem; min-height: 2.4rem; padding: .5rem 1rem; font-size: var(--text-formula); }
 .chart-key>span { display: inline-flex; align-items: center; gap: .45rem; }
@@ -503,7 +508,7 @@ const FrictionPhysics=(()=>{
     snapshot(s=this.s){const q=forces(this.model,this.p,s),K=.5*this.p.m1*s.v1**2+.5*this.p.m2*s.v2**2;return {...s,...q,K,balance:K-this.K0-s.WA-s.WG-s.W1-s.W2};}
     get end(){return this.history[this.history.length-1].t;}
     get done(){return this.s.edge||this.s.t>=this.p.duration-1e-9;}
-    record(){if(Math.abs(this.end-this.s.t)<1e-10)this.history[this.history.length-1]={...this.s};else this.history.push({...this.s});}
+    record(){if(this.history.length&&Math.abs(this.end-this.s.t)<1e-10)this.history[this.history.length-1]={...this.s};else this.history.push({...this.s});}
     branch(){if(this.s.t<this.end-1e-10)this.history=this.history.filter(s=>s.t<this.s.t-1e-10);this.record();}
     setLive(key,value){
       if(!['F','muS','muK','angle'].includes(key)||!Number.isFinite(value)||
@@ -561,7 +566,65 @@ const FrictionPhysics=(()=>{
       return this.snapshot();
     }
   }
-  return {g,forces,Simulation,presets,supportLimit};
+  // A reproducible experiment, deliberately restricted to a horizontal body
+  // released from rest and a nonnegative monotone force ramp. The solution is
+  // analytic: it does not depend on requestAnimationFrame or the playback rate.
+  class RampSimulation extends Simulation {
+    constructor(parameters={},peak=15,rise=5){
+      super('horizontal',{...parameters,F:0,v0:0});
+      if(!Number.isFinite(peak)||peak<0||peak>60||!Number.isFinite(rise)||rise<=0||rise>this.p.duration)throw new Error('Rampe non valide.');
+      this.ramp={peak,rise};
+      this.thresholdTime=peak>this.p.muS*this.p.m1*g?this.p.muS*this.p.m1*g*rise/peak:Infinity;
+      this.s=this.sampleAt(0);this.history=[{...this.s}];
+    }
+    sampleAt(time,side='right'){
+      const t=Math.max(0,Math.min(this.p.duration,time)),p=this.p,{peak,rise}=this.ramp;
+      const F=peak*Math.min(1,t/rise),tc=this.thresholdTime;
+      const sliding=Number.isFinite(tc)&&(t>tc+1e-12||Math.abs(t-tc)<=1e-12&&side==='right');
+      let x=0,v=0,WA=0;
+      if(sliding){
+        const rate=peak/rise,limit=p.muS*p.m1*g,a0=(p.muS-p.muK)*g,j=rate/p.m1;
+        const q=Math.max(0,Math.min(t,rise)-tc);
+        x=.5*a0*q*q+j*q**3/6;v=a0*q+.5*j*q*q;
+        // Independent integral of (limit + rate*q) * v(q), not inferred
+        // from kinetic energy, so the work-energy residual remains a check.
+        WA=limit*a0*q*q/2+(limit*j/2+rate*a0)*q**3/3+rate*j*q**4/8;
+        if(t>rise){const h=t-rise,a=(peak-p.muK*p.m1*g)/p.m1,dx=v*h+.5*a*h*h;x+=dx;v+=a*h;WA+=peak*dx;}
+      }
+      const W1=-p.muK*p.m1*g*x;
+      return {t,x1:x,x2:0,v1:v,v2:0,F,muS:p.muS,muK:p.muK,angle:0,W1,W2:0,WA,WG:0,Q:-W1,edge:false,rampSliding:sliding};
+    }
+    snapshot(s=this.s){
+      const result=super.snapshot(s);
+      if(s.rampSliding){
+        // The right-hand limit at release has kinetic friction even though
+        // the velocity is still zero at that exact transition instant.
+        result.f=-s.muK*result.N;result.a1=(s.F+result.f)/this.p.m1;result.mode='kinetic';
+      }
+      return result;
+    }
+    setLive(){throw new Error('La rampe est programmée : recommencez avec les nouveaux paramètres ou choisissez la commande manuelle.');}
+    advance(dt){
+      if(!Number.isFinite(dt)||dt<0)throw new Error('Pas de temps non valide.');
+      if(this.done||dt===0)return this.snapshot();
+      this.branch();this.started=true;
+      const start=this.s.t,end=Math.min(this.p.duration,start+dt),tc=this.thresholdTime,times=[end];
+      for(let i=Math.floor((start+1e-10)*120)+1;i/120<end-1e-10;i++)times.push(i/120);
+      if(start<this.ramp.rise&&this.ramp.rise<end)times.push(this.ramp.rise);
+      if(start<tc&&tc<=end)times.push(tc);
+      const sorted=[...new Set(times)].filter(t=>t===tc||Math.abs(t-tc)>1e-10).sort((a,b)=>a-b);
+      for(const t of sorted){
+        if(t===tc&&start<tc)this.history.push(this.sampleAt(t,'left'));
+        this.s=this.sampleAt(t);this.history.push({...this.s});
+      }
+      return this.snapshot();
+    }
+    seek(t){
+      if(!Number.isFinite(t))throw new Error('Instant non valide.');
+      this.s=this.sampleAt(Math.max(0,Math.min(this.end,t)));return this.snapshot();
+    }
+  }
+  return {g,forces,Simulation,RampSimulation,presets,supportLimit};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=FrictionPhysics;
 
@@ -574,7 +637,9 @@ async function startFrictionApp(){
   try{
     await MathJax.startup.promise;
     const C={body:'#2775b6',body2:'#429b88',f:'#d9683b',F:'#268576',N:'#7758a6',P:'#2775b6',v:'#00869c',ink:'#233449',muted:'#607185',grid:'#dce4ec',heat:'#b5688b'};
-    const state={sim:new FP.Simulation(),playing:false,frame:0,last:null,lastReadout:-Infinity,legend:'',vectorScale:2,labelPlan:null},labels=new Map(),glyphs=new Map(),units=new Map();
+    const state={sim:new FP.Simulation(),playing:false,frame:0,last:null,lastReadout:-Infinity,legend:'',vectorScale:2,labelPlan:null,rampPeak:15,rampRise:5},labels=new Map(),glyphs=new Map(),units=new Map();
+    const isRamp=()=>state.sim instanceof FP.RampSimulation;
+    function makeRamp(p){state.rampRise=Math.min(state.rampRise,p.duration);return new FP.RampSimulation(p,state.rampPeak,state.rampRise);}
     const presetNames={held:'Repos sous une force',pushed:'Mise en glissement',slowing:'Freinage sans force appliquée',rest:'Équilibre sur le plan',slide:'Glissement',launch:'Lancé vers le haut',horizontal:'Plan horizontal : immobile',stick:'Entraînement sans glissement',brake:'Freinage puis inversion sans glissement'};
     function math(el,value){if(el.dataset.math===value)return;el.replaceChildren(MathJax.tex2svg(value,{display:false}));el.dataset.math=value;}
     function part(value){const svg=MathJax.tex2svg(value,{display:false}).querySelector('svg'),[x,y,width,height]=svg.getAttribute('viewBox').split(/\s+/).map(Number);return {svg,x,y,width,height,ex:parseFloat(svg.getAttribute('width'))/width};}
@@ -600,8 +665,16 @@ async function startFrictionApp(){
       // A physical support limit still requires an explicit restart.
       if((settingChanged||previousMode==='static'&&state.sim.snapshot().mode==='kinetic')&&!state.playing&&!state.sim.s.edge&&!document.hidden)play();
     }
-    function changeLive(key,value){const previous=state.sim.snapshot();state.sim.setLive(key,value);$('preset-select').value='custom';render();startAfterChange(previous.mode,previous.muS!==state.sim.s.muS||previous.muK!==state.sim.s.muK||previous.angle!==state.sim.s.angle);}
-    function restart(){pause();const sim=state.sim;state.sim=new FP.Simulation(sim.model,{...sim.p,F:sim.s.F,muS:sim.s.muS,muK:sim.s.muK,angle:sim.s.angle});syncControls();render();}
+    function changeLive(key,value){
+      if(isRamp()){
+        if(!['muS','muK'].includes(key))return;
+        const p={...state.sim.p,[key]:value};p.muK=Math.min(p.muK,p.muS);
+        if(p.muS===state.sim.p.muS&&p.muK===state.sim.p.muK)return;
+        pause();state.sim=makeRamp(p);$('preset-select').value='custom';syncControls();render();startAfterChange('static',true);return;
+      }
+      const previous=state.sim.snapshot();state.sim.setLive(key,value);$('preset-select').value='custom';render();startAfterChange(previous.mode,previous.muS!==state.sim.s.muS||previous.muK!==state.sim.s.muK||previous.angle!==state.sim.s.angle);
+    }
+    function restart(){pause();const sim=state.sim;state.sim=isRamp()?makeRamp(sim.p):new FP.Simulation(sim.model,{...sim.p,F:sim.s.F,muS:sim.s.muS,muK:sim.s.muK,angle:sim.s.angle});syncControls();render();}
     function configure(model,preset=Object.keys(FP.presets[model])[0]){
       pause();state.sim=new FP.Simulation(model,FP.presets[model][preset]);$('model-select').value=model;
       const options=Object.keys(FP.presets[model]).map(key=>{const el=document.createElement('option');el.value=key;el.textContent=presetNames[key];return el;});
@@ -610,13 +683,21 @@ async function startFrictionApp(){
     }
     function syncControls(){
       const sim=state.sim,p=sim.p,stack=sim.model==='stack',horizontal=sim.model==='horizontal';
+      const ramp=isRamp();
+      $('drive-control').hidden=!horizontal;$('force-mode').value=ramp?'ramp':'manual';$('ramp-settings').hidden=!ramp;
+      $('force').disabled=$('zero-force').disabled=$('initial-speed').disabled=ramp;
+      $('force').min=ramp?0:-40;$('force').max=ramp?60:40;
+      $('ramp-rise').max=p.duration;$('ramp-rise').value=state.rampRise;$('ramp-peak').value=state.rampPeak;
+      number($('ramp-peak-value'),state.rampPeak,2,tex`\mathrm N`);number($('ramp-rise-value'),state.rampRise,2,tex`\mathrm s`);
+      if(ramp)$('ramp-status').textContent=Number.isFinite(sim.thresholdTime)?'Seuil prévu : '+(p.muS*p.m1*FP.g).toFixed(2)+' N, atteint à '+sim.thresholdTime.toFixed(2)+' s.':'La force finale ne dépasse pas la limite statique : le bloc reste au repos.';
       for(const [id,value]of [['angle',p.angle],['mass-1',p.m1],['mass-2',p.m2],['initial-speed',p.v0],['duration',p.duration]])$(id).value=value;
       $('angle-control').hidden=sim.model!=='incline';$('mass-2-control').hidden=!stack;$('second-velocity').hidden=!stack;
-      $('launch-control').hidden=stack;
+      $('launch-control').hidden=stack||ramp;
       $('mass-1-name').textContent=stack?'Masse du corps supérieur':'Masse';math($('mass-1-symbol'),stack?'m_1':'m');$('speed-name').textContent=stack?'Vitesse initiale commune':'Vitesse initiale';
       $('scene-title').textContent=stack?'Deux corps empilés':horizontal?'Corps sur une surface horizontale':'Corps sur un plan incliné';
       $('model-note').textContent=stack?'La force agit sur le bloc inférieur. Le sol est sans frottement ; seul le contact entre les deux blocs est rugueux.':horizontal?'Un corps repose sur une surface rugueuse immobile. Faites varier la force extérieure pendant la lecture pour passer de l’adhérence au glissement.':'Faites varier l’angle pendant la lecture pour passer de l’équilibre au glissement. Le mouvement est mesuré parallèlement au plan.';
       $('force-note').textContent=stack?'Positive vers la droite, appliquée au corps inférieur.':horizontal?'Positive vers la droite, négative vers la gauche. Le curseur agit immédiatement, sans remettre le temps à zéro.':'Force parallèle au plan : positive dans le sens +x, vers la droite ; négative dans le sens opposé.';
+      if(ramp)$('force-note').textContent='Force imposée par la rampe ; sa valeur instantanée est affichée ici. Pour la régler librement, choisissez la commande manuelle.';
       math($('model-equation'),stack?tex`N=m_1g,\quad v_{\mathrm{rel}}=v_1-v_2`:horizontal?tex`N=mg,\quad v_{\mathrm{rel}}=v`:tex`N=mg\cos\theta,\quad v_{\mathrm{rel}}=v`);
       math($('motion-equation'),stack?tex`m_1a_1=f,\quad m_2a_2=F_{\mathrm{app},x}-f`:horizontal?tex`ma=F_{\mathrm{app},x}+f`:tex`ma=F_{\mathrm{app},x}-mg\sin\theta+f`);
       math($('work-equation'),stack?tex`W_{f,1}=\int f\,\mathrm dx_1,\quad W_{f,2}=-\int f\,\mathrm dx_2`:tex`W_f=\int f\,\mathrm dx,\quad Q=-W_f`);
@@ -801,7 +882,7 @@ async function startFrictionApp(){
     }
     function chartGeometry(w,h){return {left:70,right:Math.max(95,w-25),top:32,bottom:h-44};}
     function chartSeries(){const stack=state.sim.model==='stack',key=$('chart-select').value;
-      if(key==='friction')return {stepped:true,unit:tex`f_x\,[\mathrm N]`,series:[{key:'f',tex:'f_x(t)',color:C.f},{key:'limit',tex:tex`+\mu_s N`,color:C.muted,dash:[5,4]},{get:s=>-s.limit,tex:tex`-\mu_s N`,color:C.muted,dash:[5,4]}]};
+      if(key==='friction')return {stepped:true,unit:isRamp()?tex`\mathrm{Forces}\,[\mathrm N]`:tex`f_x\,[\mathrm N]`,series:[{key:'f',tex:'f_x(t)',color:C.f},...(isRamp()?[{key:'F',tex:tex`F_{\mathrm{app},x}(t)`,color:C.F}]:[]),{key:'limit',tex:tex`+\mu_s N`,color:C.muted,dash:[5,4]},{get:s=>-s.limit,tex:tex`-\mu_s N`,color:C.muted,dash:[5,4]}]};
       if(key==='velocity')return {unit:tex`v_x\,[\mathrm{m\,s^{-1}}]`,series:stack?[{key:'v1',tex:'v_1',color:C.body},{key:'v2',tex:'v_2',color:C.body2}]:[{key:'v1',tex:'v',color:C.body}]};
       return {unit:tex`W\,[\mathrm J]`,series:stack?[{key:'W1',tex:'W_{f,1}',color:C.body},{key:'W2',tex:'W_{f,2}',color:C.body2}]:[{key:'W1',tex:'W_f',color:C.body}]};
     }
@@ -812,6 +893,7 @@ async function startFrictionApp(){
       $('chart-title').textContent=$('chart-select').value==='friction'?'Force de frottement en fonction du temps':$('chart-select').value==='velocity'?'Vitesses en fonction du temps':'Travaux du frottement en fonction du temps';
       $('chart-note').hidden=$('chart-select').value!=='friction';
       $('chart-note').textContent=sim.model==='horizontal'?'Pendant la lecture, faites varier la force appliquée : le frottement statique s’ajuste jusqu’à sa limite, puis le corps glisse. Les pointillés indiquent les limites statiques.':'Force de frottement signée au contact ; les pointillés indiquent les limites statiques. Les changements de force ou de régime restent visibles depuis l’instant initial.';
+      if(isRamp())$('chart-note').textContent='La courbe verte montre la force appliquée programmée ; le frottement suit son opposé pendant l’adhérence, puis passe à sa valeur cinétique en glissement. Les pointillés marquent les limites statiques.';
       if(state.legend!==legendKey){$('chart-key').replaceChildren();for(const series of info.series){const row=document.createElement('span'),swatch=document.createElement('i'),symbol=document.createElement('span');swatch.style.borderColor=series.color;if(series.dash)swatch.style.borderTopStyle='dashed';math(symbol,series.tex);row.append(swatch,symbol);$('chart-key').append(row);}state.legend=legendKey;}
       const get=(series,s)=>series.get?series.get(s):s[series.key],values=info.series.flatMap(series=>data.map(s=>get(series,s))),min=Math.min(0,...values),max=Math.max(0,...values),span=Math.max(.2,max-min),low=min-.1*span,high=max+.12*span;
       const X=t=>g.left+t/sim.p.duration*(g.right-g.left),Y=v=>g.bottom-(v-low)/(high-low)*(g.bottom-g.top),ticks=w<450?4:5;
@@ -820,10 +902,43 @@ async function startFrictionApp(){
       numericLabel('history-labels','y-zero',0,g.left-30,Y(0));
       label('history-labels','unitY',info.unit,g.left,12).style.transform='translate(0,-50%)';label('history-labels','unitX',tex`t\,[\mathrm s]`,(g.left+g.right)/2,h-9);
       line(ctx,[[g.left,Y(0)],[g.right,Y(0)]],C.muted,1,[3,5]);
-      // Coulomb friction is constant on each exact integration segment.
-      // Draw its jumps vertically, including live edits and transitions at rest.
-      for(const series of info.series){const points=[];for(let i=0;i<data.length;i++){if(info.stepped&&i)points.push([X(data[i].t),Y(get(series,data[i-1]))]);points.push([X(data[i].t),Y(get(series,data[i]))]);}line(ctx,points,series.color,2,series.dash||[]);dot(ctx,X(s.t),Y(get(series,s)),3.5,series.color);}
+      // The analytic ramp varies continuously in static contact; its two
+      // samples at release retain the vertical Coulomb jump exactly.
+      for(const series of info.series){const points=[];for(let i=0;i<data.length;i++){if(info.stepped&&!isRamp()&&i)points.push([X(data[i].t),Y(get(series,data[i-1]))]);points.push([X(data[i].t),Y(get(series,data[i]))]);}line(ctx,points,series.color,2,series.dash||[]);dot(ctx,X(s.t),Y(get(series,s)),3.5,series.color);}
       line(ctx,[[X(s.t),g.top],[X(s.t),g.bottom]],C.muted,1,[4,4]);$('history').setAttribute('aria-valuemax',sim.end);$('history').setAttribute('aria-valuenow',s.t);$('history').setAttribute('aria-valuetext',s.t.toFixed(2)+' s');
+    }
+    function drawForceHistory(s){
+      const {ctx,w,h}=surface('force-history-canvas'),g={...chartGeometry(w,h),left:76,top:40,bottom:h-52},sim=state.sim;
+      const data=sim.history.map(row=>sim.snapshot(row)),forceValues=data.map(row=>row.F);
+      const minX=Math.min(0,...forceValues),maxX=Math.max(1,...forceValues,isRamp()?sim.ramp.peak:1.15*s.limit),spanX=Math.max(1,maxX-minX);
+      const lowX=minX<0?minX-.08*spanX:0,highX=maxX+.08*spanX;
+      const bound=1.2*Math.max(1,s.limit,...data.map(row=>Math.abs(row.f)));
+      const X=F=>g.left+(F-lowX)/(highX-lowX)*(g.right-g.left),Y=f=>g.bottom-(f+bound)/(2*bound)*(g.bottom-g.top);
+      for(const el of $('force-history-labels').children)el.hidden=true;
+      for(let i=0;i<=4;i++){
+        const f=-bound+2*bound*i/4,y=Y(f);line(ctx,[[g.left,y],[g.right,y]],C.grid);
+        if(Math.abs(y-Y(0))>=22)numericLabel('force-history-labels','y'+i,f,g.left-32,y,1);
+      }
+      const ticks=w<450?3:5;
+      for(let i=0;i<=ticks;i++){
+        const F=lowX+(highX-lowX)*i/ticks,x=X(F);line(ctx,[[x,g.top],[x,g.bottom]],C.grid);
+        if(Math.abs(x-X(0))>=32)numericLabel('force-history-labels','x'+i,F,x,g.bottom+17,1);
+      }
+      numericLabel('force-history-labels','y-zero',0,g.left-32,Y(0));
+      numericLabel('force-history-labels','x-zero',0,X(0),g.bottom+17);
+      label('force-history-labels','unitY',tex`f_x\,[\mathrm N]`,g.left,14).style.transform='translate(0,-50%)';
+      label('force-history-labels','unitX',tex`F_{\mathrm{app},x}\,[\mathrm N]`,(g.left+g.right)/2,h-12);
+      line(ctx,[[g.left,Y(0)],[g.right,Y(0)]],C.muted,1,[3,5]);
+      for(const sign of [-1,1])line(ctx,[[g.left,Y(sign*s.limit)],[g.right,Y(sign*s.limit)]],C.muted,1.2,[5,4]);
+      // Actual acquired contact states, not a single-valued constitutive law:
+      // the same applied force can have different friction while sliding.
+      for(let i=1;i<data.length;i++){
+        const a=data[i-1],b=data[i];
+        line(ctx,[[X(a.F),Y(a.f)],[X(b.F),Y(b.f)]],b.mode==='static'?C.F:C.f,2.5,a.mode!==b.mode?[2,3]:[]);
+      }
+      dot(ctx,X(s.F),Y(s.f),5,s.mode==='static'?C.F:C.f);
+      $('force-history').setAttribute('aria-label','Instant '+s.t.toFixed(2)+' s ; force appliquée '+s.F.toFixed(2)+' N ; frottement '+s.f.toFixed(2)+' N ; '+(s.mode==='static'?'adhérence':'glissement')+'.');
+      $('force-chart-note').textContent=sim.model==='horizontal'?'Composantes signées : au repos, le frottement est opposé à la force appliquée et de même module, jusqu’à la limite statique. En glissement, il dépend aussi du sens de la vitesse.':sim.model==='incline'?'Composantes suivant le plan : à l’arrêt, le frottement équilibre la force appliquée et la composante tangentielle du poids.':'Frottement sur le corps supérieur : en adhérence, il fournit son accélération, sans être systématiquement à la limite statique.';
     }
     function render(readouts=true){
       const sim=state.sim,s=sim.snapshot(),p=sim.p,stack=sim.model==='stack';
@@ -841,7 +956,7 @@ async function startFrictionApp(){
         else $('observation').textContent=s.mode==='static'?(Math.abs(s.W1)<1e-8?(sim.model==='incline'?'Sans déplacement relatif au plan, le travail du frottement dans ce modèle est nul.':'Le point de contact est fixe dans le laboratoire : le travail du frottement statique est nul.'):'Le bloc est maintenant arrêté par rapport au plan. Le travail affiché conserve la contribution du glissement antérieur ; il ne varie plus pendant l’adhérence.'):'Le frottement cinétique s’oppose au déplacement relatif au plan : son travail est négatif et l’énergie correspondante est dissipée au contact.';
         $('stop-note').hidden=!s.edge;$('stop-note').textContent='Limite du support complet atteinte. L’animation s’arrête avant la perte d’appui ou le basculement, qui ne font pas partie de ce modèle. Recommencez avec une force plus faible pour prolonger le contact.';
       }
-      drawScene(s);if(readouts)drawHistory(s);
+      drawScene(s);if(readouts){drawHistory(s);drawForceHistory(s);}
     }
     function frame(now){state.frame=0;if(!state.playing)return;const dt=state.last===null?0:Math.min(.05,Math.max(0,(now-state.last)/1000))*Number($('speed').value);state.last=now;
       try{state.sim.advance(dt);const refresh=now-state.lastReadout>=80;if(refresh)state.lastReadout=now;render(refresh);if(state.sim.done){pause();render();return;}}
@@ -850,6 +965,15 @@ async function startFrictionApp(){
     $('model-select').addEventListener('change',()=>configure($('model-select').value));$('preset-select').addEventListener('change',()=>{const preset=$('preset-select').value;if(preset!=='custom')configure(state.sim.model,preset);});
     for(const [id,key]of [['force','F'],['mu-static','muS'],['mu-kinetic','muK'],['angle','angle']])$(id).addEventListener('input',()=>changeLive(key,Number($(id).value)));
     $('zero-force').addEventListener('click',()=>changeLive('F',0));
+    $('force-mode').addEventListener('change',()=>{
+      const sim=state.sim;if(sim.model!=='horizontal')return;
+      const ramp=$('force-mode').value==='ramp',p={...sim.p,F:Math.max(-40,Math.min(40,sim.s.F)),muS:sim.s.muS,muK:sim.s.muK};
+      pause();state.sim=ramp?makeRamp(p):new FP.Simulation('horizontal',p);$('preset-select').value='custom';syncControls();render();
+    });
+    for(const [id,key]of [['ramp-peak','rampPeak'],['ramp-rise','rampRise']])$(id).addEventListener('input',()=>{
+      const wasPlaying=state.playing;state[key]=Number($(id).value);restart();if(wasPlaying)play();
+    });
+    $('replay-ramp').addEventListener('click',()=>{if(isRamp()){restart();play();}});
     for(const [id,key]of [['mass-1','m1'],['mass-2','m2'],['initial-speed','v0'],['duration','duration']])$(id).addEventListener('input',()=>{const previousMode=state.sim.snapshot().mode;state.sim.p[key]=Number($(id).value);$('preset-select').value='custom';restart();startAfterChange(previousMode);});
     $('play').addEventListener('click',()=>{if(state.playing){pause();render();}else play();});$('restart').addEventListener('click',restart);$('reset').addEventListener('click',()=>configure(state.sim.model));
     $('launch-block').addEventListener('click',()=>{
@@ -884,6 +1008,7 @@ async function startFrictionApp(){
           if(Object.hasOwn(input,'playback')&&!['play','pause'].includes(input.playback))throw new Error('Action de lecture inconnue.');
           const muS=input.muStatic??state.sim.s.muS,muK=input.muKinetic??Math.min(state.sim.s.muK,muS);if(muK>muS)throw new Error('Le coefficient cinétique doit rester inférieur ou égal au coefficient statique.');
           const previous=state.sim.snapshot();
+          if(isRamp()&&['force','muStatic','muKinetic','angle'].some(key=>Object.hasOwn(input,key)))throw new Error('Choisissez la commande manuelle pour modifier les réglages en direct.');
           if(Object.hasOwn(input,'muStatic'))state.sim.setLive('muS',muS);if(Object.hasOwn(input,'muKinetic'))state.sim.setLive('muK',muK);if(Object.hasOwn(input,'force'))state.sim.setLive('F',input.force);
           if(Object.hasOwn(input,'angle'))state.sim.setLive('angle',input.angle);
           if(input.playback==='play')play();else if(input.playback==='pause')pause();else startAfterChange(previous.mode,previous.muS!==state.sim.s.muS||previous.muK!==state.sim.s.muK||previous.angle!==state.sim.s.angle);$('preset-select').value='custom';render();return read();
@@ -907,6 +1032,20 @@ async function startFrictionApp(){
         <p id="model-note" class="microcopy"></p>
         <label class="field-label compact" for="preset-select">Exemples</label><select id="preset-select"></select>
       </section>
+      <section id="drive-control" class="panel-section">
+        <label class="field-label" for="force-mode">Commande de la force</label>
+        <select id="force-mode"><option value="manual" selected>Manuelle</option><option value="ramp">Rampe reproductible</option></select>
+        <div id="ramp-settings" hidden>
+          <label class="field-label compact" for="ramp-peak">Force finale <span data-tex="F_{\max}"></span></label>
+          <input id="ramp-peak" type="range" min="0" max="60" step="0.1" value="15" /><output id="ramp-peak-value" for="ramp-peak"></output>
+          <label class="field-label compact" for="ramp-rise">Temps de montée <span data-tex="t_r"></span></label>
+          <input id="ramp-rise" type="range" min="0.5" max="8" step="0.5" value="5" /><output id="ramp-rise-value" for="ramp-rise"></output>
+          <div class="equation" data-tex="F_{\mathrm{app},x}(t)=F_{\max}\min(t/t_r,1)"></div>
+          <p id="ramp-status" class="microcopy"></p>
+          <button id="replay-ramp" type="button">Rejouer la rampe</button>
+          <p class="microcopy">La force monte linéairement, puis reste constante. Chaque essai repart du repos. Modifier la rampe, une masse ou un coefficient recommence l’essai ; la vitesse de lecture ne change pas le résultat physique.</p>
+        </div>
+      </section>
       <section class="panel-section">
         <div class="section-heading-row"><h2>Réglages en direct</h2><button id="zero-force" type="button" class="text-button">Annuler la force</button></div>
         <label class="field-label" for="force">Force appliquée <span data-tex="F_{\mathrm{app},x}"></span></label>
@@ -916,7 +1055,7 @@ async function startFrictionApp(){
         <input id="mu-static" type="range" min="0" max="1" step="0.01" value="0.5" /><output id="mu-static-value" for="mu-static"></output>
         <label class="field-label compact" for="mu-kinetic">Coefficient cinétique <span data-tex="\mu_k"></span></label>
         <input id="mu-kinetic" type="range" min="0" max="0.5" step="0.01" value="0.3" /><output id="mu-kinetic-value" for="mu-kinetic"></output>
-        <p class="microcopy">Modèle de Coulomb avec <span data-tex="0\le\mu_k\le\mu_s"></span>. Ces réglages ne recommencent pas la lecture.</p>
+        <p class="microcopy">Modèle de Coulomb avec <span data-tex="0\le\mu_k\le\mu_s"></span>. En commande manuelle, ces réglages ne recommencent pas la lecture.</p>
         <div id="angle-control"><label class="field-label compact" for="angle">Angle du plan <span data-tex="\theta"></span></label><input id="angle" type="range" min="-60" max="60" step="0.1" value="20" aria-describedby="angle-note" /><output id="angle-value" for="angle"></output><p id="angle-note" class="microcopy">Réglable pendant la lecture, sans remettre le temps à zéro. Un angle négatif incline le plan vers le bas à droite. Approximation quasi statique : les effets de rotation du support sont négligés.</p></div>
       </section>
       <section class="panel-section">
@@ -978,6 +1117,13 @@ async function startFrictionApp(){
         <p id="chart-note" class="scene-note microcopy">Pendant la lecture, faites varier la force appliquée : le frottement statique s’ajuste jusqu’à sa limite, puis le corps glisse.</p>
         <div id="history" class="history-wrap" tabindex="0" role="slider" aria-label="Revoir un instant de l’expérience" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><canvas id="history-canvas" aria-hidden="true"></canvas><div id="history-labels" class="plot-labels" aria-hidden="true"></div></div>
         <div class="history-footer"><span class="microcopy">Cliquer sur le graphique pour revoir un instant. Une reprise dans le passé remplace la suite.</span><span><span data-tex="\Delta K-\sum W="></span><span id="balance-value"></span></span></div>
+      </section>
+      <section class="visual-card force-response-card">
+        <header class="card-heading"><h2>Frottement et force appliquée</h2></header>
+        <div class="chart-key"><span><i style="border-color:#268576"></i>Adhérence</span><span><i style="border-color:#d9683b"></i>Glissement</span><span><i style="border-color:#607185;border-top-style:dashed"></i><span data-tex="\pm\mu_s N"></span> actuelles</span></div>
+        <p id="force-chart-note" class="scene-note microcopy"></p>
+        <div id="force-history" class="history-wrap" role="img" aria-label="Frottement en fonction de la force appliquée"><canvas id="force-history-canvas" aria-hidden="true"></canvas><div id="force-history-labels" class="plot-labels" aria-hidden="true"></div></div>
+        <div class="history-footer"><span data-tex="|f_s|\le\mu_s N"></span><span class="microcopy">Le frottement statique s’adapte. L’égalité n’est atteinte qu’à la limite d’adhérence. Le point repère le même instant que l’animation et le graphique temporel.</span></div>
       </section>
       <p id="observation" class="observation"></p>
       <p id="stop-note" class="stop-note" role="status" hidden></p>
