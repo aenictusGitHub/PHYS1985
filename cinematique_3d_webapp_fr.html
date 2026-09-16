@@ -499,7 +499,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   display: none !important;
 }
 
-/* A discreet backing keeps mathematical labels legible over the 3D grid. */
+/* A discreet backing keeps mathematical labels legible over the trajectory. */
 .axis-math-label {
   padding: 2px 3px;
   border-radius: 3px;
@@ -2101,62 +2101,66 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
   }
 
-  function drawReferenceFrame(basis) {
-    const levels = [0, 2000, 4000];
-    const soft = '#9cacbf';
-    const ranges = currentAxisRanges();
-
-    // The 0–2 m reference cube uses 0–4000 rendering coordinates.
-    for (const value of levels) {
-      strokeSegment(V(0, 0, value), V(4000, 0, value), basis, soft, 1, 0.28);
-      strokeSegment(V(value, 0, 0), V(value, 0, 4000), basis, soft, 1, 0.28);
-
-      strokeSegment(V(0, value, 0), V(4000, value, 0), basis, soft, 1, 0.17);
-      strokeSegment(V(value, 0, 0), V(value, 4000, 0), basis, soft, 1, 0.17);
-
-      strokeSegment(V(0, 0, value), V(0, 4000, value), basis, soft, 1, 0.17);
-      strokeSegment(V(0, value, 0), V(0, value, 4000), basis, soft, 1, 0.17);
-    }
-
-    const corners = [];
-    for (const x of [0, 4000]) {
-      for (const y of [0, 4000]) {
-        for (const z of [0, 4000]) corners.push(V(x, y, z));
-      }
-    }
-    const edges = [];
-    for (let i = 0; i < corners.length; i += 1) {
-      for (let j = i + 1; j < corners.length; j += 1) {
-        const a = corners[i];
-        const b = corners[j];
-        const differing = Number(a.x !== b.x) + Number(a.y !== b.y) + Number(a.z !== b.z);
-        if (differing === 1) edges.push([a, b]);
-      }
-    }
-    for (const [a, b] of edges) strokeSegment(a, b, basis, '#607089', 1.4, 0.78);
-
-    // Axes and tick marks extend dynamically as the user zooms or pans.
-    const axisColor = '#52627a';
-    strokeSegment(V(ranges.x.minimum, 0, 0), V(ranges.x.maximum, 0, 0), basis, axisColor, 1.55, 0.82);
-    strokeSegment(V(0, 0, ranges.y.minimum), V(0, 0, ranges.y.maximum), basis, axisColor, 1.55, 0.82);
-    strokeSegment(V(0, ranges.z.minimum, 0), V(0, ranges.z.maximum, 0), basis, axisColor, 1.55, 0.82);
-
-    // Physical spacing remains AXIS_TICK_STEP. The marks themselves keep a
-    // readable screen size and orientation, including in the top view.
-    ctx.save();
-    ctx.strokeStyle = axisColor;
-    ctx.lineWidth = 1.3;
-    ctx.globalAlpha = 0.82;
-    for (const [axis,unit] of [['x',V(1,0,0)],['y',V(0,0,1)],['z',V(0,1,0)]]) {
-      const start = projectWorld(scale(unit,ranges[axis].minimum),basis);
-      const end = projectWorld(scale(unit,ranges[axis].maximum),basis);
-      if (!start || !end || Math.abs(dot(unit,basis.forward)) > .985) continue;
+  function referenceAxes(basis, ranges) {
+    const axes = [];
+    const bounds = { left: 16, top: 16, right: viewportWidth-16, bottom: viewportHeight-16 };
+    for (const [axis, unit] of [['x',V(1,0,0)],['y',V(0,0,1)],['z',V(0,1,0)]]) {
+      // O is the common physical origin. Leave a short negative tail and
+      // room after the last tick for a clearly separate positive arrow tip.
+      const minimum = Math.min(0,ranges[axis].minimum)-.25*AXIS_TICK_STEP_WORLD;
+      const maximum = Math.max(0,ranges[axis].maximum)+.25*AXIS_TICK_STEP_WORLD;
+      if (Math.abs(dot(unit,basis.forward)) > .985) continue;
+      let a = scale(unit,minimum), b = scale(unit,maximum);
+      const da = dot(sub(a,basis.cameraPosition),basis.forward);
+      const db = dot(sub(b,basis.cameraPosition),basis.forward);
+      if (da <= 10 && db <= 10) continue;
+      // Clip in 3D before projecting when a zoom/pan crosses the near plane.
+      if (da < 10) a = add(a,scale(sub(b,a),(10-da)/(db-da)));
+      else if (db < 10) b = add(a,scale(sub(b,a),(10-da)/(db-da)));
+      const segment = clipScreenSegment(projectWorld(a,basis),projectWorld(b,basis),bounds);
+      if (!segment) continue;
+      const [start,end] = segment;
       const length = Math.hypot(end.x-start.x,end.y-start.y);
       if (length < 45) continue;
-      const nx = -(end.y-start.y)/length, ny = (end.x-start.x)/length;
-      for (const tick of ranges[axis].ticks) {
+      const ux = (end.x-start.x)/length, uy = (end.y-start.y)/length;
+      let nx = -uy, ny = ux;
+      const midpoint = {x:(start.x+end.x)/2,y:(start.y+end.y)/2};
+      const outside = nx*(midpoint.x-viewportWidth/2)+ny*(midpoint.y-viewportHeight/2);
+      if (outside < -1 || Math.abs(outside) <= 1 && (axis === 'z' ? nx > 0 : ny < 0)) { nx = -nx; ny = -ny; }
+      axes.push({axis,unit,start,end,ux,uy,nx,ny,ticks:axisTickValues(minimum,maximum)});
+    }
+    return axes;
+  }
+
+  function drawReferenceFrame(basis) {
+    const axes = referenceAxes(basis,currentAxisRanges());
+    const axisColor = '#52627a';
+    ctx.save();
+    ctx.strokeStyle = axisColor;
+    ctx.fillStyle = axisColor;
+    ctx.globalAlpha = .9;
+    for (const {start,end,unit,ux,uy,nx,ny,ticks} of axes) {
+      // Connected shaft and stylized arrowhead, always readable on screen.
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(start.x,start.y);
+      ctx.lineTo(end.x-7*ux,end.y-7*uy);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(end.x,end.y);
+      ctx.lineTo(end.x-13*ux+4.5*nx,end.y-13*uy+4.5*ny);
+      ctx.lineTo(end.x-9*ux,end.y-9*uy);
+      ctx.lineTo(end.x-13*ux-4.5*nx,end.y-13*uy-4.5*ny);
+      ctx.closePath();
+      ctx.fill();
+
+      // Ticks are 1 m apart; zero is the shared intersection, not three marks.
+      ctx.lineWidth = 1.3;
+      for (const tick of ticks) {
+        if (tick === 0) continue;
         const p = projectWorld(scale(unit,tick),basis);
-        if (!p) continue;
+        if (!p || (p.x-start.x)*ux+(p.y-start.y)*uy < 0
+          || (end.x-p.x)*ux+(end.y-p.y)*uy < 18) continue;
         ctx.beginPath();
         ctx.moveTo(p.x-5*nx,p.y-5*ny);
         ctx.lineTo(p.x+5*nx,p.y+5*ny);
@@ -2166,7 +2170,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
 
     updateLengthScale(basis);
-    drawAxisLabels(basis, ranges);
+    drawAxisLabels(axes);
   }
 
   function updateLengthScale(basis) {
@@ -2191,7 +2195,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       dom.lengthScaleBar.parentElement.setAttribute('aria-label',description);
   }
 
-  function drawAxisLabels(basis, ranges) {
+  function drawAxisLabels(axes) {
     // Screen-space clearance is independent of zoom. No particle or vector
     // position enters this layout, so labels cannot jump during playback.
     const key = [viewportWidth, viewportHeight, camera.yaw, camera.pitch,
@@ -2199,8 +2203,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       mathIsReady, getComputedStyle(dom.axisLabels.x).fontSize].join('|');
     if (key === axisLabelLayoutKey) return;
     axisLabelLayoutKey = key;
-    const axes = [], occupied = [], sizes = new Map();
-    const worldAxis = { x: V(1, 0, 0), y: V(0, 0, 1), z: V(0, 1, 0) };
+    const occupied = [], sizes = new Map();
     const size = element => {
       if (!sizes.has(element)) {
         element.hidden = false;
@@ -2220,19 +2223,6 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     }
     for (const axis of ['x', 'y', 'z']) {
       dom.axisLabels[axis].hidden = true;
-      const unit = worldAxis[axis], range = ranges[axis];
-      const start = projectWorld(scale(unit, range.minimum), basis);
-      const end = projectWorld(scale(unit, range.maximum), basis);
-      // A depth axis is not a readable ruler in an aligned face/side/top view.
-      if (!start || !end || Math.abs(dot(unit, basis.forward)) > .985) continue;
-      const dx = end.x - start.x, dy = end.y - start.y, length = Math.hypot(dx, dy);
-      if (length < 45) continue;
-      const midpoint = projectWorld(scale(unit, (range.minimum + range.maximum) / 2), basis);
-      if (!midpoint) continue;
-      let nx = -dy / length, ny = dx / length;
-      const outside = nx * (midpoint.x - viewportWidth / 2) + ny * (midpoint.y - viewportHeight / 2);
-      if (outside < -1 || Math.abs(outside) <= 1 && (axis === 'z' ? nx > 0 : ny < 0)) { nx = -nx; ny = -ny; }
-      axes.push({ axis, unit, range, start, end, midpoint, nx, ny });
     }
     const crossesAxis = rect => axes.some(({ start: a, end: b }) => {
       // Segment/rectangle clipping also keeps a label clear of another axis.
@@ -2256,53 +2246,21 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       return false;
     };
     const support = (element, nx, ny) => { const s = size(element); return (Math.abs(nx)*s.w + Math.abs(ny)*s.h)/2; };
-    const cubeCorners = [];
-    for (const x of [0,4000]) for (const y of [0,4000]) for (const z of [0,4000]) {
-      const p = projectWorld(V(x,y,z),basis);
-      if (p) cubeCorners.push(p);
-    }
-    // An offset from the axis alone can still lie inside the front face of
-    // the cube. Clear its projected silhouette, including the title's size.
-    const titleDistance = (title, p, nx, ny, minimum) => {
-      if (!cubeCorners.length) return minimum;
-      const boundary = Math.max(...cubeCorners.map(q => q.x*nx+q.y*ny));
-      return Math.max(minimum, boundary-p.x*nx-p.y*ny+support(title,nx,ny)+8);
-    };
     // Only axis titles are annotated; the common tick spacing is given in
     // the fixed length-scale legend beside the scene.
     for (const a of axes) {
       const title = dom.axisLabels[a.axis];
-      const distance = 18 + support(title,a.nx,a.ny);
-      const candidates = [];
-      if (a.axis !== 'z') {
-        // Move away from the cube's center, on the same side as the axis.
-        // A perpendicular offset alone would put both titles at the bottom
-        // corner in an oblique view and make their association ambiguous.
-        const center = projectWorld(V(2000,2000,2000),basis);
-        for (const fraction of [.5,.7,.3]) {
-          const p = projectWorld(scale(a.unit,a.range.minimum+fraction*(a.range.maximum-a.range.minimum)),basis);
-          if (!p || !center) continue;
-          const length = Math.hypot(p.x-center.x,p.y-center.y);
-          if (length < 1) continue;
-          const nx = (p.x-center.x)/length, ny = (p.y-center.y)/length;
-          const d = titleDistance(title,p,nx,ny,distance);
-          for (const extra of [0,12,24]) candidates.push({x:p.x+nx*(d+extra),y:p.y+ny*(d+extra)});
+      const extension = 9 + support(title,a.ux,a.uy);
+      // Prefer just beyond the positive tip. At screen boundaries move
+      // beside that end, keeping clear of all three axes and the controls.
+      const candidates = [{x:a.end.x+a.ux*extension,y:a.end.y+a.uy*extension}];
+      for (const fraction of [1,.9,.75,.55]) {
+        const p = {x:a.start.x+fraction*(a.end.x-a.start.x),y:a.start.y+fraction*(a.end.y-a.start.y)};
+        for (const sign of [1,-1]) for (const extra of [0,12]) {
+          const distance = 10 + support(title,a.nx,a.ny) + extra;
+          candidates.push({x:p.x+sign*a.nx*distance,y:p.y+sign*a.ny*distance});
         }
       }
-      for (const fraction of [.5,.7,.3]) {
-        const p = projectWorld(scale(a.unit, a.range.minimum + fraction*(a.range.maximum-a.range.minimum)),basis);
-        if (p) {
-          const outerDistance = titleDistance(title,p,a.nx,a.ny,distance);
-          for (const extra of [0,12,24]) candidates.push({ x: p.x+a.nx*(outerDistance+extra), y: p.y+a.ny*(outerDistance+extra) });
-        }
-      }
-      // On a narrow viewport the vertical title fits above the end of its
-      // axis better than outside the left edge.
-      const length = Math.hypot(a.end.x-a.start.x,a.end.y-a.start.y);
-      const ux = (a.end.x-a.start.x)/length, uy = (a.end.y-a.start.y)/length;
-      const endpoint = { x:a.end.x+a.nx*6, y:a.end.y+a.ny*6 };
-      const extension = titleDistance(title,endpoint,ux,uy,24+support(title,ux,uy));
-      candidates.push({ x:endpoint.x+ux*extension, y:endpoint.y+uy*extension });
       place(title,candidates);
     }
   }

@@ -8,17 +8,20 @@ const {chromium}=require('playwright');
   page.on('pageerror',e=>errors.push(e.message));
   // Exercise the real animation loop, not the app's static webdriver preview.
   await page.addInitScript(()=>Object.defineProperty(navigator,'webdriver',{get:()=>false}));
-  // Capture the actual projected reference edges without exposing app state.
+  // Capture the reference axes and ensure that no cube or grid is drawn.
   await page.addInitScript(()=>{
     const proto=CanvasRenderingContext2D.prototype;
-    for(const method of ['clearRect','beginPath','moveTo','lineTo','stroke']){
+    for(const method of ['clearRect','beginPath','moveTo','lineTo','stroke','fill']){
       const original=proto[method];
       proto[method]=function(...args){
-        if(method==='clearRect'){window.__referenceEdges=[];window.__axisTicks=[];}
+        if(method==='clearRect'){window.__referenceEdges=[];window.__axisTicks=[];window.__axes=[];window.__axisHeads=[];}
         if(method==='beginPath')this.__testPath=[];
         if(method==='moveTo'||method==='lineTo')(this.__testPath??=[]).push({x:args[0],y:args[1]});
-        if(method==='stroke'&&this.strokeStyle==='#607089'&&Math.abs(this.lineWidth-1.4)<.001)
+        if(method==='stroke'&&['#607089','#9cacbf'].includes(this.strokeStyle))
           window.__referenceEdges.push(this.__testPath.slice());
+        if(method==='stroke'&&this.strokeStyle==='#52627a'&&Math.abs(this.lineWidth-1.8)<.001)
+          window.__axes.push(this.__testPath.slice());
+        if(method==='fill'&&this.fillStyle==='#52627a')window.__axisHeads.push(this.__testPath.slice());
         if(method==='stroke'&&this.strokeStyle==='#52627a'&&Math.abs(this.lineWidth-1.3)<.001)
           window.__axisTicks.push(this.__testPath.slice());
         return original.apply(this,args);
@@ -33,17 +36,26 @@ const {chromium}=require('playwright');
   const labels=()=>page.locator('.axis-math-label').evaluateAll(elements=>elements.filter(el=>!el.hidden).map(el=>{
     const r=el.getBoundingClientRect();return {id:el.id||el.parentElement.id+':'+el.textContent,value:el.querySelector('[data-value]')?.dataset.value,x:r.x,y:r.y,w:r.width,h:r.height};
   }));
-  const assertOuterTitles=async(items,box)=>{
-    const edges=await page.evaluate(()=>window.__referenceEdges);
-    assert.equal(edges.length,12,'All cube edges captured');
-    const corners=edges.flat(),normals=[{x:1,y:0},{x:0,y:1},...edges.map(([a,b])=>({x:b.y-a.y,y:a.x-b.x}))];
+  const assertAxisTitles=async(items,box)=>{
+    const {edges,axes,heads}=await page.evaluate(()=>({edges:window.__referenceEdges,axes:window.__axes,heads:window.__axisHeads}));
+    assert.equal(edges.length,0,'No cube edges or plane grid remain');
+    assert.equal(heads.length,axes.length,'Every visible axis has a positive arrow tip');
+    for(let i=0;i<axes.length;i++){
+      const [start,end]=axes[i],[tip,,notch]=heads[i];
+      assert.equal(heads[i].length,4,'Stylized filled arrowhead');
+      assert(Math.abs(Math.hypot(tip.x-end.x,tip.y-end.y)-7)<1e-6,'Shaft overlaps the notch, without a white gap');
+      assert(Math.hypot(start.x-tip.x,start.y-tip.y)>Math.hypot(start.x-notch.x,start.y-notch.y),'Head points in the positive direction');
+    }
     for(const title of items.filter(item=>item.id.startsWith('axis-label-'))){
-      const x=title.x-box.x,y=title.y-box.y;
-      const rect=[{x,y},{x:x+title.w,y},{x,y:y+title.h},{x:x+title.w,y:y+title.h}];
-      assert(normals.some(n=>{
-        const cube=corners.map(p=>p.x*n.x+p.y*n.y),label=rect.map(p=>p.x*n.x+p.y*n.y);
-        return Math.min(...label)>Math.max(...cube)||Math.max(...label)<Math.min(...cube);
-      }),title.id+' is entirely outside the projected cube');
+      const x=title.x-box.x,y=title.y-box.y,w=title.w,h=title.h;
+      for(let i=0;i<axes.length;i++){
+        const a=axes[i][0],b=heads[i][0];let lo=0,hi=1;
+        for(const [v,delta,min,max] of [[a.x,b.x-a.x,x-1,x+w+1],[a.y,b.y-a.y,y-1,y+h+1]]){
+          if(Math.abs(delta)<1e-8){if(v<min||v>max){lo=1;hi=0;}}
+          else {const t1=(min-v)/delta,t2=(max-v)/delta;lo=Math.max(lo,Math.min(t1,t2));hi=Math.min(hi,Math.max(t1,t2));}
+        }
+        assert(lo>hi,title.id+' does not overlap an axis');
+      }
     }
   };
   const assertScale=async(distance)=>{
@@ -73,13 +85,16 @@ const {chromium}=require('playwright');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     assert.equal(await page.locator('[data-mml-node="merror"]').count(),0);
     const items=await labels(),intersects=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
-    await assertOuterTitles(items,box);
+    await assertAxisTitles(items,box);
     const expected=id==='front-view'?['x','z']:id==='side-view'?['y','z']:id==='top-view'?['x','y']:['x','y','z'];
     assert.deepEqual(items.filter(x=>x.id.startsWith('axis-label-')).map(x=>x.id.slice(-1)).sort(),expected);
     assert.equal(items.length,expected.length,'Only axis titles remain; no numbers along axes');
     assert.equal(await page.locator('.axis-tick-label,.axis-tick-layer').count(),0);
     const ticks=await page.evaluate(()=>window.__axisTicks);
-    assert.equal(ticks.length,3*expected.length,'Three physical marks per visible axis at the initial zoom');
+    assert.equal(await page.evaluate(()=>window.__axes.length),expected.length,'Only the visible Cartesian axes are drawn');
+    if(width===390&&id==='reset-view')
+      assert(ticks.length>=expected.length&&ticks.length<=2*expected.length,'Mobile clips ticks too close to the arrow tips');
+    else assert.equal(ticks.length,2*expected.length,'Marks at 1 and 2 m; no redundant ticks at the common origin');
     for(const [a,b] of ticks)assert(Math.abs(Math.hypot(b.x-a.x,b.y-a.y)-10)<1e-6,'Ticks stay visible, including in the top view');
     assert.equal(await page.locator('#length-scale-digits').getAttribute('data-value'),'1');
     await assertScale(13800);
@@ -118,7 +133,7 @@ const {chromium}=require('playwright');
     }
     await page.waitForTimeout(100);
     const items=await labels();assert(items.filter(a=>a.id.startsWith('axis-label-')).length>=2);
-    await assertOuterTitles(items,box);
+    await assertAxisTitles(items,box);
     for(let i=0;i<items.length;i++){
       const a=items[i];assert(a.x>=box.x&&a.x+a.w<=box.x+box.width+1&&a.y>=box.y&&a.y+a.h<=box.y+box.height+1,gesture+' bounds');
       for(const b of items.slice(i+1))assert(!(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y),gesture+' overlap');
@@ -183,6 +198,6 @@ const {chromium}=require('playwright');
   await page.waitForFunction(()=>document.querySelector('#trajectory-equations mjx-container'));
   assert.equal(await page.locator('[data-mml-node="merror"]').count(),0);
   assert.deepEqual(errors,[]);
-  console.log('PASS: 1 m scale and SI readouts, physical gravity, curvature, exterior x/y/z titles, four 3D views, playback, mobile and MathJax.');
+  console.log('PASS: Cartesian axes without a box, connected arrow tips, stable clear titles, 1 m scale, SI readouts, gravity, curvature, four views, playback, mobile and MathJax.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
