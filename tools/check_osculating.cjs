@@ -103,10 +103,12 @@ function load(dimensions) {
 for (const dimensions of [2, 3]) {
   const app = load(dimensions);
   const { V, add, sub, scale, dot, norm, osculatingGeometry: geometry, osculatingPoint: point } = app;
-  const data = {
+  const fixtureScale = dimensions === 3 ? 1/2000 : 1;
+  const metric = v => scale(v,fixtureScale);
+  const data = Object.fromEntries(Object.entries({
     position: V(3000, 2000, 2000), velocity: V(0, 100, 0),
     acceleration: V(-10, 7, 0), // Tangential acceleration must not change the radius.
-  };
+  }).map(([name,vector])=>[name,metric(vector)]));
   const circle = geometry(data);
   if (dimensions === 2) {
     for (const length of [21, 35, 200, 1500]) for (let i = 0; i < 16; i++) {
@@ -127,8 +129,8 @@ for (const dimensions of [2, 3]) {
     assert.equal(app.drawTestArrow(V()).length, 0);
   }
   assert(circle.defined);
-  close(circle.radius, 1000);
-  close(norm(sub(circle.center, V(2000, 2000, 2000))), 0);
+  close(circle.radius, 1000*fixtureScale);
+  close(norm(sub(circle.center, metric(V(2000, 2000, 2000)))), 0);
   close(dot(circle.tangent, circle.normal), 0);
   close(norm(sub(point(circle, 0), data.position)), 0);
   for (let i = 0; i <= 64; i++) {
@@ -160,14 +162,14 @@ for (const dimensions of [2, 3]) {
   for (const t of [0, .1, 2, 5, mcua.duration]) {
     const c = geometry(app.derivatives(mcua, t));
     assert(c.defined);
-    const expected = dimensions === 2 ? 1000 : 2000;
+    const expected = dimensions === 2 ? 1000 : 1;
     close(c.radius, expected, expected * .002);
   }
   const rest = { closed: false, duration: 10, position: () => V(2000, 2000, 2000) };
   assert.equal(geometry(app.derivatives(rest, 4)).reason, 'stationary');
-  const line = { closed: false, duration: 10, position: t => V(2000 + t * 100, 2000 + t * 50, 2000 + t * 20) };
+  const line = { closed: false, duration: 10, position: t => metric(V(2000 + t * 100, 2000 + t * 50, 2000 + t * 20)) };
   assert.equal(geometry(app.derivatives(line, 4)).reason, 'straight');
-  const inflection = { closed: false, duration: 10, position: t => V(2000 + (t - 5) * 100, 2000 + (t - 5) ** 3 * 10, 2000) };
+  const inflection = { closed: false, duration: 10, position: t => metric(V(2000 + (t - 5) * 100, 2000 + (t - 5) ** 3 * 10, 2000)) };
   assert.equal(geometry(app.derivatives(inflection, 5)).reason, 'straight');
   assert(geometry(app.derivatives(inflection, 4.9)).defined);
   assert(geometry(app.derivatives(inflection, 5.1)).defined);
@@ -178,7 +180,7 @@ for (const dimensions of [2, 3]) {
   app.dom.osculating.checked = true;
   const regularCommands = JSON.stringify(app.render(data));
   assert(app.commands.some(c => c[0] === 'lineTo'));
-  assert.equal(app.dom.curvatureDigits.textContent, '1000.00');
+  assert.equal(app.dom.curvatureDigits.textContent, (1000*fixtureScale).toFixed(2));
   assert(!app.dom.curvatureValue.hidden && !app.dom.curvatureDetails.hidden);
   assert(app.dom.curvatureStatus.hidden && app.dom.curvatureScientific.hidden);
   assert.equal(JSON.stringify({ frame: app.frame, state: app.state }), before);
@@ -189,7 +191,7 @@ for (const dimensions of [2, 3]) {
   assert.equal(app.commands.length, 0);
   app.render({ ...data, velocity: V() });
   assert(app.dom.curvatureStatus.textContent.includes('Vitesse quasi nulle'));
-  app.render({ ...data, acceleration: V(-.001, 0, 0) });
+  app.render({ ...data, velocity: V(0,100,0), acceleration: V(-.001, 0, 0) });
   assert(!app.dom.curvatureScientific.hidden);
   assert.equal(app.dom.curvatureExponent.textContent, '7');
   app.render(data);

@@ -40,7 +40,7 @@ pure += [
 for (const name of ['cameraBasis', 'projectWorld', 'arrowMaterialColor', 'drawDepthArrowMarker',
   'buildArrowFaces', 'paintArrowFaces', 'drawArrow', 'drawSelectedVectors']) pure += fn(name);
 pure += [
-  'return {V,add,sub,scale,dot,norm,toWorld,ARROW,COLORS,TRAJECTORIES,derivatives,',
+  'return {V,add,sub,scale,dot,norm,toWorld,toScene,SCENE_UNITS_PER_METRE,ARROW,COLORS,TRAJECTORIES,derivatives,',
   'camera,commands,state,cameraBasis,buildArrowFaces,paintArrowFaces,',
   'resize(w,h){viewportWidth=w;viewportHeight=h;},',
   'drawAll(key,t){commands.length=0;',
@@ -50,7 +50,8 @@ pure += [
   '})();'
 ].join('\n');
 const app = vm.runInNewContext(pure);
-const {V,add,sub,scale,dot,norm,toWorld} = app;
+const {V,add,sub,scale,dot,norm,toWorld,toScene} = app;
+const fromScene = p => scale(toWorld(p),1/app.SCENE_UNITS_PER_METRE);
 const close = (a,b,tolerance=1e-7) => assert(Math.abs(a-b)<=tolerance, a+' != '+b);
 const html = execFileSync('unzip', ['-p', zip, entry.replace('app.js', 'index.html')], {encoding:'utf8'});
 assert(!/id="projection-toggle"[^>]*checked/.test(html), 'Projections are off by default');
@@ -66,6 +67,18 @@ assert.equal(redraws, 1);
 assert.equal(app.camera.yaw, initialCamera.yaw);
 assert.equal(app.camera.distance, initialCamera.distance);
 assert.equal(JSON.stringify(app.camera.target), JSON.stringify(initialCamera.target));
+for(const [control,axis,up] of [['frontView',V(1,0,0),V(0,0,1)],['sideView',V(0,1,0),V(0,0,1)]]){
+  const id=control==='frontView'?'front-view':'side-view';assert(html.includes('id="'+id+'"'));
+  const handler=source.match(new RegExp("dom\\."+control+"\\.addEventListener\\('click', \\(\\) => \\{([\\s\\S]*?)\\n  \\}\\);"))[1];
+  for(const distance of [5200,13800,26000]){
+    app.camera.target=V(1400,-900,3200);app.camera.distance=distance;const before=JSON.stringify(app.camera.target);
+    const count=redraws;vm.runInNewContext(handler,{camera:app.camera,updateAndDraw(){redraws++;}});
+    assert.equal(redraws,count+1);assert.equal(app.camera.distance,distance);assert.equal(JSON.stringify(app.camera.target),before);
+    close(app.camera.pitch,0);const basis=app.cameraBasis();
+    close(norm(sub(basis.right,toWorld(axis))),0);close(norm(sub(basis.up,toWorld(up))),0);
+    close(dot(basis.forward,toWorld(axis)),0);close(dot(basis.forward,toWorld(up)),0);
+  }
+}
 for (const sign of [-1,1]) for (let i=0;i<24;i++) {
   app.camera.yaw=i*Math.PI/12;
   app.camera.pitch=sign*Math.PI/2;
@@ -92,9 +105,9 @@ for (const size of [[280,400],[900,650]]) for (const distance of [3500,13800,420
     app.camera.yaw=random()*2*Math.PI;
     app.camera.pitch=(random()-.5)*2.5;
     const basis=app.cameraBasis();
-    const origin=toWorld(app.camera.target);
-    const vector=V((random()-.5)*1800,(random()-.5)*1800,(random()-.5)*1800);
-    const direction=toWorld(vector), length=norm(direction), unit=scale(direction,1/length);
+    const origin=fromScene(app.camera.target);
+    const vector=scale(V((random()-.5)*1800,(random()-.5)*1800,(random()-.5)*1800),1/app.SCENE_UNITS_PER_METRE);
+    const direction=toScene(vector), length=norm(direction), unit=scale(direction,1/length);
     const faces=app.buildArrowFaces(origin,vector,1,app.COLORS.velocity,basis);
     assert(faces.length>0,'Visible arrow has a mesh');
     for (const face of faces.filter(f=>f.kind==='face')) {
@@ -105,12 +118,12 @@ for (const size of [[280,400],[900,650]]) for (const distance of [3500,13800,420
         assert(Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>5);
       }
       for (const p of face.vertices) {
-        const axial=dot(sub(p,toWorld(origin)),unit);
+        const axial=dot(sub(p,toScene(origin)),unit);
         assert(axial>=-1e-7&&axial<=length+app.ARROW.headLengthWorld+1e-7);
         if (face.part==='shaft') assert(Math.min(Math.abs(axial),Math.abs(axial-length))<1e-7);
       }
       if (face.part==='head') close(norm(sub(face.vertices[2],
-        add(toWorld(origin),scale(unit,length+app.ARROW.headLengthWorld)))),0);
+        add(toScene(origin),scale(unit,length+app.ARROW.headLengthWorld)))),0);
     }
     app.paintArrowFaces(faces);
     for (let j=1;j<faces.length;j++) assert(faces[j-1].depth>=faces[j].depth);
@@ -120,23 +133,23 @@ for (const size of [[280,400],[900,650]]) for (const distance of [3500,13800,420
 for (const part of ['tail','shaft','shoulder','head']) assert(parts.has(part),part);
 app.resize(900,650);
 app.camera.distance=13800;
-const b=app.cameraBasis(), origin=toWorld(app.camera.target);
+const b=app.cameraBasis(), origin=fromScene(app.camera.target);
 for (const sign of [-1,1]) {
-  const faces=app.buildArrowFaces(origin,toWorld(scale(b.forward,sign*1000)),1,app.COLORS.velocity,b);
+  const faces=app.buildArrowFaces(origin,fromScene(scale(b.forward,sign*1000)),1,app.COLORS.velocity,b);
   const marker=faces.find(f=>f.kind==='depth-marker');
   assert(marker,'End-on arrow is identifiable');
   assert.equal(marker.towardCamera,sign<0);
   app.paintArrowFaces(faces);
   assert.equal(faces.at(-1),marker,'Direction cue must remain visible over its own cap');
 }
-const side=app.buildArrowFaces(origin,toWorld(scale(b.right,1000)),1,app.COLORS.velocity,b);
+const side=app.buildArrowFaces(origin,fromScene(scale(b.right,1000)),1,app.COLORS.velocity,b);
 assert(new Set(side.map(f=>f.color)).size>=6,'Lighting supplies visible tonal variation');
 for (const [vector,factor] of [[V(),1],[V(Infinity,0,0),1],[V(200,100,300),0]]) {
   assert.equal(app.buildArrowFaces(origin,vector,factor,app.COLORS.velocity,b).length,0);
 }
 for (const z of [-10,1,6,30]) {
-  const o=toWorld(add(b.cameraPosition,scale(b.forward,z)));
-  app.paintArrowFaces(app.buildArrowFaces(o,V(100,20,-30),1,app.COLORS.velocity,b));
+  const o=fromScene(add(b.cameraPosition,scale(b.forward,z)));
+  app.paintArrowFaces(app.buildArrowFaces(o,scale(V(100,20,-30),1/app.SCENE_UNITS_PER_METRE),1,app.COLORS.velocity,b));
 }
 const cameraBefore=JSON.stringify(app.camera);
 for (const [key,item] of Object.entries(app.TRAJECTORIES)) for (const fraction of [0,.31,.7,1]) {

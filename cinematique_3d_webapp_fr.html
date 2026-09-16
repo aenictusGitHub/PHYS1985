@@ -359,6 +359,26 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   font-size: 0.76rem;
 }
 
+.phys-app .length-scale {
+  position: absolute;
+  right: 0.85rem;
+  bottom: 0.85rem;
+  z-index: 3;
+  display: grid;
+  gap: 0.3rem;
+  justify-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(255,255,255,.94);
+  color: var(--ink);
+  pointer-events: none;
+}
+.length-scale-bar { display: block; overflow: visible; }
+.length-scale-bar path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.length-scale-value { display: inline-flex; align-items: baseline; font-size: var(--text-value,1rem); }
+.length-scale mjx-container { margin: 0 !important; }
+
 .time-badge {
   position: absolute;
   top: 1rem;
@@ -479,26 +499,15 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   display: none !important;
 }
 
+/* A discreet backing keeps mathematical labels legible over the 3D grid. */
+.axis-math-label {
+  padding: 2px 3px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.88);
+}
+
 .axis-title-label {
   font-size: 1rem;
-}
-
-.axis-tick-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  user-select: none;
-}
-
-.axis-tick-label {
-  color: #475569;
-  font-size: 0.96rem;
-  font-weight: 600;
-}
-.axis-tick-label .math-digits {
-  min-width: 0;
-  justify-content: center;
 }
 
 .axis-math-label .tex-math,
@@ -933,6 +942,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 .catalog .button { display: inline-block; padding: 0.65rem 0.85rem; border: 1px solid #c4d5e3; border-radius: 0.5rem; color: var(--accent-dark); background: #f4f8fb; font-size: 0.875rem; font-weight: 550; text-decoration: none; transition: background-color 140ms ease; }
 .catalog .button:hover { background: #e7f0f7; }
 .catalog .qr { display: block; width: 6.75rem; height: 6.75rem; border: 0.3rem solid #fff; }
+.catalog .notes-cover-link { display: block; justify-self: end; border: 1px solid var(--line); background: #fff; box-shadow: 0 3px 10px rgba(28, 49, 72, 0.08); }
+.catalog .notes-cover { display: block; width: 6.75rem; height: auto; }
 .catalog footer { margin-top: 1.6rem; padding-top: 1.1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
 @media (max-width: 820px) {
   .catalog main { width: min(680px, calc(100% - 2rem)); padding: 2.5rem 0; }
@@ -943,6 +954,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 @media (max-width: 420px) {
   .catalog article { grid-template-columns: minmax(0, 1fr) 4.75rem; gap: 0.7rem; padding: 1.15rem; }
   .catalog .qr { width: 4.75rem; height: 4.75rem; }
+  .catalog .notes-cover { width: 4.75rem; }
   .catalog h2 { font-size: 1.35rem; }
 }
 
@@ -1120,14 +1132,16 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <div id="axis-label-y" class="axis-math-label axis-title-label" aria-hidden="true" hidden><span class="tex-math">\(y\,[\mathrm m]\)</span></div>
         <div id="axis-label-z" class="axis-math-label axis-title-label" aria-hidden="true" hidden><span class="tex-math">\(z\,[\mathrm m]\)</span></div>
 
-        <div id="axis-ticks-x" class="axis-tick-layer" aria-hidden="true"></div>
-        <div id="axis-ticks-y" class="axis-tick-layer" aria-hidden="true"></div>
-        <div id="axis-ticks-z" class="axis-tick-layer" aria-hidden="true"></div>
-
         <div class="viewport-toolbar">
           <button id="top-view" type="button">Vue du dessus</button>
+          <button id="front-view" type="button" title="Vue dans le plan xz">Vue de face</button>
+          <button id="side-view" type="button" title="Vue dans le plan yz">Vue de côté</button>
           <button id="reset-view" type="button">Réinitialiser la vue</button>
         </div>
+        <aside class="length-scale" aria-label="Étalon de longueur au centre de la vue">
+          <svg id="length-scale-bar" class="length-scale-bar" width="120" height="14" viewBox="0 0 120 14" aria-hidden="true"><path id="length-scale-path" d="M2 2V12 M2 7H118 M118 2V12" /></svg>
+          <span class="length-scale-value"><span id="length-scale-digits" class="math-digits">1</span><span class="tex-math">\(\,\mathrm m\)</span></span>
+        </aside>
         <div class="time-badge" aria-label="Temps courant">
           <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
         </div>
@@ -1157,22 +1171,27 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   });
 
   const PARAMETERS = Object.freeze({
-    R: 2000,
-    x0: 2000,
-    y0: 2000,
-    z0: 2000,
+    R: 1,
+    x0: 1,
+    y0: 1,
+    z0: 1,
     omega: 0.5,
     alpha: 0.02,
     theta0Deg: 0,
   });
 
-  const T_MAX = 10 * Math.PI;
+  // Physical laws use metres. The rendering coordinate system is kept
+  // separate so changing physical scale preserves framing and arrow meshes.
+  const SCENE_UNITS_PER_METRE = 2000;
+  const BALLISTIC_TIME_SCALE = 1 / Math.sqrt(SCENE_UNITS_PER_METRE);
+  const T_MAX = 10 * Math.PI * BALLISTIC_TIME_SCALE;
   const CLOSED_PERIOD = 2 * Math.PI / PARAMETERS.omega;
   const DOUBLE_CLOSED_PERIOD = 2 * CLOSED_PERIOD;
   const MCUA_TURN_DURATION = (Math.sqrt(PARAMETERS.omega ** 2 + 4 * Math.PI * PARAMETERS.alpha) - PARAMETERS.omega) / PARAMETERS.alpha;
   const MCUA_DURATION = 2 * MCUA_TURN_DURATION;
   const BUTTERFLY_DURATION = 24;
-  const AXIS_TICK_STEP = 2000;
+  const AXIS_TICK_STEP = 1;
+  const AXIS_TICK_STEP_WORLD = AXIS_TICK_STEP * SCENE_UNITS_PER_METRE;
   const BASE_CAMERA_DISTANCE = 13800;
   const ZOOM_AXIS_STEP_DISTANCE = 3500;
   const ARROW = Object.freeze({
@@ -1200,6 +1219,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   // Keep the original z coordinate vertical in the rendered scene.
   const toWorld = (p) => V(p.x, p.z, p.y);
+  const toScene = (p) => scale(toWorld(p), SCENE_UNITS_PER_METRE);
   const deg2rad = (angle) => angle * Math.PI / 180;
   const POSITION_VECTOR_ORIGIN = Object.freeze(V(0, 0, 0));
 
@@ -1216,8 +1236,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(3\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m}`,
-        String.raw`R=2000\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m}`,
+        String.raw`R=1\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, z0, R, omega, theta0Deg } = PARAMETERS;
@@ -1241,8 +1261,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin\!\left(\frac{9}{2}\omega t\right)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m}`,
-        String.raw`R=2000\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m}`,
+        String.raw`R=1\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
         String.raw`n=3,\qquad T=\frac{4\pi}{\omega}=8\pi\,\mathrm s`,
       ],
       position(t) {
@@ -1267,8 +1287,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(2\omega t)\cos(2\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m}`,
-        String.raw`R=2000\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m}`,
+        String.raw`R=1\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, z0, R, omega } = PARAMETERS;
@@ -1294,8 +1314,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(2\omega t)\sin(\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m}`,
-        String.raw`R=2000\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m}`,
+        String.raw`R=1\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, z0, R, omega } = PARAMETERS;
@@ -1320,7 +1340,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m},\qquad R=2000\,\mathrm{m}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m},\qquad R=1\,\mathrm{m}`,
         String.raw`\omega_0=0.5\,\mathrm{rad\,s^{-1}},\qquad \alpha=0.02\,\mathrm{rad\,s^{-2}}`,
         String.raw`T_{\mathrm{tour}}\simeq 10.40\,\mathrm s,\qquad t_{\max}=2T_{\mathrm{tour}}\simeq 20.80\,\mathrm s`,
       ],
@@ -1342,8 +1362,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm{m}`,
-        String.raw`R=2000\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm{m}`,
+        String.raw`R=1\,\mathrm{m},\qquad \omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, z0, R, omega } = PARAMETERS;
@@ -1370,14 +1390,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+r\sin(3\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m`,
-        String.raw`R_0=1100\,\mathrm m,\qquad r=650\,\mathrm m`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m`,
+        String.raw`R_0=0.55\,\mathrm m,\qquad r=0.325\,\mathrm m`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R0 = 1100;
-        const r = 650;
+        const R0 = 0.55;
+        const r = 0.325;
         const q = omega * t;
         const radial = R0 + r * Math.cos(3 * q);
         return V(
@@ -1400,12 +1420,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+A\sin(4\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m,\qquad A=620\,\mathrm m`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m,\qquad A=0.31\,\mathrm m`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const A = 620;
+        const A = 0.31;
         const q = omega * t;
         const radial = A * (2 + Math.cos(2 * q));
         return V(
@@ -1428,14 +1448,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+r\sin(5\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m`,
-        String.raw`R_0=1150\,\mathrm m,\qquad r=550\,\mathrm m`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m`,
+        String.raw`R_0=0.575\,\mathrm m,\qquad r=0.275\,\mathrm m`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R0 = 1150;
-        const r = 550;
+        const R0 = 0.575;
+        const r = 0.275;
         const q = omega * t;
         const radial = R0 + r * Math.cos(5 * q);
         return V(
@@ -1458,14 +1478,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+r\sin(n\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m`,
-        String.raw`R_0=1250\,\mathrm m,\qquad r=480\,\mathrm m,\qquad n=7`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m`,
+        String.raw`R_0=0.625\,\mathrm m,\qquad r=0.24\,\mathrm m,\qquad n=7`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R0 = 1250;
-        const r = 480;
+        const R0 = 0.625;
+        const r = 0.24;
         const n = 7;
         const q = omega * t;
         const radial = R0 + r * Math.cos(n * q);
@@ -1489,12 +1509,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+2a\sin\!\left(\frac{\tau}{2}\right)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m,\qquad a=850\,\mathrm m`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m,\qquad a=0.425\,\mathrm m`,
         String.raw`T=\frac{4\pi}{\omega}=8\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const a = 850;
+        const a = 0.425;
         const q = omega * t;
         return V(
           x0 + a * Math.cos(q),
@@ -1516,12 +1536,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(3\tau)`,
       ],
       parameters: [
-        String.raw`R=1700\,\mathrm m,\qquad T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
+        String.raw`R=0.85\,\mathrm m,\qquad T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
         String.raw`(x-x_0)^2+(y-y_0)^2+(z-z_0)^2=R^2`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R = 1700;
+        const R = 0.85;
         const q = omega * t;
         const latitudeRadius = R * Math.cos(3 * q);
         return V(
@@ -1544,12 +1564,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(2\tau)`,
       ],
       parameters: [
-        String.raw`R=1700\,\mathrm m,\qquad T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
+        String.raw`R=0.85\,\mathrm m,\qquad T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
         String.raw`(x-x_0)^2+(y-y_0)^2+(z-z_0)^2=R^2`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R = 1700;
+        const R = 0.85;
         const q = omega * t;
         const latitudeRadius = R * Math.cos(2 * q);
         return V(
@@ -1572,12 +1592,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+R\sin(5\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m,\qquad R=1550\,\mathrm m`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m,\qquad R=0.775\,\mathrm m`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const R = 1550;
+        const R = 0.775;
         const q = omega * t;
         return V(
           x0 + R * Math.cos(3 * q),
@@ -1599,13 +1619,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+B\sin(2\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m`,
-        String.raw`A=95\,\mathrm m,\qquad B=450\,\mathrm m,\qquad T=4\pi\,\mathrm s`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m`,
+        String.raw`A=0.0475\,\mathrm m,\qquad B=0.225\,\mathrm m,\qquad T=4\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0, omega } = PARAMETERS;
-        const A = 95;
-        const B = 450;
+        const A = 0.0475;
+        const B = 0.225;
         const q = omega * t;
         const s = Math.sin(q);
         return V(
@@ -1629,13 +1649,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0+B\sin(3\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=z_0=2000\,\mathrm m`,
-        String.raw`A=440\,\mathrm m,\qquad B=520\,\mathrm m,\qquad T=24\,\mathrm s`,
+        String.raw`x_0=y_0=z_0=1\,\mathrm m`,
+        String.raw`A=0.22\,\mathrm m,\qquad B=0.26\,\mathrm m,\qquad T=24\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, z0 } = PARAMETERS;
-        const A = 440;
-        const B = 520;
+        const A = 0.22;
+        const B = 0.26;
         const q = 12 * Math.PI * t / BUTTERFLY_DURATION;
         const rho = Math.exp(Math.sin(q))
           - 2 * Math.cos(4 * q)
@@ -1651,8 +1671,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       label: 'Trajectoire balistique',
       duration: T_MAX,
       closed: false,
-      scaleV: 3,
-      scaleA: 25,
+      scaleV: 3 * BALLISTIC_TIME_SCALE,
+      scaleA: 25 / SCENE_UNITS_PER_METRE,
       jerk() { return V(0, 0, 0); },
       equations: [
         String.raw`x(t)=x_0+v_0\cos(\theta_0)t`,
@@ -1660,11 +1680,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`z(t)=z_0`,
       ],
       parameters: [
-        String.raw`x_0=y_0=0\,\mathrm{m},\qquad z_0=2000\,\mathrm{m}`,
-        String.raw`v_0=200\,\mathrm{m\,s^{-1}},\qquad \theta_0=60^\circ,\qquad g=9.81\,\mathrm{m\,s^{-2}}`,
+        String.raw`x_0=y_0=0\,\mathrm{m},\qquad z_0=1\,\mathrm{m}`,
+        String.raw`v_0=\sqrt{20}\simeq 4.47\,\mathrm{m\,s^{-1}},\qquad \theta_0=60^\circ,\qquad g=9.81\,\mathrm{m\,s^{-2}}`,
       ],
       position(t) {
-        const v0 = 200;
+        const v0 = Math.sqrt(20);
         const theta = deg2rad(60);
         const g = 9.81;
         return V(
@@ -1688,7 +1708,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     let normal = { ...acceleration };
     let decompositionDefined = false;
 
-    if (speed > 1e-5) {
+    if (speed > 1e-5 / SCENE_UNITS_PER_METRE) {
       const tangent = scale(velocity, 1 / speed);
       tangential = scale(tangent, dot(acceleration, tangent));
       normal = sub(acceleration, tangential);
@@ -1717,7 +1737,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     );
     const result = scale(numerator, 1 / (8 * h ** 3));
     for (const axis of Object.keys(result)) {
-      if (Math.abs(result[axis]) < 1e-4) result[axis] = 0;
+      if (Math.abs(result[axis]) < 1e-4 / SCENE_UNITS_PER_METRE) result[axis] = 0;
     }
     return result;
   }
@@ -1730,7 +1750,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         maximum = Math.max(maximum, norm(jerkAt(item, item.duration * i / 384)));
       }
       // Fixed for each trajectory: arrow length still follows |j(t)|.
-      jerkScales.set(item, maximum > 1e-4 ? 0.65 * PARAMETERS.R / maximum : 1);
+      jerkScales.set(item, maximum > 1e-4 / SCENE_UNITS_PER_METRE ? 0.65 * PARAMETERS.R / maximum : 1);
     }
     return jerkScales.get(item);
   }
@@ -1738,14 +1758,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   // Physical geometry only: independent of camera and vector display scales.
   function osculatingGeometry(data) {
     const speed = norm(data.velocity);
-    if (!Number.isFinite(speed) || speed <= 1e-2) {
+    if (!Number.isFinite(speed) || speed <= 1e-2 / SCENE_UNITS_PER_METRE) {
       return { defined: false, reason: 'stationary' };
     }
     const tangent = scale(data.velocity, 1 / speed);
     const normalAcceleration = sub(data.acceleration, scale(tangent, dot(data.acceleration, tangent)));
     const normalMagnitude = norm(normalAcceleration);
     // Suppress finite-difference roundoff at straight segments and inflections.
-    const tolerance = Math.max(1e-5, norm(data.acceleration) * 1e-7);
+    const tolerance = Math.max(1e-5 / SCENE_UNITS_PER_METRE, norm(data.acceleration) * 1e-7);
     if (!Number.isFinite(normalMagnitude) || normalMagnitude <= tolerance) {
       return { defined: false, reason: 'straight' };
     }
@@ -1829,6 +1849,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     reset: document.getElementById('reset-button'),
     resetView: document.getElementById('reset-view'),
     topView: document.getElementById('top-view'),
+    frontView: document.getElementById('front-view'),
+    sideView: document.getElementById('side-view'),
     speed: document.getElementById('speed-select'),
     timeSlider: document.getElementById('time-slider'),
     timeOutputDigits: document.getElementById('time-output-digits'),
@@ -1856,11 +1878,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       y: document.getElementById('axis-label-y'),
       z: document.getElementById('axis-label-z'),
     },
-    axisTickLayers: {
-      x: document.getElementById('axis-ticks-x'),
-      y: document.getElementById('axis-ticks-y'),
-      z: document.getElementById('axis-ticks-z'),
-    },
+    lengthScaleDigits: document.getElementById('length-scale-digits'),
+    lengthScaleBar: document.getElementById('length-scale-bar'),
+    lengthScalePath: document.getElementById('length-scale-path'),
     clearVectors: document.getElementById('clear-vectors'),
     toggles: {
       position: document.getElementById('toggle-position'),
@@ -1945,7 +1965,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   let mathIsReady = false;
   let mathTypesetQueue = Promise.resolve();
   const mathGlyphTemplates = new Map();
-  const axisTickElements = { x: new Map(), y: new Map(), z: new Map() };
+  let axisLabelLayoutKey = '';
 
   function queueTypeset(elements) {
     if (!mathIsReady || !window.MathJax?.typesetPromise) return Promise.resolve();
@@ -1990,50 +2010,19 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     element.dataset.value = value;
   }
 
-  function synchronizeAxisTickElements(axis, ticks) {
-    const elements = axisTickElements[axis];
-    const visible = new Set(ticks);
-
-    for (const [tick, record] of elements) {
-      if (!visible.has(tick)) {
-        record.root.remove();
-        elements.delete(tick);
-      }
-    }
-
-    for (const tick of ticks) {
-      let record = elements.get(tick);
-      if (!record) {
-        const root = document.createElement('div');
-        root.className = 'axis-math-label axis-tick-label';
-        root.setAttribute('aria-hidden', 'true');
-        const digits = document.createElement('span');
-        digits.className = 'math-digits';
-        root.append(digits);
-        dom.axisTickLayers[axis].append(root);
-        record = { root, digits };
-        elements.set(tick, record);
-      }
-      setMathDigits(record.digits, String(tick));
-    }
-  }
-
   function updateDynamicMathOutputs() {
     setMathDigits(dom.timeOutputDigits, state.time.toFixed(2));
     setMathDigits(dom.timeBadgeDigits, state.time.toFixed(2));
     setMathDigits(dom.vectorScaleOutputDigits, state.vectorScale.toFixed(2));
     setMathDigits(dom.trailDurationOutputDigits, state.trailDuration.toFixed(1));
-    for (const elements of Object.values(axisTickElements)) {
-      for (const [tick, record] of elements) setMathDigits(record.digits, String(tick));
-    }
   }
 
   const currentTrajectory = () => TRAJECTORIES[state.trajectoryKey];
   const trajectoryTimeMax = (item) => item.closed ? 2 * item.duration : item.duration;
   const axisTickValues = (minimum, maximum) => {
-    const first = Math.ceil((minimum - 1e-9) / AXIS_TICK_STEP) * AXIS_TICK_STEP;
+    const first = Math.ceil((minimum - 1e-9) / AXIS_TICK_STEP_WORLD) * AXIS_TICK_STEP_WORLD;
     const values = [];
-    for (let value = first; value <= maximum + 1e-9; value += AXIS_TICK_STEP) {
+    for (let value = first; value <= maximum + 1e-9; value += AXIS_TICK_STEP_WORLD) {
       values.push(Math.abs(value) < 1e-9 ? 0 : value);
     }
     return values;
@@ -2041,9 +2030,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   const axisRange = (coordinate) => {
     const zoomSteps = Math.max(0, Math.floor((camera.distance - BASE_CAMERA_DISTANCE + 1e-9) / ZOOM_AXIS_STEP_DISTANCE));
     const halfSteps = 1 + zoomSteps;
-    const center = Math.round(coordinate / AXIS_TICK_STEP) * AXIS_TICK_STEP;
-    const minimum = center - halfSteps * AXIS_TICK_STEP;
-    const maximum = center + halfSteps * AXIS_TICK_STEP;
+    const center = Math.round(coordinate / AXIS_TICK_STEP_WORLD) * AXIS_TICK_STEP_WORLD;
+    const minimum = center - halfSteps * AXIS_TICK_STEP_WORLD;
+    const maximum = center + halfSteps * AXIS_TICK_STEP_WORLD;
     return { minimum, maximum, ticks: axisTickValues(minimum, maximum) };
   };
   const currentAxisRanges = () => ({
@@ -2093,7 +2082,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     };
   }
 
-  const projectPhysical = (point, basis) => projectWorld(toWorld(point), basis);
+  const projectPhysical = (point, basis) => projectWorld(toScene(point), basis);
 
   function strokeSegment(a, b, basis, color, width = 1, alpha = 1, dash = []) {
     const pa = projectWorld(a, basis);
@@ -2116,7 +2105,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     const soft = '#9cacbf';
     const ranges = currentAxisRanges();
 
-    // The original 0–4000 m reference cube remains visible.
+    // The 0–2 m reference cube uses 0–4000 rendering coordinates.
     for (const value of levels) {
       strokeSegment(V(0, 0, value), V(4000, 0, value), basis, soft, 1, 0.28);
       strokeSegment(V(value, 0, 0), V(value, 0, 4000), basis, soft, 1, 0.28);
@@ -2147,55 +2136,173 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     // Axes and tick marks extend dynamically as the user zooms or pans.
     const axisColor = '#52627a';
-    const tickHalfLength = 85;
     strokeSegment(V(ranges.x.minimum, 0, 0), V(ranges.x.maximum, 0, 0), basis, axisColor, 1.55, 0.82);
     strokeSegment(V(0, 0, ranges.y.minimum), V(0, 0, ranges.y.maximum), basis, axisColor, 1.55, 0.82);
     strokeSegment(V(0, ranges.z.minimum, 0), V(0, ranges.z.maximum, 0), basis, axisColor, 1.55, 0.82);
 
-    for (const tick of ranges.x.ticks) {
-      strokeSegment(V(tick, -tickHalfLength, 0), V(tick, tickHalfLength, 0), basis, axisColor, 1.3, 0.82);
+    // Physical spacing remains AXIS_TICK_STEP. The marks themselves keep a
+    // readable screen size and orientation, including in the top view.
+    ctx.save();
+    ctx.strokeStyle = axisColor;
+    ctx.lineWidth = 1.3;
+    ctx.globalAlpha = 0.82;
+    for (const [axis,unit] of [['x',V(1,0,0)],['y',V(0,0,1)],['z',V(0,1,0)]]) {
+      const start = projectWorld(scale(unit,ranges[axis].minimum),basis);
+      const end = projectWorld(scale(unit,ranges[axis].maximum),basis);
+      if (!start || !end || Math.abs(dot(unit,basis.forward)) > .985) continue;
+      const length = Math.hypot(end.x-start.x,end.y-start.y);
+      if (length < 45) continue;
+      const nx = -(end.y-start.y)/length, ny = (end.x-start.x)/length;
+      for (const tick of ranges[axis].ticks) {
+        const p = projectWorld(scale(unit,tick),basis);
+        if (!p) continue;
+        ctx.beginPath();
+        ctx.moveTo(p.x-5*nx,p.y-5*ny);
+        ctx.lineTo(p.x+5*nx,p.y+5*ny);
+        ctx.stroke();
+      }
     }
-    for (const tick of ranges.y.ticks) {
-      strokeSegment(V(0, -tickHalfLength, tick), V(0, tickHalfLength, tick), basis, axisColor, 1.3, 0.82);
-    }
-    for (const tick of ranges.z.ticks) {
-      strokeSegment(V(-tickHalfLength, tick, 0), V(tickHalfLength, tick, 0), basis, axisColor, 1.3, 0.82);
-    }
+    ctx.restore();
 
+    updateLengthScale(basis);
     drawAxisLabels(basis, ranges);
   }
 
-  function placeAxisMathLabel(element, point, basis) {
-    const p = projectWorld(point, basis);
-    const margin = 110;
-    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)
-      || p.x < -margin || p.x > viewportWidth + margin
-      || p.y < -margin || p.y > viewportHeight + margin) {
-      element.hidden = true;
-      return;
+  function updateLengthScale(basis) {
+    // A screen-parallel segment at the camera target has constant depth.
+    // Its pixel length is exact there; perspective changes scale elsewhere.
+    const pixelsPerMetre = SCENE_UNITS_PER_METRE * basis.focal / camera.distance;
+    const maximumWidth = Math.max(40,Math.min(200,viewportWidth-80));
+    const minimumWidth = Math.min(70,maximumWidth/2);
+    let metres = AXIS_TICK_STEP;
+    while (metres*pixelsPerMetre > maximumWidth) metres /= 2;
+    while (metres*pixelsPerMetre < minimumWidth) metres *= 2;
+    const pixels = metres*pixelsPerMetre;
+    const width = String(pixels+4);
+    if (dom.lengthScaleBar.getAttribute('width') !== width) {
+      dom.lengthScaleBar.setAttribute('width',width);
+      dom.lengthScaleBar.setAttribute('viewBox',`0 0 ${width} 14`);
+      dom.lengthScalePath.setAttribute('d',`M2 2V12 M2 7H${pixels+2} M${pixels+2} 2V12`);
     }
-    element.hidden = false;
-    element.style.left = `${p.x}px`;
-    element.style.top = `${p.y}px`;
+    setMathDigits(dom.lengthScaleDigits,String(metres));
+    const description = `Étalon de longueur : ${metres} mètres, au centre de la vue (perspective).`;
+    if (dom.lengthScaleBar.parentElement.getAttribute('aria-label') !== description)
+      dom.lengthScaleBar.parentElement.setAttribute('aria-label',description);
   }
 
   function drawAxisLabels(basis, ranges) {
-    synchronizeAxisTickElements('x', ranges.x.ticks);
-    synchronizeAxisTickElements('y', ranges.y.ticks);
-    synchronizeAxisTickElements('z', ranges.z.ticks);
-
-    placeAxisMathLabel(dom.axisLabels.x, V(ranges.x.maximum + 450, -130, -120), basis);
-    placeAxisMathLabel(dom.axisLabels.y, V(-140, -130, ranges.y.maximum + 450), basis);
-    placeAxisMathLabel(dom.axisLabels.z, V(-140, ranges.z.maximum + 450, -120), basis);
-
-    for (const tick of ranges.x.ticks) {
-      placeAxisMathLabel(axisTickElements.x.get(tick).root, V(tick, -150, -110), basis);
+    // Screen-space clearance is independent of zoom. No particle or vector
+    // position enters this layout, so labels cannot jump during playback.
+    const key = [viewportWidth, viewportHeight, camera.yaw, camera.pitch,
+      camera.distance, camera.target.x, camera.target.y, camera.target.z,
+      mathIsReady, getComputedStyle(dom.axisLabels.x).fontSize].join('|');
+    if (key === axisLabelLayoutKey) return;
+    axisLabelLayoutKey = key;
+    const axes = [], occupied = [], sizes = new Map();
+    const worldAxis = { x: V(1, 0, 0), y: V(0, 0, 1), z: V(0, 1, 0) };
+    const size = element => {
+      if (!sizes.has(element)) {
+        element.hidden = false;
+        element.style.visibility = 'hidden';
+        sizes.set(element, { w: element.offsetWidth, h: element.offsetHeight });
+        element.hidden = true;
+        element.style.visibility = '';
+      }
+      return sizes.get(element);
+    };
+    const overlap = (a, b, gap = 4) => a.x < b.x + b.w + gap
+      && a.x + a.w + gap > b.x && a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
+    const frame = viewport.getBoundingClientRect();
+    for (const selector of ['.viewport-toolbar', '.time-badge', '.length-scale']) {
+      const r = viewport.querySelector(selector).getBoundingClientRect();
+      occupied.push({ x: r.left - frame.left, y: r.top - frame.top, w: r.width, h: r.height });
     }
-    for (const tick of ranges.y.ticks) {
-      placeAxisMathLabel(axisTickElements.y.get(tick).root, V(-125, -150, tick), basis);
+    for (const axis of ['x', 'y', 'z']) {
+      dom.axisLabels[axis].hidden = true;
+      const unit = worldAxis[axis], range = ranges[axis];
+      const start = projectWorld(scale(unit, range.minimum), basis);
+      const end = projectWorld(scale(unit, range.maximum), basis);
+      // A depth axis is not a readable ruler in an aligned face/side/top view.
+      if (!start || !end || Math.abs(dot(unit, basis.forward)) > .985) continue;
+      const dx = end.x - start.x, dy = end.y - start.y, length = Math.hypot(dx, dy);
+      if (length < 45) continue;
+      const midpoint = projectWorld(scale(unit, (range.minimum + range.maximum) / 2), basis);
+      if (!midpoint) continue;
+      let nx = -dy / length, ny = dx / length;
+      const outside = nx * (midpoint.x - viewportWidth / 2) + ny * (midpoint.y - viewportHeight / 2);
+      if (outside < -1 || Math.abs(outside) <= 1 && (axis === 'z' ? nx > 0 : ny < 0)) { nx = -nx; ny = -ny; }
+      axes.push({ axis, unit, range, start, end, midpoint, nx, ny });
     }
-    for (const tick of ranges.z.ticks) {
-      placeAxisMathLabel(axisTickElements.z.get(tick).root, V(-125, tick, -110), basis);
+    const crossesAxis = rect => axes.some(({ start: a, end: b }) => {
+      // Segment/rectangle clipping also keeps a label clear of another axis.
+      let lo = 0, hi = 1;
+      for (const [v, delta, min, max] of [[a.x, b.x-a.x, rect.x-2, rect.x+rect.w+2],
+        [a.y, b.y-a.y, rect.y-2, rect.y+rect.h+2]]) {
+        if (Math.abs(delta) < 1e-8) { if (v < min || v > max) return false; }
+        else { const t1 = (min-v)/delta, t2 = (max-v)/delta; lo = Math.max(lo, Math.min(t1,t2)); hi = Math.min(hi, Math.max(t1,t2)); }
+      }
+      return lo <= hi;
+    });
+    const place = (element, candidates) => {
+      const { w, h } = size(element);
+      for (const p of candidates) {
+        const rect = { x: p.x-w/2, y: p.y-h/2, w, h };
+        if (rect.x < 6 || rect.y < 6 || rect.x+w > viewportWidth-6 || rect.y+h > viewportHeight-6
+          || occupied.some(r => overlap(rect,r)) || crossesAxis(rect)) continue;
+        element.style.left = `${p.x}px`; element.style.top = `${p.y}px`;
+        element.hidden = false; occupied.push(rect); return true;
+      }
+      return false;
+    };
+    const support = (element, nx, ny) => { const s = size(element); return (Math.abs(nx)*s.w + Math.abs(ny)*s.h)/2; };
+    const cubeCorners = [];
+    for (const x of [0,4000]) for (const y of [0,4000]) for (const z of [0,4000]) {
+      const p = projectWorld(V(x,y,z),basis);
+      if (p) cubeCorners.push(p);
+    }
+    // An offset from the axis alone can still lie inside the front face of
+    // the cube. Clear its projected silhouette, including the title's size.
+    const titleDistance = (title, p, nx, ny, minimum) => {
+      if (!cubeCorners.length) return minimum;
+      const boundary = Math.max(...cubeCorners.map(q => q.x*nx+q.y*ny));
+      return Math.max(minimum, boundary-p.x*nx-p.y*ny+support(title,nx,ny)+8);
+    };
+    // Only axis titles are annotated; the common tick spacing is given in
+    // the fixed length-scale legend beside the scene.
+    for (const a of axes) {
+      const title = dom.axisLabels[a.axis];
+      const distance = 18 + support(title,a.nx,a.ny);
+      const candidates = [];
+      if (a.axis !== 'z') {
+        // Move away from the cube's center, on the same side as the axis.
+        // A perpendicular offset alone would put both titles at the bottom
+        // corner in an oblique view and make their association ambiguous.
+        const center = projectWorld(V(2000,2000,2000),basis);
+        for (const fraction of [.5,.7,.3]) {
+          const p = projectWorld(scale(a.unit,a.range.minimum+fraction*(a.range.maximum-a.range.minimum)),basis);
+          if (!p || !center) continue;
+          const length = Math.hypot(p.x-center.x,p.y-center.y);
+          if (length < 1) continue;
+          const nx = (p.x-center.x)/length, ny = (p.y-center.y)/length;
+          const d = titleDistance(title,p,nx,ny,distance);
+          for (const extra of [0,12,24]) candidates.push({x:p.x+nx*(d+extra),y:p.y+ny*(d+extra)});
+        }
+      }
+      for (const fraction of [.5,.7,.3]) {
+        const p = projectWorld(scale(a.unit, a.range.minimum + fraction*(a.range.maximum-a.range.minimum)),basis);
+        if (p) {
+          const outerDistance = titleDistance(title,p,a.nx,a.ny,distance);
+          for (const extra of [0,12,24]) candidates.push({ x: p.x+a.nx*(outerDistance+extra), y: p.y+a.ny*(outerDistance+extra) });
+        }
+      }
+      // On a narrow viewport the vertical title fits above the end of its
+      // axis better than outside the left edge.
+      const length = Math.hypot(a.end.x-a.start.x,a.end.y-a.start.y);
+      const ux = (a.end.x-a.start.x)/length, uy = (a.end.y-a.start.y)/length;
+      const endpoint = { x:a.end.x+a.nx*6, y:a.end.y+a.ny*6 };
+      const extension = titleDistance(title,endpoint,ux,uy,24+support(title,ux,uy));
+      candidates.push({ x:endpoint.x+ux*extension, y:endpoint.y+uy*extension });
+      place(title,candidates);
     }
   }
 
@@ -2325,8 +2432,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   }
 
   function buildArrowFaces(originPhysical, vectorPhysical, lengthScale, color, basis) {
-    const originWorld = toWorld(originPhysical);
-    const directionWorld = toWorld(scale(vectorPhysical, lengthScale));
+    const originWorld = toScene(originPhysical);
+    const directionWorld = toScene(scale(vectorPhysical, lengthScale));
     const shaftLength = norm(directionWorld);
     if (!Number.isFinite(shaftLength) || shaftLength < 1e-7) return [];
     const unit = scale(directionWorld, 1 / shaftLength);
@@ -2435,7 +2542,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     if (selected.position) {
       const positionLength = norm(positionVector);
-      const shortening = Math.min(ARROW.positionShorteningWorld, Math.max(0, positionLength));
+      const shortening = Math.min(ARROW.positionShorteningWorld / SCENE_UNITS_PER_METRE, Math.max(0, positionLength));
       const displayedPosition = positionLength > 1e-9
         ? scale(positionVector, Math.max(0, positionLength - shortening) / positionLength)
         : V(0, 0, 0);
@@ -2458,7 +2565,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       Math.hypot(1, halfY), Math.hypot(1, halfY)];
     const sample = (angle) => {
       const physical = osculatingPoint(circle, angle);
-      const relative = sub(toWorld(physical), basis.cameraPosition);
+      const relative = sub(toScene(physical), basis.cameraPosition);
       const depth = dot(relative, basis.forward);
       const x = dot(relative, basis.right);
       const y = dot(relative, basis.up);
@@ -2474,7 +2581,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       // Sagitta bounds the distance from this arc to its chord in world space.
       // Frustum culling prevents huge circles near inflections from wasting work
       // or being joined across the camera's near plane.
-      const sagitta = 2 * circle.radius * Math.sin((b - a) / 4) ** 2;
+      const sagitta = 2 * circle.radius * SCENE_UNITS_PER_METRE * Math.sin((b - a) / 4) ** 2;
       if (pa.planes.some((d, i) => Math.max(d, pb.planes[i]) + sagitta * planeNorms[i] < 0)) {
         last = null;
         return;
@@ -2523,8 +2630,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
 
     // Clip the radius in world space before perspective projection.
-    let start = toWorld(circle.position);
-    let end = toWorld(circle.center);
+    let start = toScene(circle.position);
+    let end = toScene(circle.center);
     const startDepth = dot(sub(start, basis.cameraPosition), basis.forward);
     const endDepth = dot(sub(end, basis.cameraPosition), basis.forward);
     if (startDepth <= 6 && endDepth <= 6) return;
@@ -2622,9 +2729,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     for (const [key, vector] of Object.entries(vectors)) {
       const elements = readoutElements[key];
       const magnitude = norm(vector).toFixed(2);
-      const componentX = vector.x.toFixed(1);
-      const componentY = vector.y.toFixed(1);
-      const componentZ = vector.z.toFixed(1);
+      const componentX = vector.x.toFixed(2);
+      const componentY = vector.y.toFixed(2);
+      const componentZ = vector.z.toFixed(2);
 
       elements.root.classList.toggle('visible', selected[key]);
       setMathDigits(elements.magnitude, magnitude);
@@ -2779,6 +2886,16 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   });
   dom.topView.addEventListener('click', () => {
     camera.pitch = Math.PI / 2;
+    updateAndDraw();
+  });
+  dom.frontView.addEventListener('click', () => {
+    camera.yaw = 0;
+    camera.pitch = 0;
+    updateAndDraw();
+  });
+  dom.sideView.addEventListener('click', () => {
+    camera.yaw = -Math.PI / 2;
+    camera.pitch = 0;
     updateAndDraw();
   });
   dom.speed.addEventListener('change', () => { state.playbackSpeed = Number(dom.speed.value); });
