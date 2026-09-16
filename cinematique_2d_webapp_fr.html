@@ -262,6 +262,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 }
 .equation.parameters { margin-top: 0.28rem; color: var(--muted); font-size: 0.76rem; }
 .equation.parameter-line + .equation.parameter-line { margin-top: -0.15rem; }
+/* MathJax cannot infer the relation spacing across separate numeric nodes. */
+.equation-numeric .math-digits { margin-inline-start: 0.278em; }
 
 .panel-footer {
   display: flex;
@@ -305,7 +307,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   font-weight: 700;
 }
 
-.viewport-toolbar { position: absolute; top: 1rem; right: 1rem; z-index: 4; }
+.viewport-toolbar { position: absolute; top: 1rem; right: 1rem; z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; max-width: calc(100% - 110px); }
 .viewport-toolbar button {
   min-height: 2rem;
   padding: 0.35rem 0.65rem;
@@ -313,6 +315,21 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   backdrop-filter: blur(8px);
   font-size: 0.76rem;
 }
+.phys-app .viewport-toolbar button[aria-pressed="true"] { color: #1c527c; border-color: #2775b6; background: #eaf3fb; }
+#viewport.moving-origin canvas { cursor: crosshair; }
+.phys-app #origin-handle {
+  position: absolute; z-index: 3; width: 30px; height: 30px; min-height: 0;
+  padding: 0; border: 0; background: transparent; box-shadow: none;
+  transform: translate(-50%, -50%); cursor: grab; touch-action: none;
+  overflow: visible;
+}
+.phys-app #origin-handle:active { cursor: grabbing; }
+.phys-app #origin-handle:focus-visible { outline: 2px solid #2775b6; outline-offset: 2px; border-radius: 50%; }
+.origin-point { position: absolute; inset: 10px; border: 2px solid #52627a; border-radius: 50%; background: #fff; }
+.origin-symbol { position: absolute; right: 25px; bottom: 22px; color: #52627a; font-size: 0.9rem; }
+.origin-symbol mjx-container { margin: 0 !important; }
+.origin-transform { margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid var(--line); }
+#origin-handle[hidden], #origin-transform[hidden], #origin-reference-caption[hidden] { display: none !important; }
 
 .time-badge {
   position: absolute;
@@ -433,6 +450,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   font-size: 0.96rem;
   font-weight: 600;
 }
+/* Align the near edge of each number 7 px from the tick tip. */
+#axis-ticks-x .axis-tick-label { transform: translate(-50%, 0); }
+#axis-ticks-y .axis-tick-label { transform: translate(-100%, -50%); }
 .axis-tick-label .math-digits { min-width: 0; justify-content: center; }
 .axis-math-label .tex-math, .axis-math-label mjx-container[jax="SVG"] {
   display: block !important;
@@ -1037,11 +1057,19 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <input id="grid-toggle" type="checkbox" checked />
           <span>Afficher la grille (1 carré = 1 m)</span>
         </label>
+        <p class="microcopy">Pour changer de repère, activez « Déplacer l’origine », puis cliquez dans le graphique ou faites glisser <span class="tex-math">\(O\)</span>. Seuls les coordonnées et le vecteur position changent.</p>
       </section>
 
       <section class="panel-section equation-section">
         <h2>Mouvement</h2>
+        <p id="origin-reference-caption" class="microcopy">Équations dans le repère choisi, d’origine <span class="tex-math">\(O\)</span>.</p>
         <div id="trajectory-equations" class="equations"></div>
+        <div id="origin-transform" class="equations origin-transform">
+          <p class="microcopy">Position de l’origine <span class="tex-math">\(O\)</span> dans le repère initial :</p>
+          <div class="equation equation-numeric"><span class="tex-math">\(X_O=\)</span><span id="origin-x-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm m\)</span></div>
+          <div class="equation equation-numeric"><span class="tex-math">\(Y_O=\)</span><span id="origin-y-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm m\)</span></div>
+          <p class="microcopy">Chaque déplacement de l’origine définit un nouveau repère fixe. La vitesse et l’accélération du mobile sont inchangées.</p>
+        </div>
         <div class="equations jerk-relation">
           <div class="equation"><span class="tex-math">\(\displaystyle \vec{\jmath}(t)=\frac{\mathrm d\vec a}{\mathrm dt}=\frac{\mathrm d^3\vec r}{\mathrm dt^3}\)</span></div>
           <p class="microcopy">L’à-coup mesure la variation du vecteur accélération. Unité : <span class="tex-math">\(\mathrm{m\,s^{-3}}\)</span>.</p>
@@ -1066,8 +1094,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <div id="axis-ticks-y" class="axis-tick-layer" aria-hidden="true"></div>
 
         <div class="viewport-toolbar">
+          <button id="move-origin" type="button" aria-pressed="false" aria-controls="origin-handle">Déplacer l’origine</button>
+          <button id="reset-origin" type="button" disabled>Origine initiale</button>
           <button id="reset-view" type="button">Réinitialiser la vue</button>
         </div>
+        <button id="origin-handle" type="button" aria-label="Origine du repère : faire glisser pour la déplacer" title="Faire glisser l’origine (flèches du clavier : 0,1 m ; Maj : 1 m)" hidden><span class="origin-point" aria-hidden="true"></span><span class="origin-symbol tex-math" aria-hidden="true">\(O\)</span></button>
         <div class="time-badge" aria-label="Temps courant">
           <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
         </div>
@@ -1285,6 +1316,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     ballistic: {
       label: 'Mouvement balistique',
+      equationOrigin: V(0, 0),
       duration: BALLISTIC_DURATION,
       closed: false,
       scaleV: 3 * BALLISTIC_TIME_SCALE,
@@ -1405,6 +1437,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     cycloid: {
       label: 'Cycloïde',
+      equationOrigin: V(0.8, 1.3),
+      equationOriginSubscript: String.raw`\mathrm i`,
       duration: 12,
       closed: false,
       scaleV: 1.25,
@@ -1551,6 +1585,17 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     },
   });
 
+  // Constant offsets in the displayed laws change with the chosen origin;
+  // all time-dependent terms and physical trajectory laws stay unchanged.
+  function equationFrame(item, frameOrigin) {
+    const base = item.equationOrigin || V(PARAMETERS.x0, PARAMETERS.y0);
+    const subscript = item.equationOriginSubscript || '0';
+    const parameters = item.parameters.map(line => line.split(/\\qquad\s*/)
+      .filter(part => !/^[xy]_(?:0|\\mathrm i)=/.test(part.trim()))
+      .join(String.raw`\qquad `)).filter(Boolean);
+    return { offset: sub(base, frameOrigin), subscript, parameters };
+  }
+
   // Differentiate the smooth position law, not the playback wrap/clamp.
   // A symmetric seven-point stencil gives fourth-order accuracy without
   // differentiating the noise in the displayed acceleration.
@@ -1655,6 +1700,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     play: document.getElementById('play-button'),
     reset: document.getElementById('reset-button'),
     resetView: document.getElementById('reset-view'),
+    moveOrigin: document.getElementById('move-origin'),
+    resetOrigin: document.getElementById('reset-origin'),
+    originHandle: document.getElementById('origin-handle'),
+    originXDigits: document.getElementById('origin-x-digits'),
+    originYDigits: document.getElementById('origin-y-digits'),
     speed: document.getElementById('speed-select'),
     timeSlider: document.getElementById('time-slider'),
     timeOutputDigits: document.getElementById('time-output-digits'),
@@ -1777,6 +1827,17 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   };
 
   const view = { ...DEFAULT_VIEW };
+  // The trajectory stays in its original physical coordinates. This is a
+  // translation of a fixed reference frame, never a change to the motion law.
+  const origin = V(0, 0);
+  let movingOrigin = false;
+  let originDrag = null;
+  const originIsShifted = () => Math.abs(origin.x) > 1e-10 || Math.abs(origin.y) > 1e-10;
+  const relativePosition = (position) => sub(position, origin);
+  const relativeView = () => ({
+    xmin: view.xmin - origin.x, xmax: view.xmax - origin.x,
+    ymin: view.ymin - origin.y, ymax: view.ymax - origin.y,
+  });
   let viewportWidth = 1;
   let viewportHeight = 1;
   let devicePixelRatio = 1;
@@ -1884,6 +1945,31 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   function resetView() {
     Object.assign(view, DEFAULT_VIEW);
+  }
+
+  function setOrigin(point) {
+    origin.x = Math.abs(point.x) < 1e-10 ? 0 : point.x;
+    origin.y = Math.abs(point.y) < 1e-10 ? 0 : point.y;
+    updateOriginControls();
+    updateAndDraw();
+  }
+
+  function updateOriginControls() {
+    const shifted = originIsShifted();
+    dom.resetOrigin.disabled = !shifted;
+    setMathDigits(dom.originXDigits, origin.x.toFixed(2));
+    setMathDigits(dom.originYDigits, origin.y.toFixed(2));
+    updateEquationOffsets();
+    dom.originHandle.setAttribute('aria-label', `Origine du repère : X = ${origin.x.toFixed(2)} m, Y = ${origin.y.toFixed(2)} m. Faire glisser pour la déplacer.`);
+  }
+
+  function positionOriginHandle() {
+    const point = worldToScreen(origin);
+    const inside = point.x >= plotRect.left - 0.1 && point.x <= plotRect.right + 0.1
+      && point.y >= plotRect.top - 0.1 && point.y <= plotRect.bottom + 0.1;
+    dom.originHandle.hidden = !(movingOrigin || originIsShifted()) || !inside;
+    dom.originHandle.style.left = `${point.x}px`;
+    dom.originHandle.style.top = `${point.y}px`;
   }
 
   function computePlotRect() {
@@ -2011,8 +2097,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     clipToPlot(() => {
       if (state.grid) {
         const step = GRID_STEP_METRES;
-        const xStart = Math.ceil(view.xmin / step) * step;
-        const yStart = Math.ceil(view.ymin / step) * step;
+        const xStart = Math.ceil((view.xmin - origin.x) / step) * step + origin.x;
+        const yStart = Math.ceil((view.ymin - origin.y) / step) * step + origin.y;
         ctx.save();
         ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(148,168,186,0.20)';
@@ -2033,12 +2119,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         ctx.restore();
       }
 
-      if (view.xmin <= 0 && view.xmax >= 0) {
-        const x0 = worldToScreen(V(0, 0)).x;
+      if (view.xmin <= origin.x && view.xmax >= origin.x) {
+        const x0 = worldToScreen(origin).x;
         drawLineScreen(V(x0, plotRect.top), V(x0, plotRect.bottom), '#8190a5', 1.7, 0.85);
       }
-      if (view.ymin <= 0 && view.ymax >= 0) {
-        const y0 = worldToScreen(V(0, 0)).y;
+      if (view.ymin <= origin.y && view.ymax >= origin.y) {
+        const y0 = worldToScreen(origin).y;
         drawLineScreen(V(plotRect.left, y0), V(plotRect.right, y0), '#8190a5', 1.7, 0.85);
       }
     });
@@ -2049,20 +2135,21 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.strokeRect(plotRect.left, plotRect.top, plotRect.width, plotRect.height);
     ctx.restore();
 
-    const xTickValues = axisTickValues(view.xmin, view.xmax);
-    const yTickValues = axisTickValues(view.ymin, view.ymax);
+    const range = relativeView();
+    const xTickValues = axisTickValues(range.xmin, range.xmax);
+    const yTickValues = axisTickValues(range.ymin, range.ymax);
     ctx.save();
     ctx.strokeStyle = '#64748b';
     ctx.lineWidth = 1.2;
     for (const tick of xTickValues) {
-      const s = worldToScreen(V(tick, view.ymin));
+      const s = worldToScreen(V(tick + origin.x, view.ymin));
       ctx.beginPath();
       ctx.moveTo(s.x, plotRect.bottom);
       ctx.lineTo(s.x, plotRect.bottom + 7);
       ctx.stroke();
     }
     for (const tick of yTickValues) {
-      const s = worldToScreen(V(view.xmin, tick));
+      const s = worldToScreen(V(view.xmin, tick + origin.y));
       ctx.beginPath();
       ctx.moveTo(plotRect.left - 7, s.y);
       ctx.lineTo(plotRect.left, s.y);
@@ -2094,8 +2181,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   function drawProjectionSystem(position) {
     if (!state.projections) return;
     const p = worldToScreen(position);
-    const px = worldToScreen(V(position.x, 0));
-    const py = worldToScreen(V(0, position.y));
+    const px = worldToScreen(V(position.x, origin.y));
+    const py = worldToScreen(V(origin.x, position.y));
 
     clipToPlot(() => {
       drawLineScreen(p, px, COLORS.position, 1.15, 0.38, [6, 6]);
@@ -2165,7 +2252,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     const selected = vectorSelection();
     drawDecompositionParallelogram(item, data, selected);
 
-    if (selected.position) drawArrow(V(0, 0), data.position, 1, COLORS.position);
+    if (selected.position) drawArrow(origin, relativePosition(data.position), 1, COLORS.position);
     if (selected.acceleration) drawArrow(data.position, data.acceleration, item.scaleA * state.vectorScale, COLORS.acceleration);
     if (selected.centripetal && data.decompositionDefined) drawArrow(data.position, data.centripetal, item.scaleA * state.vectorScale, COLORS.centripetal);
     if (selected.tangential && data.decompositionDefined) drawArrow(data.position, data.tangential, item.scaleA * state.vectorScale, COLORS.tangential);
@@ -2312,7 +2399,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   function updateReadouts(data) {
     const vectors = {
-      position: data.position,
+      position: relativePosition(data.position),
       velocity: data.velocity,
       acceleration: data.acceleration,
       tangential: data.tangential,
@@ -2338,13 +2425,29 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     }
   }
 
+  function updateEquationOffsets() {
+    const frame = equationFrame(currentTrajectory(), origin);
+    for (const element of dom.equations.querySelectorAll('[data-offset-axis]')) {
+      const axis = element.dataset.offsetAxis;
+      const value = frame.offset[axis];
+      const text = (Math.abs(value) < 0.005 ? 0 : value).toFixed(2);
+      setMathDigits(element, text);
+      element.parentElement.setAttribute('aria-label', `${axis}, constante de position : ${text} mètres`);
+    }
+  }
+
   function updateEquationPanel() {
     const item = currentTrajectory();
+    const frame = equationFrame(item, origin);
+    // Only the numbers below change during an origin drag. Keeping the TeX
+    // and line count fixed avoids reflow, delayed updates and mobile jumps.
     if (mathIsReady && window.MathJax?.typesetClear) window.MathJax.typesetClear([dom.equations]);
     dom.equations.innerHTML = [
       ...item.equations.map((equation) => `<div class="equation"><span class="tex-math">\\(\\displaystyle ${equation}\\)</span></div>`),
-      ...item.parameters.map((parameter) => `<div class="equation parameters parameter-line"><span class="tex-math">\\(${parameter}\\)</span></div>`),
+      ...['x', 'y'].map(axis => `<div class="equation parameters equation-numeric"><span class="tex-math">\\(${axis}_{${frame.subscript}}=\\)</span><span class="math-digits" data-offset-axis="${axis}"></span><span class="tex-math">\\(\\,\\mathrm m\\)</span></div>`),
+      ...frame.parameters.map((parameter) => `<div class="equation parameters parameter-line"><span class="tex-math">\\(${parameter}\\)</span></div>`),
     ].join('');
+    updateEquationOffsets();
     if (mathIsReady) void queueTypeset([dom.equations]);
   }
 
@@ -2362,18 +2465,19 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     place(dom.axisLabels.x, plotRect.left + 0.5 * plotRect.width, plotRect.bottom + 54);
     place(dom.axisLabels.y, plotRect.left - 50, plotRect.top - 18);
 
-    const xTicks = axisTickValues(view.xmin, view.xmax);
-    const yTicks = axisTickValues(view.ymin, view.ymax);
+    const range = relativeView();
+    const xTicks = axisTickValues(range.xmin, range.xmax);
+    const yTicks = axisTickValues(range.ymin, range.ymax);
     synchronizeAxisTickElements('x', xTicks);
     synchronizeAxisTickElements('y', yTicks);
 
     for (const tick of xTicks) {
-      const sx = worldToScreen(V(tick, view.ymin)).x;
-      place(axisTickElements.x.get(tick).root, sx, plotRect.bottom + 29);
+      const sx = worldToScreen(V(tick + origin.x, view.ymin)).x;
+      place(axisTickElements.x.get(tick).root, sx, plotRect.bottom + 14);
     }
     for (const tick of yTicks) {
-      const sy = worldToScreen(V(view.xmin, tick)).y;
-      place(axisTickElements.y.get(tick).root, plotRect.left - 42, sy);
+      const sy = worldToScreen(V(view.xmin, tick + origin.y)).y;
+      place(axisTickElements.y.get(tick).root, plotRect.left - 14, sy);
     }
   }
 
@@ -2420,6 +2524,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.warning.hidden = !(decompositionRequested && !data.decompositionDefined);
     dom.warning.textContent = 'La décomposition tangentielle / centripète est indéfinie car la vitesse instantanée est approximativement nulle.';
     drawScene(item, data);
+    positionOriginHandle();
   }
 
   function onTrajectoryChanged() {
@@ -2444,6 +2549,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     resetView();
     updateAndDraw();
   });
+  dom.moveOrigin.addEventListener('click', () => {
+    movingOrigin = !movingOrigin;
+    dom.moveOrigin.setAttribute('aria-pressed', String(movingOrigin));
+    viewport.classList.toggle('moving-origin', movingOrigin);
+    updateAndDraw();
+  });
+  dom.resetOrigin.addEventListener('click', () => setOrigin(V(0, 0)));
   dom.speed.addEventListener('change', () => {
     state.playbackSpeed = Number(dom.speed.value);
   });
@@ -2490,7 +2602,46 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     });
   });
 
+  const pointerWorld = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    return screenToWorld(V(event.clientX - rect.left, event.clientY - rect.top));
+  };
+  const beginOriginDrag = (event, target, jump) => {
+    if (event.button !== 0 || originDrag || dragging) return;
+    const point = pointerWorld(event);
+    if (jump && (point.x < view.xmin || point.x > view.xmax || point.y < view.ymin || point.y > view.ymax)) return;
+    event.preventDefault();
+    if (jump) setOrigin(point);
+    originDrag = { pointerId: event.pointerId, target, offset: sub(origin, point) };
+    target.setPointerCapture(event.pointerId);
+  };
+  const moveOriginDrag = (event) => {
+    if (!originDrag || event.pointerId !== originDrag.pointerId) return;
+    const point = add(pointerWorld(event), originDrag.offset);
+    setOrigin(V(clamp(point.x, view.xmin, view.xmax), clamp(point.y, view.ymin, view.ymax)));
+  };
+  const stopOriginDrag = (event) => {
+    if (!originDrag || event.pointerId !== originDrag.pointerId) return;
+    const { target, pointerId } = originDrag;
+    originDrag = null;
+    if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+  };
+  dom.originHandle.addEventListener('pointerdown', (event) => beginOriginDrag(event, dom.originHandle, false));
+  dom.originHandle.addEventListener('pointermove', moveOriginDrag);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    dom.originHandle.addEventListener(type, stopOriginDrag);
+    canvas.addEventListener(type, stopOriginDrag);
+  }
+  dom.originHandle.addEventListener('keydown', (event) => {
+    const directions = { ArrowLeft: V(-1, 0), ArrowRight: V(1, 0), ArrowUp: V(0, 1), ArrowDown: V(0, -1) };
+    if (!directions[event.key]) return;
+    event.preventDefault();
+    setOrigin(add(origin, scale(directions[event.key], event.shiftKey ? 1 : 0.1)));
+  });
+
   canvas.addEventListener('pointerdown', (event) => {
+    if (movingOrigin) { beginOriginDrag(event, canvas, true); return; }
+    if (event.button !== 0 || dragging || originDrag) return;
     dragging = true;
     dragX = event.clientX;
     dragY = event.clientY;
@@ -2499,6 +2650,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   });
 
   canvas.addEventListener('pointermove', (event) => {
+    if (originDrag) { moveOriginDrag(event); return; }
     if (!dragging) return;
     const dx = event.clientX - dragX;
     const dy = event.clientY - dragY;
@@ -2585,6 +2737,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.fullTrail.checked = state.fullTrail;
     dom.trailDuration.disabled = state.fullTrail;
     dom.timeSlider.max = String(trajectoryTimeMax(currentTrajectory()));
+    updateOriginControls();
     updateEquationPanel();
     resizeCanvas();
     updateAndDraw();
@@ -2596,6 +2749,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       await initializeMathGlyphs();
       mathIsReady = true;
       updateDynamicMathOutputs();
+      updateOriginControls();
       updateAxisLabelPositions();
       updateAndDraw();
     } catch (error) {

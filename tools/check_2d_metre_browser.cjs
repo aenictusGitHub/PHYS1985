@@ -41,6 +41,16 @@ const {chromium}=require('playwright');
     }
     const ticks=await page.locator('.axis-tick-label').evaluateAll(els=>els.map(el=>({value:Number(el.querySelector('[data-value]').dataset.value),x:parseFloat(el.style.left)})));
     for(const tick of ticks)assert(Number.isInteger(tick.value),'Axis labels are in metres');
+    const canvas=await page.locator('#viewport canvas').boundingBox();
+    for(const axis of ['x','y']){
+      const boxes=await page.locator('#axis-ticks-'+axis+' .axis-tick-label').evaluateAll(els=>els.map(el=>{
+        const r=el.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};
+      }));
+      for(const box of boxes){
+        const gap=axis==='x'?box.y-(canvas.y+top+height+7):(canvas.x+left-7)-(box.x+box.w);
+        assert(Math.abs(gap-7)<1,'Numbers stay 7 px from tick tips: '+axis+' gap '+gap);
+      }
+    }
   };
   for(const width of [1440,390]){
     await page.setViewportSize({width,height:1000});

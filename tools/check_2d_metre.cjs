@@ -7,7 +7,7 @@ function load(zip){
   const source=execFileSync('unzip',['-p',zip,entry],{encoding:'utf8'});
   const pure=source.slice(0,source.indexOf("  const viewport = document.getElementById('viewport');"))
     +source.slice(source.indexOf('  function positionAt('),source.indexOf('  function clipToPlot('));
-  const api=vm.runInNewContext(pure+'\nreturn {PARAMETERS,TRAJECTORIES,derivatives,osculatingGeometry,DEFAULT_VIEW};})();');
+  const api=vm.runInNewContext(pure+'\nreturn {PARAMETERS,TRAJECTORIES,derivatives,osculatingGeometry,DEFAULT_VIEW,frame:typeof equationFrame === "function" ? equationFrame : null};})();');
   return {source,api};
 }
 const {source,api}=load(path.join(root,'cinematique_2d_webapp_fr.zip'));
@@ -32,6 +32,16 @@ close(ballistic.position(ballistic.duration).y,0);
 assert.equal(Math.hypot(...Object.values(launch.jerk)),0);
 assert(ballistic.parameters.some(p=>p.includes('g=9.81')));
 assert(Object.values(api.TRAJECTORIES).every(item=>item.parameters.every(p=>!p.includes('2000'))));
+for(const [key,item] of Object.entries(api.TRAJECTORIES))for(const origin of [{x:0,y:0},{x:1.25,y:2.5},{x:4,y:4},{x:-2,y:7}]){
+  const frame=api.frame(item,origin),base=key==='ballistic'?{x:0,y:0}:key==='cycloid'?{x:.8,y:1.3}:{x:4,y:4};
+  for(const axis of ['x','y'])close(frame.offset[axis],base[axis]-origin[axis]);
+  assert(frame.parameters.every(line=>!/(?:x_0=|y_0=|x_\\mathrm i=|y_\\mathrm i=)/.test(line)),'No stale coordinate constants');
+  assert.equal(frame.subscript,key==='cycloid'?String.raw`\mathrm i`:'0');
+  for(const time of [0,item.duration/4,item.duration]){
+    const position=item.position(time);
+    for(const axis of ['x','y'])close(frame.offset[axis]+position[axis]-base[axis],position[axis]-origin[axis]);
+  }
+}
 if(process.env.REFERENCE_2D_ZIP){
   const previous=load(process.env.REFERENCE_2D_ZIP).api;
   for(const [key,item] of Object.entries(api.TRAJECTORIES)){
