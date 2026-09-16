@@ -467,6 +467,78 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
 
+/* Imposed paths have their own controls and do not change the free experiment. */
+.path-intro { margin: 0 0 1rem; }
+.path-intro h2 { margin: .25rem 0; font: 600 1.35rem Georgia, serif; }
+.path-intro p:last-child { margin: .4rem 0 0; color: var(--muted); font-size: .875rem; }
+.path-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: .85rem; }
+.path-grid .visual-card { display: block; }
+.path-scene, .path-chart { position: relative; height: 420px; overflow: hidden; background: #fafbfd; }
+.path-chart { background: #fff; }
+.path-scene canvas, .path-chart canvas { position: absolute; inset: 0; }
+.path-scene { touch-action: none; }
+.phys-app .path-point { position: absolute; z-index: 3; transform: translate(-50%,-50%); width: 32px; min-height: 30px; padding: 2px; background: #fafbfde6; border: 1px solid transparent; cursor: grab; color: var(--ink); touch-action: none; }
+.phys-app .path-point:hover { border-color: #b9cad9; }
+.path-point mjx-container { pointer-events: none; }
+.path-label { position: absolute; z-index: 2; transform: translate(-50%,-50%); font-size: var(--text-formula); pointer-events: none; }
+.path-vector-legend { position: absolute; top: 10px; right: 12px; z-index: 2; display: grid; gap: .3rem; padding: .45rem .65rem; border: 1px solid var(--line); border-radius: .5rem; color: var(--ink); background: #ffffffed; font-size: var(--text-formula); pointer-events: none; }
+.path-vector-legend > span { display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.path-vector-key { position: relative; display: inline-block; flex: 0 0 28px; width: 28px; height: 12px; }
+.path-vector-key::before { content: ""; position: absolute; top: 5px; left: 0; width: 22px; height: 3px; border-radius: 2px; background: var(--vector-color); }
+.path-vector-key::after { content: ""; position: absolute; top: 1px; right: 0; width: 11px; height: 11px; background: var(--vector-color); clip-path: polygon(0 0, 100% 50%, 0 100%, 22% 50%); }
+.path-axis { position: absolute; color: var(--muted); font-size: var(--text-formula); pointer-events: none; }
+.path-axis-x { bottom: 4px; left: 50%; transform: translateX(-50%); }
+.path-axis-y { top: 35px; left: 15px; }
+.path-work-axis { position: absolute; top: 10px; left: 65px; color: var(--muted); font-size: var(--text-formula); }
+.path-key, .path-current { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; padding: .65rem 1rem; min-height: 48px; border-top: 1px solid var(--line); font-size: .875rem; color: var(--muted); }
+.path-key span { display: inline-flex; align-items: center; gap: .5rem; }
+.path-key i { width: 30px; height: 0; border-top: 3px solid var(--key); }
+.path-key i.path-dashed { border-top-style: dashed; }
+.path-current > span { display: inline-flex; align-items: baseline; gap: .25rem; }
+.path-current > span:first-child { color: #2775b6; }
+.path-current > span:nth-child(2) { color: #b5688b; }
+.path-current > #path-current-loop { color: #268576; }
+.path-results-title { font-size: .875rem; font-weight: 500; color: var(--muted); margin: 1rem 0 .6rem; }
+.path-results { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .7rem; }
+.path-result-one::before { background: #2775b6; }
+.path-result-two::before { background: #b5688b; }
+.path-results .readout-card:last-child::before { background: #268576; }
+.path-results .readout-symbol { line-height: 1.7; }
+.path-results .readout-card strong { margin-top: .5rem; }
+.path-explanation { margin: .8rem 0 0; line-height: 1.6; font-size: .875rem; }
+.path-explanation.microcopy { font-size: .75rem; }
+.integral-plot { position: relative; height: 245px; background: #fff; overflow: hidden; }
+.integral-plot canvas { position: absolute; inset: 0; }
+.integral-area-caption { margin: 0; padding: .55rem 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .8125rem; }
+.integral-mode .path-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); grid-template-rows: auto auto; }
+.integral-mode .path-grid .path-scene-card { grid-column: 1; grid-row: 1 / 3; display: grid; grid-template-rows: auto minmax(360px,1fr) auto; }
+.integral-mode .path-scene { height: auto; }
+.integral-legend { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; margin-top: .85rem; font-size: .8125rem; color: var(--muted); }
+.integral-legend > span { display: inline-flex; align-items: center; gap: .4rem; }
+.integral-legend i { display: inline-block; width: 16px; height: 10px; }
+.integral-spatial-result::before { background: #7758a6; }
+#integral-results .readout-card small { white-space: normal; }
+.path-button-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; }
+.phys-app .path-transport { grid-template-columns: 1fr 1.3fr; }
+#path-reverse-row { margin-top: .8rem; }
+#path-controls .equation-section p { overflow-wrap: anywhere; }
+@container workspace (max-width: 760px) {
+  .path-grid { grid-template-columns: minmax(0,1fr); }
+  .path-results { grid-template-columns: minmax(0,1fr); }
+  .path-scene { height: 410px; }
+  .path-chart { height: 320px; }
+  .integral-mode .path-grid { grid-template-columns: minmax(0,1fr); grid-template-rows: none; }
+  .integral-mode .path-grid .path-scene-card { grid-column: auto; grid-row: auto; display: block; }
+  .integral-mode .path-scene { height: 410px; }
+}
+@media (max-width: 500px) {
+  .path-scene { height: 365px; }
+  .path-grid { grid-template-columns: minmax(0,1fr); }
+  .path-results { grid-template-columns: minmax(0,1fr); }
+  .path-current { font-size: .8rem; }
+  .integral-mode .path-scene { height: 365px; }
+}
+
 </style>
   <style>
 /* PHYS1985 — shared visual language. Embedded in every standalone application. */
@@ -844,6 +916,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .catalog .button { display: inline-block; padding: 0.65rem 0.85rem; border: 1px solid #c4d5e3; border-radius: 0.5rem; color: var(--accent-dark); background: #f4f8fb; font-size: 0.875rem; font-weight: 550; text-decoration: none; transition: background-color 140ms ease; }
 .catalog .button:hover { background: #e7f0f7; }
 .catalog .qr { display: block; width: 6.75rem; height: 6.75rem; border: 0.3rem solid #fff; }
+.catalog .notes-cover-link { display: block; justify-self: end; border: 1px solid var(--line); background: #fff; box-shadow: 0 3px 10px rgba(28, 49, 72, 0.08); }
+.catalog .notes-cover { display: block; width: 6.75rem; height: auto; }
 .catalog footer { margin-top: 1.6rem; padding-top: 1.1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
 @media (max-width: 820px) {
   .catalog main { width: min(680px, calc(100% - 2rem)); padding: 2.5rem 0; }
@@ -854,6 +928,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 @media (max-width: 420px) {
   .catalog article { grid-template-columns: minmax(0, 1fr) 4.75rem; gap: 0.7rem; padding: 1.15rem; }
   .catalog .qr { width: 4.75rem; height: 4.75rem; }
+  .catalog .notes-cover { width: 4.75rem; }
   .catalog h2 { font-size: 1.35rem; }
 }
 
@@ -868,6 +943,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <p class="subtitle">Champ de force et théorème de l’énergie cinétique</p>
       </header>
 
+      <section class="panel-section mode-section">
+        <label class="field-label" for="motion-mode">Mode d’expérience</label>
+        <select id="motion-mode">
+          <option value="free">Mouvement libre</option>
+          <option value="paths">Chemin imposé — comparaison</option>
+          <option value="integrals">Puissance et force — deux intégrales</option>
+        </select>
+        <p class="microcopy block-note" id="mode-description">La force détermine le mouvement de la particule.</p>
+      </section>
+
+      <div id="free-controls">
       <section class="panel-section">
         <label class="field-label" for="force-field-select">Champ de force</label>
         <select id="force-field-select">
@@ -1038,6 +1124,87 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         </div>
       </section>
 
+      </div>
+
+      <div id="path-controls" hidden>
+        <section class="panel-section">
+          <label class="field-label" for="path-field">Champ de force stationnaire</label>
+          <select id="path-field">
+            <option value="vortex">Tourbillon central — non conservatif</option>
+            <option value="central">Attraction centrale — conservatif</option>
+            <option value="periodic">Puits périodiques — conservatif</option>
+            <option value="cellular">Tourbillons périodiques — non conservatif</option>
+            <option value="gravity">Pesanteur uniforme — conservatif</option>
+          </select>
+          <p class="microcopy block-note">Les champs dépendants du temps restent disponibles en mouvement libre. Ici, seul le chemin varie.</p>
+          <label class="field-label compact" for="path-experiment" id="path-experiment-label">Parcours</label>
+          <select id="path-experiment">
+            <option value="compare">Deux chemins de A vers B</option>
+            <option value="loop">Contour fermé : A → B → A</option>
+          </select>
+          <div id="integral-route-controls" hidden>
+            <label class="field-label compact" for="integral-route">Trajet étudié</label>
+            <select id="integral-route">
+              <option value="0">Chemin 1 — arc</option>
+              <option value="1">Chemin 2 — courbe en S</option>
+              <option value="loop">Contour fermé : A → B → A</option>
+            </select>
+            <p class="microcopy block-note">Une seule particule, un seul parcours : deux façons de calculer le même travail.</p>
+          </div>
+          <label class="field-label compact" for="path-bend">Amplitude des courbes</label>
+          <input id="path-bend" type="range" min="0" max="2.5" step="0.05" value="1.3" />
+          <output class="dynamic-math-output"><span id="path-bend-value" class="math-digits"></span>\(\,\mathrm m\)</output>
+          <p class="microcopy block-note">Un arc en trait plein et une courbe en S en tirets. Faites glisser \(A\) et \(B\) sur l’animation. À amplitude nulle, les deux chemins se confondent avec le segment AB.</p>
+          <div class="path-button-row">
+            <button id="path-swap" type="button">Échanger A et B</button>
+            <button id="path-defaults" type="button">Position initiale</button>
+          </div>
+          <label class="check-row" id="path-reverse-row" hidden><input id="path-reverse" type="checkbox" />Inverser le sens du contour</label>
+          <label class="field-label compact" for="path-strength" id="path-strength-label">Intensité du champ</label>
+          <input id="path-strength" type="range" min="0.2" max="2" step="0.1" value="1" />
+          <output class="dynamic-math-output"><span id="path-strength-value" class="math-digits"></span><span id="path-strength-unit">\(\,\mathrm N\)</span><span id="path-gravity-unit" hidden>\(\,\mathrm{m\,s^{-2}}\)</span></output>
+          <p id="path-mass-note" class="microcopy block-note" hidden>Pour la pesanteur, \(m=1\,\mathrm{kg}\), \(\vec F=-mg\,\vec e_z\).</p>
+        </section>
+        <section class="panel-section">
+          <h2>Animation du parcours</h2>
+          <div class="transport-row path-transport">
+            <button id="path-play" class="primary-button" type="button">Lire</button>
+            <button id="path-reset" type="button">Recommencer</button>
+          </div>
+          <label class="field-label compact" for="path-time">Instant \(t\)</label>
+          <input id="path-time" type="range" min="0" max="10" step="0.01" value="0" />
+          <output class="dynamic-math-output"><span id="path-time-value" class="math-digits"></span>\(\,\mathrm s\)</output>
+          <label class="field-label compact" for="path-duration">Durée du parcours</label>
+          <input id="path-duration" type="range" min="2" max="20" step="1" value="10" />
+          <output class="dynamic-math-output"><span id="path-duration-value" class="math-digits"></span>\(\,\mathrm s\)</output>
+          <p class="microcopy block-note">Changer la durée modifie la puissance, mais pas le travail total dans ces champs stationnaires.</p>
+          <button id="path-end" type="button">Voir l’arrivée</button>
+        </section>
+        <section class="panel-section">
+          <h2>Affichage</h2>
+          <label class="check-row"><input id="path-show-field" type="checkbox" checked />Champ de force</label>
+          <label class="check-row"><input id="path-show-vectors" type="checkbox" checked /><span id="path-vectors-description">Force et vitesse sur les deux chemins</span></label>
+        </section>
+        <section class="panel-section equation-section">
+          <h2>Travail le long d’un chemin</h2>
+          <div id="path-field-formula"></div>
+          <p class="microcopy">Pour les champs spatiaux : \(L_0=1\,\mathrm m\), \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\).</p>
+          <div id="path-comparison-relations">
+            <p>\[W_i=\int_{C_i:A\to B}\vec F\cdot\mathrm d\vec r\]</p>
+            <p>\[\oint_{C_1- C_2}\vec F\cdot\mathrm d\vec r=W_1-W_2\]</p>
+            <p id="path-conservative-formula">\[\vec F=-\nabla U\ \Rightarrow\ W_i=U(A)-U(B)\]</p>
+          </div>
+          <div id="integral-relations" hidden>
+            <p>\[P=\vec F\cdot\vec v,\qquad F_\parallel=\vec F\cdot\vec e_\tau\]</p>
+            <p>\[\mathrm d\vec r=\vec v\,\mathrm dt=\vec e_\tau\,\mathrm d\ell\]</p>
+            <p>\[\int_0^t P(\tau)\,\mathrm d\tau=\int_{C_{A\to M(t)}}\vec F\cdot\mathrm d\vec r\]</p>
+            <p>\[=\int_0^{\ell(t)}F_\parallel(\ell)\,\mathrm d\ell\]</p>
+            <p class="microcopy">\(\vec e_\tau\) est le vecteur unitaire tangent orienté dans le sens du mouvement. \(F_\parallel\) est une composante signée, pas le module de la force. Cette égalité ne suppose pas que le champ soit conservatif.</p>
+          </div>
+          <p class="microcopy">Le trajet et la vitesse sont imposés par un dispositif extérieur. On calcule uniquement le travail du champ \(\vec F\), pas celui de la force résultante : ce travail seul n’est donc pas nécessairement égal à \(\Delta K\).</p>
+        </section>
+      </div>
+
       <footer class="panel-footer">
         <span>© J. Martin</span>
         <span>Espace : lire · R : recommencer</span>
@@ -1045,6 +1212,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     </aside>
 
     <main class="visualization-panel">
+      <div id="free-visualization">
       <div class="experiment-grid">
         <section class="visual-card scene-card" aria-labelledby="scene-title">
           <header class="card-heading">
@@ -1128,10 +1296,499 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       </section>
 
       <p id="accessible-summary" class="sr-only" aria-live="polite"></p>
+      </div>
+
+      <div id="path-visualization" hidden>
+        <div class="path-intro"><p class="card-kicker">Chemin imposé</p><h2 id="path-heading">Mêmes extrémités, même travail ?</h2><p id="path-status" role="status"></p></div>
+        <div class="path-grid">
+          <section class="visual-card path-scene-card" aria-labelledby="path-scene-title">
+            <header class="card-heading"><h2 id="path-scene-title">Deux chemins de A vers B</h2><span id="path-classification" class="result-badge"></span></header>
+            <div class="path-scene" id="path-viewport" tabindex="0" aria-label="Deux chemins imposés. Faire glisser A ou B pour déplacer les extrémités.">
+              <canvas id="path-canvas"></canvas>
+              <button id="path-a" class="path-point" type="button" aria-label="Point A. Utiliser les flèches du clavier pour le déplacer.">\(A\)</button>
+              <button id="path-b" class="path-point" type="button" aria-label="Point B. Utiliser les flèches du clavier pour le déplacer.">\(B\)</button>
+              <div id="path-vector-legend" class="path-vector-legend" aria-label="Légende des vecteurs">
+                <span><i class="path-vector-key" style="--vector-color:#7758a6" aria-hidden="true"></i>Force \(\vec F\)</span>
+                <span><i class="path-vector-key" style="--vector-color:#d9683b" aria-hidden="true"></i>Vitesse \(\vec v\)</span>
+              </div>
+              <span class="path-axis path-axis-x">\(x\,[\mathrm m]\)</span><span class="path-axis path-axis-y" id="path-y">\(y\,[\mathrm m]\)</span><span class="path-axis path-axis-y" id="path-z" hidden>\(z\,[\mathrm m]\)</span>
+              <div id="path-scene-ticks" class="chart-tick-layer" aria-hidden="true"></div>
+            </div>
+            <div class="path-key"><span id="path-key-one"><i style="--key:#2775b6"></i>Chemin 1 · arc</span><span id="path-key-two"><i class="path-dashed" style="--key:#b5688b"></i>Chemin 2 · courbe en S</span></div>
+          </section>
+          <section class="visual-card" id="path-work-card" aria-labelledby="path-chart-title">
+            <header class="card-heading"><h2 id="path-chart-title">Travail cumulé</h2><span id="path-progress" class="microcopy"></span></header>
+            <div class="path-chart">
+              <canvas id="path-work-canvas" aria-label="Travail cumulé au cours du parcours imposé"></canvas>
+              <div id="path-chart-ticks" class="chart-tick-layer" aria-hidden="true"></div>
+              <span class="path-axis path-axis-x">\(t\,[\mathrm s]\)</span><span class="path-work-axis">\(W\,[\mathrm J]\)</span>
+              <span id="path-turn-label" class="path-label" hidden>\(B\)</span>
+            </div>
+            <div class="path-current"><span id="path-current-one">\(W_1(t)=\) <span id="path-current-w1" class="math-digits"></span> \(\mathrm J\)</span><span id="path-current-two">\(W_2(t)=\) <span id="path-current-w2" class="math-digits"></span> \(\mathrm J\)</span><span id="path-current-loop" hidden>\(W(t)=\) <span id="path-current-wloop" class="math-digits"></span> \(\mathrm J\)</span></div>
+          </section>
+          <section id="integral-time-card" class="visual-card integral-card" aria-labelledby="integral-time-title" hidden>
+            <header class="card-heading"><h2 id="integral-time-title">Puissance au cours du temps</h2></header>
+            <div class="integral-plot">
+              <canvas id="integral-time-canvas" aria-label="Puissance en fonction du temps ; aire signée représentant l’intégrale temporelle"></canvas>
+              <div id="integral-time-ticks" class="chart-tick-layer" aria-hidden="true"></div>
+              <span class="path-work-axis">\(P\,[\mathrm W]\)</span><span class="path-axis path-axis-x">\(t\,[\mathrm s]\)</span>
+            </div>
+            <p class="integral-area-caption">Aire signée : \(W_t=\int_0^t P(\tau)\,\mathrm d\tau\)</p>
+          </section>
+          <section id="integral-space-card" class="visual-card integral-card" aria-labelledby="integral-space-title" hidden>
+            <header class="card-heading"><h2 id="integral-space-title">Force tangentielle le long du trajet</h2></header>
+            <div class="integral-plot">
+              <canvas id="integral-space-canvas" aria-label="Composante tangentielle signée de la force en fonction de la longueur parcourue ; aire représentant l’intégrale curviligne"></canvas>
+              <div id="integral-space-ticks" class="chart-tick-layer" aria-hidden="true"></div>
+              <span class="path-work-axis">\(F_\parallel\,[\mathrm N]\)</span><span class="path-axis path-axis-x">\(\ell\,[\mathrm m]\)</span>
+            </div>
+            <p class="integral-area-caption">Aire signée : \(W_C=\int_C\vec F\cdot\mathrm d\vec r\)</p>
+          </section>
+        </div>
+        <div id="integral-results" hidden>
+          <div class="integral-legend"><span><i class="legend-positive"></i>Aire positive</span><span><i class="legend-negative"></i>Aire négative</span><span>\(\ell(t)=\) <span id="integral-distance" class="math-digits"></span> \(\mathrm m\)</span></div>
+          <h3 class="path-results-title">Même point atteint · travaux cumulés à l’instant courant</h3>
+          <div class="path-results">
+            <article class="readout-card"><span class="readout-symbol">\(W_t=\int_0^t P(\tau)\,\mathrm d\tau\)</span><strong class="dynamic-math-output"><span id="integral-wtime" class="math-digits"></span>\(\,\mathrm J\)</strong><small>intégrale temporelle</small></article>
+            <article class="readout-card integral-spatial-result"><span class="readout-symbol">\(W_C=\int_C\vec F\cdot\mathrm d\vec r\)</span><strong class="dynamic-math-output"><span id="integral-wspace" class="math-digits"></span>\(\,\mathrm J\)</strong><small>intégrale curviligne</small></article>
+            <article class="readout-card"><span class="readout-symbol">\(W_t-W_C\)</span><strong class="dynamic-math-output"><span id="integral-error" class="math-digits"></span>\(\,\mathrm J\)</strong><small>écart entre deux calculs indépendants</small></article>
+          </div>
+          <p class="microcopy path-explanation">Les aires colorées sont comptées avec leur signe. La longueur parcourue \(\ell\) augmente aussi au retour sur le contour : ce n’est ni la coordonnée \(x\), ni la distance à A. Aux arrêts, \(P=0\) ; la force tangentielle est montrée par sa limite le long du trajet.</p>
+          <p class="microcopy path-explanation">Calculs indépendants : puissance et vitesse analytique sur une grille temporelle ; force au milieu de petits déplacements sur une grille spatiale distincte. L’écart provient de l’approximation numérique du trajet, pas d’une différence entre les deux définitions du travail. Il est calculé avant l’arrondi des valeurs affichées.</p>
+        </div>
+        <h3 id="path-results-heading" class="path-results-title">Travaux sur les parcours complets</h3>
+        <div class="path-results" id="path-comparison-results">
+          <article class="readout-card path-result-one"><span class="readout-symbol">\(W_1\) · chemin 1, A → B</span><strong class="dynamic-math-output"><span id="path-w1" class="math-digits"></span>\(\,\mathrm J\)</strong></article>
+          <article class="readout-card path-result-two"><span class="readout-symbol">\(W_2\) · chemin 2, A → B</span><strong class="dynamic-math-output"><span id="path-w2" class="math-digits"></span>\(\,\mathrm J\)</strong></article>
+          <article class="readout-card"><span id="path-forward-result" class="readout-symbol">\(W_1-W_2\) · contour \(C_1-C_2\)</span><span id="path-reverse-result" class="readout-symbol" hidden>\(W_2-W_1\) · contour inverse</span><strong class="dynamic-math-output"><span id="path-loop-work" class="math-digits"></span>\(\,\mathrm J\)</strong></article>
+        </div>
+        <p class="path-explanation" id="path-conclusion"></p>
+        <p class="microcopy path-explanation" id="path-potential-check" hidden>Valeur attendue : \(U(A)-U(B)=\) <span id="path-expected" class="math-digits"></span> \(\mathrm J\).</p>
+        <p class="microcopy path-explanation"><span id="path-direction-caption">Les flèches des deux chemins donnent le sens A → B.</span> Les échelles des vecteurs force et vitesse sont distinctes de l’échelle spatiale.</p>
+      </div>
     </main>
   </div>
 
   <noscript>Cette application nécessite JavaScript.</noscript>
+  <script>
+/* Stationary line integrals, deliberately independent of free particle dynamics. */
+const ImposedWork = (() => {
+  'use strict';
+  const center = [Math.PI, 1.5 * Math.PI];
+  const stationary = ['vortex', 'central', 'periodic', 'cellular', 'gravity'];
+  const conservative = id => ['central', 'periodic', 'gravity'].includes(id);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  function potential(p, r) {
+    const x = r[0] - center[0], y = r[1] - center[1];
+    if (p.fieldId === 'central') return p.forceScale * Math.sqrt(1 + x*x + y*y);
+    if (p.fieldId === 'periodic') return -p.forceScale * (Math.cos(x) + Math.cos(y));
+    if (p.fieldId === 'gravity') return p.mass * p.forceScale * r[1];
+    return null;
+  }
+  function point(a, b, bend, path, u) {
+    // Ease to rest at both endpoints, including the turn at B on a closed tour.
+    u = clamp(u, 0, 1);
+    const s = u*u*(3-2*u), ds = 6*u*(1-u);
+    const dx = b[0]-a[0], dy = b[1]-a[1], length = Math.hypot(dx,dy);
+    if (length < 1e-8) throw new Error('Les extrémités doivent être distinctes.');
+    const sign = dx < 0 || (dx === 0 && dy < 0) ? -1 : 1;
+    const nx = -dy/length*sign, ny = dx/length*sign;
+    // C1 is a parabolic arc; C2 has an inflection and crosses the chord A–B.
+    // The factor 0.6 keeps the S inside the arc on its positive lobe, so the
+    // closed contour has no extra intersections. Swapping A/B preserves each
+    // geometric path and only reverses traversal (hence the sign on C2).
+    const offset = path===0 ? 4*bend*s*(1-s) : -.6*bend*sign*Math.sin(2*Math.PI*s);
+    const slope = path===0 ? 4*bend*(1-2*s) : -1.2*Math.PI*bend*sign*Math.cos(2*Math.PI*s);
+    return {r:[a[0]+s*dx+offset*nx, a[1]+s*dy+offset*ny],
+      d:[(dx+slope*nx)*ds, (dy+slope*ny)*ds]};
+  }
+  function build(config, field, count=800) {
+    if (!stationary.includes(config.fieldId)) throw new Error('Un champ stationnaire est requis.');
+    const p={...config,a:[...config.a],b:[...config.b]}, routes=[];
+    for (let k=0;k<2;k++) {
+      const evaluate = u => {
+        const q=point(p.a,p.b,p.bend,k,u), f=field(q.r[0],q.r[1],0,p);
+        return {...q,f:[f.x,f.y],density:f.x*q.d[0]+f.y*q.d[1]};
+      };
+      const samples=Array.from({length:count+1},(_,i)=>evaluate(i/count));
+      const w=new Float64Array(count+1);
+      for(let i=1;i<=count;i++) w[i]=w[i-1]+(samples[i-1].density+4*evaluate((i-.5)/count).density+samples[i].density)/(6*count);
+      routes.push({samples,w,total:w[count],evaluate});
+    }
+    function sample(k,u) {
+      u=clamp(u,0,1);const route=routes[k], i=Math.min(count,Math.floor(u*count)), q=route.evaluate(u), low=i/count;
+      const work=route.w[i]+(u-low)*(route.samples[i].density+4*route.evaluate((low+u)/2).density+q.density)/6;
+      return {...q,work};
+    }
+    function loop(q,reverse=false) {
+      q=clamp(q,0,1);const outward=reverse?1:0, returning=1-outward;
+      const first=q<.5, k=first?outward:returning, u=first?2*q:2-2*q;
+      const s=sample(k,u), factor=first?2:-2;
+      return {...s,k,u,d:s.d.map(v=>factor*v),density:factor*s.density,
+        work:first?s.work:routes[outward].total+s.work-routes[returning].total};
+    }
+    const all=routes.flatMap(r=>r.samples), xs=all.map(q=>q.r[0]), ys=all.map(q=>q.r[1]);
+    const expected=conservative(p.fieldId)?potential(p,p.a)-potential(p,p.b):null;
+    const curves={compare:routes.map((_,k)=>Array.from({length:401},(_,i)=>sample(k,i/400).work)),
+      loop:[Array.from({length:401},(_,i)=>loop(i/400).work)],reverse:[Array.from({length:401},(_,i)=>loop(i/400,true).work)]};
+    const maxD=Math.max(...all.map(s=>Math.hypot(...s.d)));
+    return {config:p,routes,sample,loop,expected,curves,maxD,difference:routes[0].total-routes[1].total,
+      bounds:{xmin:Math.min(...xs),xmax:Math.max(...xs),ymin:Math.min(...ys),ymax:Math.max(...ys)}};
+  }
+  function compareIntegrals(config, field, route=0, duration=10, reverse=false, timeCount=1200, spaceCount=1600) {
+    if(!stationary.includes(config.fieldId)||!['0','1','loop'].includes(String(route))||!(duration>0))throw new Error('Configuration des intégrales non valide.');
+    if(timeCount<2||spaceCount<2||timeCount%2||spaceCount%2)throw new Error('Des nombres pairs d’intervalles sont requis.');
+    const p={...config,a:[...config.a],b:[...config.b]};
+    const trajectory=q=>{
+      q=clamp(q,0,1);
+      if(route!=='loop')return point(p.a,p.b,p.bend,Number(route),q);
+      const outward=reverse?1:0, first=q<.5,k=first?outward:1-outward;
+      const g=point(p.a,p.b,p.bend,k,first?2*q:2-2*q);
+      return {r:g.r,d:g.d.map(v=>v*(first?2:-2))};
+    };
+    const temporal=q=>{
+      const g=trajectory(q),f=field(...g.r,0,p),v=g.d.map(x=>x/duration);
+      return {x:q*duration,y:f.x*v[0]+f.y*v[1]};
+    };
+    // Time quadrature uses the analytic velocity and P(t), with its own grid.
+    const timePoints=Array.from({length:timeCount+1},(_,i)=>temporal(i/timeCount));
+    const timeWork=new Float64Array(timeCount+1),dt=duration/timeCount;
+    for(let i=1;i<=timeCount;i++)timeWork[i]=timeWork[i-1]+dt*(timePoints[i-1].y+4*temporal((i-.5)/timeCount).y+timePoints[i].y)/6;
+    // Spatial quadrature never uses v, P, dt, or the temporal work. It adds
+    // midpoint forces dotted with geometric displacements along a polygonal
+    // approximation of the path. Signed Ft times positive ds gives each work.
+    const segment=(a,b)=>{
+      const dr=b.map((x,i)=>x-a[i]),ds=Math.hypot(...dr),mid=a.map((x,i)=>(x+b[i])/2),f=field(...mid,0,p);
+      const work=f.x*dr[0]+f.y*dr[1];return {ds,work,ft:ds>0?work/ds:0};
+    };
+    const spatial=Array.from({length:spaceCount+1},(_,i)=>({r:trajectory(i/spaceCount).r,s:0,work:0})),spacePoints=[];
+    for(let i=1;i<=spaceCount;i++){
+      const previous=spatial[i-1],next=spatial[i],step=segment(previous.r,next.r);
+      next.s=previous.s+step.ds;next.work=previous.work+step.work;
+      spacePoints.push({x:previous.s,y:step.ft},{x:next.s,y:step.ft});
+    }
+    function sample(q) {
+      q=clamp(q,0,1);const it=Math.min(timeCount,Math.floor(q*timeCount)),start=it/timeCount,current=temporal(q);
+      const wt=timeWork[it]+duration*(q-start)*(timePoints[it].y+4*temporal((start+q)/2).y+current.y)/6;
+      const is=Math.min(spaceCount,Math.floor(q*spaceCount)),base=spatial[is],g=trajectory(q),step=segment(base.r,g.r);
+      let tangent=g.d,speed=Math.hypot(...tangent);
+      // At a stop, use the one-sided geometric tangent, not a division by zero.
+      if(speed<1e-10){tangent=trajectory(q>=1-1e-7?1-1e-7:q+1e-7).d;speed=Math.hypot(...tangent);}
+      const f=field(...g.r,0,p),ft=speed>0?(f.x*tangent[0]+f.y*tangent[1])/speed:0;
+      const ws=base.work+step.work;
+      return {q,t:current.x,power:current.y,length:base.s+step.ds,ft,timeWork:wt,spaceWork:ws,error:wt-ws,r:g.r};
+    }
+    return {sample,timePoints,spacePoints,totalLength:spatial[spaceCount].s,timeWork,spatial,duration,timeCount,spaceCount};
+  }
+  return {center,stationary,conservative,potential,point,build,clamp,compareIntegrals};
+})();
+
+function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onModeChange}) {
+  const $=id=>document.getElementById(id), M=ImposedWork;
+  const colors=['#2775b6','#b5688b'], ink='#233449', muted='#607185', loopColor='#268576';
+  const defaults=()=>({a:[Math.PI-1.5,1.5*Math.PI-.4],b:[Math.PI+2,1.5*Math.PI+.6],bend:1.3,fieldId:'vortex',forceScale:1,mass:1});
+  let config=defaults(), data, active=false, playing=false, time=0, duration=10, frame=0, last=null, drag=null;
+  let tickKey='',sceneTickKey='',lastStatus='';
+  let integralCache=null,integralTickKeys={};
+  const integralMode=()=>$('motion-mode').value==='integrals';
+  const mode=()=>integralMode()?($('integral-route').value==='loop'?'loop':'single'):$('path-experiment').value;
+  const reversed=()=>$('path-reverse').checked;
+  const numeric=(id,x,n=3)=>setMathDigits($(id),Math.abs(x)<.5*10**(-n)?(0).toFixed(n):x.toFixed(n));
+  const fmt=x=>Math.abs(x)<.0005?'0.000':x.toFixed(3);
+  function line(ctx,points,color,width=2,dash=[]) {
+    if(!points.length)return;
+    ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));
+    ctx.strokeStyle=color;ctx.lineWidth=width;ctx.setLineDash(dash);ctx.stroke();ctx.setLineDash([]);
+  }
+  function circle(ctx,p,color,r=6) {ctx.beginPath();ctx.arc(...p,r,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();}
+  function stop() {playing=false;last=null;if(frame)cancelAnimationFrame(frame);frame=0;$('path-play').textContent='Lire';}
+  function play() {
+    if(!active||document.hidden)return;
+    if(time>=duration)time=0;
+    playing=true;last=null;$('path-play').textContent='Pause';frame=requestAnimationFrame(animate);
+  }
+  function animate(now) {
+    frame=0;if(!playing||!active)return;
+    if(last!==null)time=Math.min(duration,time+Math.min(.1,(now-last)/1000));last=now;
+    if(time>=duration)stop();
+    render();if(playing)frame=requestAnimationFrame(animate);
+  }
+  function rebuild() {
+    stop();time=0;data=M.build(config,forceAt);tickKey='';sceneTickKey='';lastStatus='';render();
+  }
+  function transform(width,height) {
+    if(drag)return drag.transform;
+    const b=data.bounds, pad={l:56,r:44,t:86,b:48};
+    const scale=Math.min((width-pad.l-pad.r)/Math.max(5,b.xmax-b.xmin+1.2),(height-pad.t-pad.b)/Math.max(4,b.ymax-b.ymin+1.2));
+    const cx=(b.xmin+b.xmax)/2,cy=(b.ymin+b.ymax)/2, ox=(pad.l+width-pad.r)/2,oy=(pad.t+height-pad.b)/2;
+    return {scale,left:pad.l,right:width-pad.r,top:pad.t,bottom:height-pad.b,
+      to:r=>[ox+(r[0]-cx)*scale,oy-(r[1]-cy)*scale],from:p=>[cx+(p[0]-ox)/scale,cy-(p[1]-oy)/scale]};
+  }
+  function addTick(layer,key,value,x,y,cls='') {
+    let label=document.createElement('span');label.className='chart-tick-label '+cls;label.dataset.key=key;
+    label.style.left=x+'px';label.style.top=y+'px';
+    const digits=document.createElement('span');digits.className='math-digits';setMathDigits(digits,String(value));label.append(digits);layer.append(label);
+  }
+  function position(id,p) {$(id).style.left=p[0]+'px';$(id).style.top=p[1]+'px';}
+  function drawScene(q) {
+    const {context:c,width:w,height:h}=canvasContext($('path-canvas')), t=transform(w,h), first=t.from([t.left,t.bottom]), end=t.from([t.right,t.top]);
+    c.fillStyle='#fafbfd';c.fillRect(0,0,w,h);
+    const key=[w,h,...config.a,...config.b,config.bend,!!drag].join('|');
+    const updateTicks=key!==sceneTickKey;
+    if(updateTicks)$('path-scene-ticks').replaceChildren();
+    const xstep=end[0]-first[0]>10?2:1, ystep=end[1]-first[1]>8?2:1;
+    c.save();c.beginPath();c.rect(t.left,t.top,t.right-t.left,t.bottom-t.top);c.clip();
+    for(let x=Math.ceil(first[0]/xstep)*xstep;x<=end[0];x+=xstep){
+      const sx=t.to([x,0])[0];line(c,[[sx,t.top],[sx,t.bottom]],'#e5ebf1',1);
+      if(updateTicks)addTick($('path-scene-ticks'),'x'+x,x,sx,t.bottom+16);
+    }
+    for(let y=Math.ceil(first[1]/ystep)*ystep;y<=end[1];y+=ystep){
+      const sy=t.to([0,y])[1];line(c,[[t.left,sy],[t.right,sy]],'#e5ebf1',1);
+      if(updateTicks)addTick($('path-scene-ticks'),'y'+y,y,t.left-9,sy,'y-tick');
+    }
+    sceneTickKey=key;
+    if($('path-show-field').checked){
+      const step=Math.max(.55,34/t.scale), ref=config.fieldId==='gravity'?config.mass*config.forceScale:config.forceScale*Math.SQRT2;
+      for(let x=Math.ceil(first[0]/step)*step;x<=end[0];x+=step)for(let y=Math.ceil(first[1]/step)*step;y<=end[1];y+=step){
+        const f=forceAt(x,y,0,config), p=t.to([x,y]), factor=20/ref;
+        drawArrow(c,...p,f.x*factor,-f.y*factor,{color:'rgba(38,133,118,.30)',lineWidth:1,headLength:4});
+      }
+    }
+    data.routes.forEach((route,k)=>{
+      if(mode()==='single'&&k!==Number($('integral-route').value))return;
+      const full=route.samples.filter((_,i)=>i%4===0).map(s=>t.to(s.r));
+      line(c,full,k?'rgba(181,104,139,.34)':'rgba(39,117,182,.30)',2,k?[7,5]:[]);
+      const pointer=data.sample(k,.33), p=t.to(pointer.r), l=Math.hypot(...pointer.d);
+      const direction=mode()==='loop'?(k===(reversed()?1:0)?1:-1):1;
+      drawArrow(c,...p,direction*14*pointer.d[0]/l,-direction*14*pointer.d[1]/l,{color:colors[k],lineWidth:2,headLength:7});
+    });
+    const followed=[];
+    if(mode()!=='loop'){
+      data.routes.forEach((route,k)=>{
+        if(mode()==='single'&&k!==Number($('integral-route').value))return;
+        const s=data.sample(k,q), pts=route.samples.filter((_,i)=>i%4===0&&i<=q*(route.samples.length-1)).map(s=>t.to(s.r));pts.push(t.to(s.r));
+        line(c,pts,colors[k],3,k?[7,4]:[]);circle(c,t.to(s.r),colors[k],7);
+        followed.push({...s,d:s.d.map(v=>v/duration)});
+      });
+    }else{
+      const samples=Array.from({length:Math.ceil(q*400)+1},(_,i)=>data.loop(Math.min(q,i/400),reversed()));
+      for(const k of [0,1])line(c,samples.filter(s=>s.k===k).map(s=>t.to(s.r)),colors[k],3,k?[7,4]:[]);
+      const s=data.loop(q,reversed());circle(c,t.to(s.r),colors[s.k],7);followed.push({...s,d:s.d.map(v=>v/duration)});
+    }
+    circle(c,t.to(config.a),ink,4);circle(c,t.to(config.b),ink,4);
+    c.restore();
+    position('path-a',t.to(config.a).map((v,i)=>v+(i===1?-25:0)));position('path-b',t.to(config.b).map((v,i)=>v+(i===1?-25:0)));
+    // Both particles use the same force and velocity scales. The fixed legend
+    // replaces moving labels and their leader lines without changing geometry.
+    const ref=config.fieldId==='gravity'?config.mass*config.forceScale:config.forceScale;
+    const maxSpeed=data.maxD*(mode()==='loop'?2:1)/duration;
+    const velocityScale=Math.min(90,Math.min(w,h)*.25/Math.max(.01,maxSpeed));
+    const visible=$('path-show-vectors').checked;
+    $('path-vector-legend').hidden=!visible;
+    if(visible)for(const s of followed){
+      const p=t.to(s.r), deltas=[[s.f[0]*46/ref,-s.f[1]*46/ref],[s.d[0]*velocityScale,-s.d[1]*velocityScale]];
+      deltas.forEach((d,k)=>{
+        if(Math.hypot(...d)<2)return;
+        // Keep a linear scale over the whole experiment (no per-vector normalization).
+        // The wider force remains readable if the two vectors become collinear.
+        drawArrow(c,...p,...d,{color:k?'#d9683b':'#7758a6',lineWidth:k?2.5:3.5,headLength:k?9:12});
+      });
+    }
+  }
+  function drawChart(q) {
+    const {context:c,width:w,height:h}=canvasContext($('path-work-canvas'));
+    const closed=mode()==='loop', curves=data.curves[closed?(reversed()?'reverse':'loop'):'compare'];
+    const values=curves.flat(), max=Math.max(0,...values),min=Math.min(0,...values), span=Math.max(.2,max-min);
+    const low=min-.12*span,high=max+.12*span, left=66,right=w-28,top=40,bottom=h-48;
+    const X=u=>left+u*(right-left),Y=v=>top+(high-v)/(high-low)*(bottom-top);
+    c.fillStyle='#fff';c.fillRect(0,0,w,h);
+    const key=[w,h,duration,closed,reversed(),min,max].join('|'), update=key!==tickKey;
+    if(update)$('path-chart-ticks').replaceChildren();
+    for(let i=0;i<=4;i++){
+      const u=i/4;line(c,[[X(u),top],[X(u),bottom]],'#dce4ec',1);
+      if(update)addTick($('path-chart-ticks'),'x'+i,Number((duration*u).toFixed(2)),X(u),bottom+17);
+    }
+    for(let i=0;i<=4;i++){
+      const v=low+(high-low)*i/4;if(Math.abs(Y(v)-Y(0))<22)continue;
+      line(c,[[left,Y(v)],[right,Y(v)]],'#e5ebf1',1);
+      if(update)addTick($('path-chart-ticks'),'y'+i,Number(v.toFixed(2)),left-10,Y(v),'y-tick');
+    }
+    line(c,[[left,Y(0)],[right,Y(0)]],'#8090a0',1,[4,4]);
+    if(update)addTick($('path-chart-ticks'),'zero',0,left-10,Y(0),'y-tick');tickKey=key;
+    if(closed){line(c,[[X(.5),top],[X(.5),bottom]],'#a9b6c2',1,[2,4]);}
+    $('path-turn-label').hidden=!closed;position('path-turn-label',[X(.5),top-16]);
+    curves.forEach((curve,k)=>{
+      const color=closed?loopColor:colors[k],dash=!closed&&k?[7,4]:[];
+      line(c,curve.map((v,i)=>[X(i/400),Y(v)]),color+'44',1.5,dash);
+      const current=closed?data.loop(q,reversed()).work:data.sample(k,q).work;
+      const pts=curve.flatMap((v,i)=>i/400<=q?[[X(i/400),Y(v)]]:[]);pts.push([X(q),Y(current)]);
+      line(c,pts,color,2.5,dash);circle(c,[X(q),Y(current)],color,4);
+    });
+    line(c,[[X(q),top],[X(q),bottom]],'#607185',1,[3,4]);
+  }
+  function getIntegrals() {
+    const key=[$('integral-route').value,duration,reversed()].join('|');
+    if(integralCache?.source!==data||integralCache.key!==key){
+      integralCache={source:data,key,model:M.compareIntegrals(config,forceAt,$('integral-route').value,duration,reversed())};
+      integralTickKeys={};
+    }
+    return integralCache.model;
+  }
+  function drawIntegralPlot(kind,points,current,limit,color) {
+    const {context:c,width:w,height:h}=canvasContext($('integral-'+kind+'-canvas'));
+    const left=66,right=w-25,top=40,bottom=h-43;
+    const ys=points.map(p=>p.y),lo=Math.min(0,...ys),hi=Math.max(0,...ys),span=Math.max(.01,hi-lo),low=lo-.13*span,high=hi+.13*span;
+    const X=x=>left+x/Math.max(1e-9,limit)*(right-left),Y=y=>top+(high-y)/(high-low)*(bottom-top),zero=Y(0);
+    c.fillStyle='#fff';c.fillRect(0,0,w,h);
+    const key=[w,h,limit,low,high].join('|'),update=integralTickKeys[kind]!==key,layer=$('integral-'+kind+'-ticks');
+    if(update)layer.replaceChildren();
+    for(let i=0;i<=4;i++){
+      const x=limit*i/4;line(c,[[X(x),top],[X(x),bottom]],'#dce4ec',1);
+      if(update)addTick(layer,'x'+i,Number(x.toFixed(2)),X(x),bottom+15);
+      const y=low+(high-low)*i/4;
+      if(Math.abs(Y(y)-zero)>20){
+        line(c,[[left,Y(y)],[right,Y(y)]],'#e5ebf1',1);
+        if(update)addTick(layer,'y'+i,Number(y.toPrecision(3)),left-9,Y(y),'y-tick');
+      }
+    }
+    if(update)addTick(layer,'zero',0,left-9,zero,'y-tick');integralTickKeys[kind]=key;
+    c.save();c.beginPath();c.rect(left,top,right-left,bottom-top);c.clip();
+    const progress=points.filter(p=>p.x<current.x);progress.push(current);
+    // Split exactly at sign changes in the plotted polyline, then fill each
+    // signed part relative to zero (never an unsigned area under |F|).
+    const split=[];
+    progress.forEach((p,i)=>{
+      const a=progress[i-1];
+      if(a&&a.y*p.y<0)split.push({x:a.x+(p.x-a.x)*(-a.y)/(p.y-a.y),y:0});
+      split.push(p);
+    });
+    if(split.length>1)for(const positive of [true,false]){
+      c.beginPath();c.moveTo(X(split[0].x),zero);
+      for(const p of split)c.lineTo(X(p.x),Y(positive?Math.max(0,p.y):Math.min(0,p.y)));
+      c.lineTo(X(current.x),zero);c.closePath();c.fillStyle=positive?'rgba(38,133,118,.27)':'rgba(181,104,123,.27)';c.fill();
+    }
+    line(c,points.map(p=>[X(p.x),Y(p.y)]),color+'55',1.4);
+    line(c,progress.map(p=>[X(p.x),Y(p.y)]),color,2.2);
+    line(c,[[left,zero],[right,zero]],'#8090a0',1,[4,4]);
+    line(c,[[X(current.x),top],[X(current.x),bottom]],'#607185',1,[3,4]);circle(c,[X(current.x),Y(current.y)],color,4);
+    c.restore();
+  }
+  function drawIntegrals(q) {
+    const model=getIntegrals(),s=model.sample(q);
+    drawIntegralPlot('time',model.timePoints,{x:s.t,y:s.power},duration,'#2775b6');
+    drawIntegralPlot('space',model.spacePoints,{x:s.length,y:s.ft},model.totalLength,'#7758a6');
+    numeric('integral-wtime',s.timeWork,6);numeric('integral-wspace',s.spaceWork,6);numeric('integral-error',s.error,6);numeric('integral-distance',s.length,3);
+    $('integral-error').dataset.raw=String(s.error);
+  }
+  function render() {
+    if(!active||!data)return;
+    const q=time/duration, closed=mode()==='loop';
+    drawScene(q);if(integralMode())drawIntegrals(q);else drawChart(q);
+    $('path-time').value=String(time);numeric('path-time-value',time,2);numeric('path-duration-value',duration,0);
+    numeric('path-bend-value',config.bend,2);numeric('path-strength-value',config.forceScale,2);
+    numeric('path-w1',data.routes[0].total);numeric('path-w2',data.routes[1].total);numeric('path-loop-work',closed&&reversed()?-data.difference:data.difference);
+    $('path-forward-result').hidden=closed&&reversed();$('path-reverse-result').hidden=!(closed&&reversed());
+    numeric('path-current-w1',data.sample(0,q).work);numeric('path-current-w2',data.sample(1,q).work);numeric('path-current-wloop',data.loop(q,reversed()).work);
+    const isConservative=M.conservative(config.fieldId), near=Math.abs(data.difference)<.0005;
+    $('path-classification').textContent=isConservative?'Champ conservatif':'Champ non conservatif';
+    $('path-potential-check').hidden=!isConservative||integralMode();$('path-conservative-formula').hidden=!isConservative;
+    if(isConservative)numeric('path-expected',data.expected);
+    $('path-conclusion').textContent=integralMode()
+      ?'Les deux aires signées représentent le même travail jusqu’au point courant, que le champ soit conservatif ou non. Changer la durée modifie la puissance, mais pas le travail sur ce trajet stationnaire.'
+      :isConservative
+      ?'Les deux travaux sont égaux à la différence de potentiel entre A et B. Sur tout contour fermé, le travail est nul, à la précision numérique près.'
+      :near?'Ces chemins donnent ici le même travail à la précision affichée. Un résultat nul sur un seul contour ne suffit pas à prouver qu’un champ est conservatif : déplacez A ou B, ou écartez les chemins.'
+        :'Les deux chemins donnent des travaux différents. Le travail sur le contour fermé est non nul : ce résultat met en évidence le caractère non conservatif du champ.';
+    $('path-progress').textContent=closed?(q<.5?'Aller vers B · chemin '+(reversed()?2:1):'Retour vers A · chemin '+(reversed()?1:2)):'Même durée pour les deux chemins';
+    $('path-direction-caption').textContent=closed?'Les flèches suivent le sens de parcours : aller sur le chemin '+(reversed()?2:1)+', retour sur le chemin '+(reversed()?1:2)+'.':integralMode()?'La flèche du trajet indique le sens A → B.':'Les flèches des deux chemins donnent le sens A → B.';
+    const status=playing?'Lecture en cours.':time>=duration?'Parcours terminé.':time>0?'Lecture en pause.':'Prêt à parcourir les chemins.';
+    if(status!==lastStatus){$('path-status').textContent=status;lastStatus=status;}
+  }
+  function presentation() {
+    const closed=mode()==='loop',integrals=integralMode(),single=mode()==='single';
+    $('path-reverse-row').hidden=!closed;
+    $('path-vectors-description').textContent=closed||integrals?'Force et vitesse sur le parcours':'Force et vitesse sur les deux chemins';
+    $('path-current-one').hidden=closed;$('path-current-two').hidden=closed;$('path-current-loop').hidden=!closed;
+    $('path-scene-title').textContent=closed?'Contour fermé : A → B → A':single?($('integral-route').value==='0'?'Chemin 1 — arc de A vers B':'Chemin 2 — courbe en S de A vers B'):'Deux chemins de A vers B';
+    $('path-heading').textContent=integrals?'Un travail, deux intégrales':'Mêmes extrémités, même travail ?';
+    for(const id of ['path-experiment','path-experiment-label','path-work-card','path-comparison-results','path-results-heading','path-comparison-relations'])$(id).hidden=integrals;
+    for(const id of ['integral-route-controls','integral-time-card','integral-space-card','integral-results','integral-relations'])$(id).hidden=!integrals;
+    $('path-visualization').classList.toggle('integral-mode',integrals);
+    $('path-key-one').hidden=single&&$('integral-route').value!=='0';$('path-key-two').hidden=single&&$('integral-route').value!=='1';
+  }
+  function setExperiment() {
+    stop();time=0;presentation();tickKey='';integralTickKeys={};sceneTickKey='';render();
+  }
+  function activate() {
+    stop();active=$('motion-mode').value!=='free';
+    $('free-controls').hidden=active;$('free-visualization').hidden=active;
+    $('path-controls').hidden=!active;$('path-visualization').hidden=!active;
+    $('mode-description').textContent=integralMode()?'Comparer l’intégrale de la puissance sur le temps à celle de la force le long du même trajet.':active?'Le chemin est imposé. On mesure le travail du champ le long du parcours.':'La force détermine le mouvement de la particule.';
+    presentation();onModeChange(active);sceneTickKey='';tickKey='';integralTickKeys={};render();
+  }
+  $('motion-mode').addEventListener('change',activate);
+  $('path-field').addEventListener('change',()=>{
+    config.fieldId=$('path-field').value;const gravity=config.fieldId==='gravity';config.forceScale=gravity?9.81:1;
+    $('path-strength').min=gravity?'0.5':'0.2';$('path-strength').max=gravity?'15':'2';$('path-strength').step=gravity?'0.01':'0.1';$('path-strength').value=String(config.forceScale);
+    $('path-strength-label').textContent=gravity?'Intensité de la pesanteur':'Intensité du champ';
+    $('path-mass-note').hidden=!gravity;$('path-gravity-unit').hidden=!gravity;$('path-strength-unit').hidden=gravity;$('path-z').hidden=!gravity;$('path-y').hidden=gravity;
+    for(const block of $('path-field-formula').children)block.hidden=block.dataset.pathField!==config.fieldId;
+    rebuild();
+  });
+  $('path-experiment').addEventListener('change',setExperiment);
+  $('integral-route').addEventListener('change',setExperiment);
+  $('path-reverse').addEventListener('change',()=>{stop();time=0;tickKey='';render();});
+  $('path-bend').addEventListener('input',()=>{config.bend=Number($('path-bend').value);rebuild();});
+  $('path-strength').addEventListener('input',()=>{config.forceScale=Number($('path-strength').value);rebuild();});
+  $('path-duration').addEventListener('input',()=>{stop();duration=Number($('path-duration').value);time=0;$('path-time').max=String(duration);tickKey='';render();});
+  $('path-swap').addEventListener('click',()=>{[config.a,config.b]=[config.b,config.a];rebuild();});
+  $('path-defaults').addEventListener('click',()=>{const d=defaults();config.a=d.a;config.b=d.b;config.bend=d.bend;$('path-bend').value=String(d.bend);rebuild();});
+  $('path-play').addEventListener('click',()=>{if(playing)stop();else play();render();});
+  $('path-reset').addEventListener('click',()=>{stop();time=0;render();});
+  $('path-end').addEventListener('click',()=>{stop();time=duration;render();});
+  $('path-time').addEventListener('input',()=>{stop();time=M.clamp(Number($('path-time').value),0,duration);render();});
+  for(const id of ['path-show-field','path-show-vectors'])$(id).addEventListener('change',render);
+  const viewport=$('path-viewport');
+  viewport.addEventListener('pointerdown',e=>{
+    const rect=$('path-canvas').getBoundingClientRect(),t=transform(rect.width,rect.height),p=[e.clientX-rect.left,e.clientY-rect.top];
+    const button=e.target.closest?.('.path-point');
+    const k=button?.id==='path-a'?'a':button?.id==='path-b'?'b':['a','b'].find(k=>Math.hypot(...t.to(config[k]).map((x,i)=>x-p[i]))<20);
+    if(!k)return;
+    e.preventDefault();stop();viewport.setPointerCapture(e.pointerId);
+    const world=t.from(p);drag={k,id:e.pointerId,transform:t,offset:config[k].map((x,i)=>x-world[i])};
+  });
+  viewport.addEventListener('pointermove',e=>{
+    if(!drag||drag.id!==e.pointerId)return;
+    const r=$('path-canvas').getBoundingClientRect(),t=drag.transform,p=t.from([e.clientX-r.left,e.clientY-r.top]).map((x,i)=>x+drag.offset[i]);
+    const lo=t.from([t.left+16,t.bottom-16]),hi=t.from([t.right-16,t.top+16]);
+    const next=p.map((x,i)=>M.clamp(x,lo[i],hi[i])),other=config[drag.k==='a'?'b':'a'];
+    if(Math.hypot(...next.map((x,i)=>x-other[i]))<.35)return;
+    config[drag.k]=next;rebuild();
+  });
+  const endDrag=e=>{if(drag?.id===e.pointerId){drag=null;sceneTickKey='';render();}};
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])viewport.addEventListener(name,endDrag);
+  for(const k of ['a','b'])$('path-'+k).addEventListener('keydown',e=>{
+    const dirs={ArrowLeft:[-.1,0],ArrowRight:[.1,0],ArrowDown:[0,-.1],ArrowUp:[0,.1]},d=dirs[e.key];if(!d)return;
+    e.preventDefault();const next=config[k].map((x,i)=>M.clamp(x+d[i],-20,20)),other=config[k==='a'?'b':'a'];
+    if(Math.hypot(...next.map((x,i)=>x-other[i]))>=.35){config[k]=next;rebuild();}
+  });
+  document.addEventListener('keydown',e=>{
+    if(!active||e.target.closest?.('input,select,button'))return;
+    if(e.code==='Space'){e.preventDefault();if(playing)stop();else play();render();}
+    if(e.key.toLowerCase()==='r'){stop();time=0;render();}
+  });
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){stop();render();}});
+  const observer=new ResizeObserver(()=>{tickKey='';sceneTickKey='';integralTickKeys={};render();});
+  for(const id of ['path-canvas','path-work-canvas','integral-time-canvas','integral-space-canvas'])observer.observe($(id));
+  for(const id of M.stationary){
+    const block=document.querySelector('[data-force-field="'+id+'"]')?.cloneNode(true);
+    if(block){block.removeAttribute('data-force-field');block.dataset.pathField=id;block.hidden=id!==config.fieldId;$('path-field-formula').append(block);}
+  }
+  rebuild();
+  return {isActive:()=>active,render:()=>{tickKey='';sceneTickKey='';integralTickKeys={};render();}};
+}
+
+</script>
   <script>
 (function () {
   "use strict";
@@ -1323,6 +1980,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   };
 
   let mathIsReady = false;
+  let imposedWork = null;
   const mathGlyphTemplates = new Map();
   let chartTickSignature = "";
 
@@ -2028,6 +2686,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   }
 
   function render(forceAccessibleUpdate = false) {
+    if (imposedWork?.isActive()) { imposedWork.render(); return; }
     if (!state.simulation) return;
     const sample = sampleSimulation(state.time);
     drawScene(sample);
@@ -2304,6 +2963,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     }, { passive: false });
 
     document.addEventListener("keydown", (event) => {
+      if (imposedWork?.isActive()) return;
       const target = event.target;
       const editing = target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLButtonElement;
       if (editing) return;
@@ -2368,6 +3028,10 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     updateScenarioConclusion();
     updatePlayButton();
     installInteractions();
+    imposedWork = createImposedWorkUI({
+      forceAt, canvasContext, drawArrow, setMathDigits,
+      onModeChange() { setPlaying(false); render(true); }
+    });
     numericalSelfCheck();
     render(true);
     typesetMath();
