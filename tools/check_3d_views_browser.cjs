@@ -163,7 +163,21 @@ const {chromium}=require('playwright');
   assert(Math.abs(Number(await page.locator('#time-slider').getAttribute('max'))-10*Math.PI/Math.sqrt(2000))<1e-8);
   assert.equal(await read(1,'magnitude'),4.47);
   assert.equal(await read(2,'magnitude'),9.81);
-  assert.equal(await read(0,'component-z'),1);
+  assert.equal(await read(0,'component-y'),1);
+  assert.equal(await read(0,'component-z'),0);
+  assert.equal(await read(2,'component-x'),0);
+  assert.equal(await read(2,'component-y'),0);
+  assert.equal(await read(2,'component-z'),-9.81);
+  for(const fraction of [.25,.75,1]){
+    await page.locator('#time-slider').evaluate((el,q)=>{el.value=Number(el.max)*q;el.dispatchEvent(new Event('input',{bubbles:true}));},fraction);
+    assert.equal(await read(0,'component-y'),1);
+    assert.equal(await read(2,'component-z'),-9.81);
+  }
+  if(process.env.SCREENSHOT_DIR){
+    await page.setViewportSize({width:1440,height:1000});
+    await page.locator('#front-view').click();
+    await page.locator('#viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,'3d-ballistic-negative-z.png')});
+  }
   await page.locator('#osculating-toggle').uncheck();
   await page.locator('#trajectory-select').selectOption('lissajous');
   await page.waitForFunction(()=>document.querySelector('#trajectory-equations mjx-container'));

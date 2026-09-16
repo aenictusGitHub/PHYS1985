@@ -868,6 +868,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 .catalog .button { display: inline-block; padding: 0.65rem 0.85rem; border: 1px solid #c4d5e3; border-radius: 0.5rem; color: var(--accent-dark); background: #f4f8fb; font-size: 0.875rem; font-weight: 550; text-decoration: none; transition: background-color 140ms ease; }
 .catalog .button:hover { background: #e7f0f7; }
 .catalog .qr { display: block; width: 6.75rem; height: 6.75rem; border: 0.3rem solid #fff; }
+.catalog .notes-cover-link { display: block; justify-self: end; border: 1px solid var(--line); background: #fff; box-shadow: 0 3px 10px rgba(28, 49, 72, 0.08); }
+.catalog .notes-cover { display: block; width: 6.75rem; height: auto; }
 .catalog footer { margin-top: 1.6rem; padding-top: 1.1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; }
 @media (max-width: 820px) {
   .catalog main { width: min(680px, calc(100% - 2rem)); padding: 2.5rem 0; }
@@ -878,6 +880,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 @media (max-width: 420px) {
   .catalog article { grid-template-columns: minmax(0, 1fr) 4.75rem; gap: 0.7rem; padding: 1.15rem; }
   .catalog .qr { width: 4.75rem; height: 4.75rem; }
+  .catalog .notes-cover { width: 4.75rem; }
   .catalog h2 { font-size: 1.35rem; }
 }
 
@@ -1032,7 +1035,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         </label>
         <label class="check-row solo-check">
           <input id="grid-toggle" type="checkbox" checked />
-          <span>Afficher la grille</span>
+          <span>Afficher la grille (1 carré = 1 m)</span>
         </label>
       </section>
 
@@ -1094,24 +1097,29 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     projection: [217, 104, 59],
   });
 
+  // Rescale the former 500 m squares to physical 1 m squares.
+  const LENGTH_SCALE = 500;
+  const BALLISTIC_TIME_SCALE = 1 / Math.sqrt(LENGTH_SCALE);
+  const GRID_STEP_METRES = 1;
+
   const PARAMETERS = Object.freeze({
-    R: 1000,
-    x0: 2000,
-    y0: 2000,
+    R: 2,
+    x0: 4,
+    y0: 4,
     omega: 0.5,
     alpha: 0.02,
     theta0Deg: 0,
-    v0: 200,
+    v0: Math.sqrt(80),
     launchAngleDeg: 60,
     g: 9.81,
   });
 
-  const DEFAULT_VIEW = Object.freeze({ xmin: 0, xmax: 4000, ymin: 0, ymax: 4000 });
+  const DEFAULT_VIEW = Object.freeze({ xmin: 0, xmax: 8, ymin: 0, ymax: 8 });
   const CLOSED_PERIOD = 2 * Math.PI / PARAMETERS.omega;
   const MCUA_TURN_DURATION = (Math.sqrt(PARAMETERS.omega ** 2 + 4 * Math.PI * PARAMETERS.alpha) - PARAMETERS.omega) / PARAMETERS.alpha;
   const MCUA_DURATION = 2 * MCUA_TURN_DURATION;
   const BALLISTIC_DURATION = 2 * PARAMETERS.v0 * Math.sin(PARAMETERS.launchAngleDeg * Math.PI / 180) / PARAMETERS.g;
-  const AXIS_TICK_STEP = 2000;
+  const AXIS_TICK_STEP = GRID_STEP_METRES;
 
   const ARROW = Object.freeze({
     shaftWidthPx: 3.2,
@@ -1146,7 +1154,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\sin(2\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}},\qquad \theta_0=0`,
         String.raw`T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
@@ -1170,7 +1178,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\sin(3\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}},\qquad \theta_0=0`,
         String.raw`n=3,\qquad T=\frac{2\pi}{\omega}=4\pi\,\mathrm s`,
       ],
@@ -1195,7 +1203,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\sin\!\bigl(\varphi(t)\bigr)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega_0=0.5\,\mathrm{rad\,s^{-1}},\qquad \alpha=0.02\,\mathrm{rad\,s^{-2}}`,
         String.raw`\theta_0=0,\qquad \omega(t)=\omega_0+\alpha t`,
         String.raw`T_{\mathrm{tour}}\simeq 10.40\,\mathrm s,\qquad t_{\max}=2T_{\mathrm{tour}}\simeq 20.80\,\mathrm s`,
@@ -1218,7 +1226,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\cos(\omega t)\sin(\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
@@ -1241,7 +1249,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\sin^3(\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
@@ -1262,7 +1270,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+R\cos(2\omega t)\sin(\omega t)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1000\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
@@ -1279,17 +1287,17 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       label: 'Mouvement balistique',
       duration: BALLISTIC_DURATION,
       closed: false,
-      scaleV: 3.0,
-      scaleA: 25.0,
+      scaleV: 3 * BALLISTIC_TIME_SCALE,
+      scaleA: 25 / LENGTH_SCALE,
       jerk() { return V(0, 0); },
       equations: [
         String.raw`x(t)=x_0+v_0\cos(\theta_0)\,t`,
         String.raw`y(t)=y_0+v_0\sin(\theta_0)\,t-\frac{1}{2}gt^2`,
       ],
       parameters: [
-        String.raw`x_0=y_0=0,\qquad v_0=200\,\mathrm{m\,s^{-1}}`,
+        String.raw`x_0=y_0=0,\qquad v_0=\sqrt{80}\simeq 8.94\,\mathrm{m\,s^{-1}}`,
         String.raw`\theta_0=60^\circ,\qquad g=9.81\,\mathrm{m\,s^{-2}}`,
-        String.raw`T=\frac{2v_0\sin\theta_0}{g}\simeq 35.31\,\mathrm s`,
+        String.raw`T=\frac{2v_0\sin\theta_0}{g}\simeq 1.58\,\mathrm s`,
       ],
       position(t) {
         const { v0, launchAngleDeg, g } = PARAMETERS;
@@ -1310,12 +1318,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+a\bigl(2\sin\tau-\sin2\tau\bigr)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad a=500\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad a=1\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const a = 500;
+        const a = 1;
         const q = omega * t;
         return V(x0 + a * (2 * Math.cos(q) - Math.cos(2 * q)), y0 + a * (2 * Math.sin(q) - Math.sin(2 * q)));
       },
@@ -1333,12 +1341,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+\frac{a\sin\tau\cos\tau}{1+\sin^2\tau}`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad a=1400\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad a=2.8\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const a = 1400;
+        const a = 2.8;
         const q = omega * t;
         const s = Math.sin(q);
         const c = Math.cos(q);
@@ -1359,12 +1367,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+\rho(\tau)\sin\tau`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1400\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2.8\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}},\qquad T=\frac{\pi}{\omega}=2\pi\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const R = 1400;
+        const R = 2.8;
         const q = omega * t;
         const rho = R * Math.cos(5 * q);
         return V(x0 + rho * Math.cos(q), y0 + rho * Math.sin(q));
@@ -1383,14 +1391,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+\rho(\tau)\sin\tau`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad \rho_0=80\,\mathrm m`,
-        String.raw`b=80\,\mathrm m,\qquad T=24\,\mathrm s`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad \rho_0=0.16\,\mathrm m`,
+        String.raw`b=0.16\,\mathrm m,\qquad T=24\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0 } = PARAMETERS;
         const T = 24;
         const tau = 6 * Math.PI * t / T;
-        const rho = 80 + 80 * tau;
+        const rho = 0.16 + 0.16 * tau;
         return V(x0 + rho * Math.cos(tau), y0 + rho * Math.sin(tau));
       },
     },
@@ -1407,14 +1415,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_\mathrm i+a\bigl(1-\cos\tau\bigr)`,
       ],
       parameters: [
-        String.raw`x_\mathrm i=400\,\mathrm m,\qquad y_\mathrm i=650\,\mathrm m`,
-        String.raw`a=500\,\mathrm m,\qquad T=12\,\mathrm s`,
+        String.raw`x_\mathrm i=0.8\,\mathrm m,\qquad y_\mathrm i=1.3\,\mathrm m`,
+        String.raw`a=1\,\mathrm m,\qquad T=12\,\mathrm s`,
       ],
       position(t) {
         const T = 12;
-        const a = 500;
+        const a = 1;
         const tau = 2 * Math.PI * t / T;
-        return V(400 + a * (tau - Math.sin(tau)), 650 + a * (1 - Math.cos(tau)));
+        return V(0.8 + a * (tau - Math.sin(tau)), 1.3 + a * (1 - Math.cos(tau)));
       },
     },
 
@@ -1430,12 +1438,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+a\bigl(2\sin\tau-\sin2\tau\bigr)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad a=430\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad a=0.86\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const a = 430;
+        const a = 0.86;
         const q = omega * t;
         return V(x0 + a * (2 * Math.cos(q) + Math.cos(2 * q)), y0 + a * (2 * Math.sin(q) - Math.sin(2 * q)));
       },
@@ -1453,12 +1461,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+a\bigl(3\sin\tau-\sin3\tau\bigr)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad a=350\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad a=0.7\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const a = 350;
+        const a = 0.7;
         const q = omega * t;
         return V(x0 + a * (3 * Math.cos(q) - Math.cos(3 * q)), y0 + a * (3 * Math.sin(q) - Math.sin(3 * q)));
       },
@@ -1476,14 +1484,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+(R-r)\sin\tau-d\sin(k\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad R=1200\,\mathrm m`,
-        String.raw`r=400\,\mathrm m,\qquad d=650\,\mathrm m,\qquad k=2`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2.4\,\mathrm m`,
+        String.raw`r=0.8\,\mathrm m,\qquad d=1.3\,\mathrm m,\qquad k=2`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const R = 1200;
-        const r = 400;
-        const d = 650;
+        const R = 2.4;
+        const r = 0.8;
+        const d = 1.3;
         const q = omega * t;
         const k = (R - r) / r;
         return V(x0 + (R - r) * Math.cos(q) + d * Math.cos(k * q), y0 + (R - r) * Math.sin(q) - d * Math.sin(k * q));
@@ -1502,12 +1510,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+a\bigl(13\cos\tau-5\cos2\tau-2\cos3\tau-\cos4\tau\bigr)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad a=65\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad a=0.13\,\mathrm m`,
         String.raw`\omega=0.5\,\mathrm{rad\,s^{-1}}`,
       ],
       position(t) {
         const { x0, y0, omega } = PARAMETERS;
-        const a = 65;
+        const a = 0.13;
         const q = omega * t;
         return V(
           x0 + 16 * a * Math.sin(q) ** 3,
@@ -1529,13 +1537,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         String.raw`y(t)=y_0+A\cos\tau\,f(\tau)`,
       ],
       parameters: [
-        String.raw`x_0=y_0=2000\,\mathrm m,\qquad A=300\,\mathrm m`,
+        String.raw`x_0=y_0=4\,\mathrm m,\qquad A=0.6\,\mathrm m`,
         String.raw`T=24\,\mathrm s`,
       ],
       position(t) {
         const { x0, y0 } = PARAMETERS;
         const T = 24;
-        const A = 300;
+        const A = 0.6;
         const tau = 12 * Math.PI * t / T;
         const f = Math.exp(Math.cos(tau)) - 2 * Math.cos(4 * tau) - Math.sin(tau / 12) ** 5;
         return V(x0 + A * Math.sin(tau) * f, y0 + A * Math.cos(tau) * f);
@@ -1561,7 +1569,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     );
     const result = scale(numerator, 1 / (8 * h ** 3));
     for (const axis of Object.keys(result)) {
-      if (Math.abs(result[axis]) < 1e-4) result[axis] = 0;
+      if (Math.abs(result[axis]) < 1e-4 / LENGTH_SCALE) result[axis] = 0;
     }
     return result;
   }
@@ -1574,7 +1582,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         maximum = Math.max(maximum, norm(jerkAt(item, item.duration * i / 384)));
       }
       // Fixed for each trajectory: arrow length still follows |j(t)|.
-      jerkScales.set(item, maximum > 1e-4 ? 0.65 * PARAMETERS.R / maximum : 1);
+      jerkScales.set(item, maximum > 1e-4 / LENGTH_SCALE ? 0.65 * PARAMETERS.R / maximum : 1);
     }
     return jerkScales.get(item);
   }
@@ -1582,14 +1590,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   // Physical geometry only: independent of camera and vector display scales.
   function osculatingGeometry(data) {
     const speed = norm(data.velocity);
-    if (!Number.isFinite(speed) || speed <= 1e-2) {
+    if (!Number.isFinite(speed) || speed <= 1e-2 / LENGTH_SCALE) {
       return { defined: false, reason: 'stationary' };
     }
     const tangent = scale(data.velocity, 1 / speed);
     const normalAcceleration = sub(data.acceleration, scale(tangent, dot(data.acceleration, tangent)));
     const normalMagnitude = norm(normalAcceleration);
     // Suppress finite-difference roundoff at straight segments and inflections.
-    const tolerance = Math.max(1e-5, norm(data.acceleration) * 1e-7);
+    const tolerance = Math.max(1e-5 / LENGTH_SCALE, norm(data.acceleration) * 1e-7);
     if (!Number.isFinite(normalMagnitude) || normalMagnitude <= tolerance) {
       return { defined: false, reason: 'straight' };
     }
@@ -1785,9 +1793,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   const currentTrajectory = () => TRAJECTORIES[state.trajectoryKey];
   const trajectoryTimeMax = (item) => item.closed ? 2 * item.duration : item.duration;
   const axisTickValues = (minimum, maximum) => {
-    const first = Math.ceil((minimum - 1e-9) / AXIS_TICK_STEP) * AXIS_TICK_STEP;
+    // Keep every grid square at 1 m; only thin the numbers when space is tight.
+    const pixelsPerMetre = plotRect.width / (view.xmax - view.xmin);
+    const step = AXIS_TICK_STEP * Math.max(1, Math.ceil(38 / pixelsPerMetre));
+    const first = Math.ceil((minimum - 1e-9) / step) * step;
     const values = [];
-    for (let value = first; value <= maximum + 1e-9; value += AXIS_TICK_STEP) {
+    for (let value = first; value <= maximum + 1e-9; value += step) {
       values.push(Math.abs(value) < 1e-9 ? 0 : value);
     }
     return values;
@@ -1955,7 +1966,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     }
 
     const speed = norm(velocity);
-    const decompositionDefined = speed > 1e-2;
+    const decompositionDefined = speed > 1e-2 / LENGTH_SCALE;
     let tangential = V(0, 0);
     let centripetal = V(0, 0);
     if (decompositionDefined) {
@@ -1999,8 +2010,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     clipToPlot(() => {
       if (state.grid) {
-        const span = view.xmax - view.xmin;
-        const step = span <= 5000 ? 500 : span <= 9000 ? 1000 : 2000;
+        const step = GRID_STEP_METRES;
         const xStart = Math.ceil(view.xmin / step) * step;
         const yStart = Math.ceil(view.ymin / step) * step;
         ctx.save();
@@ -2314,8 +2324,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     for (const [key, vector] of Object.entries(vectors)) {
       const elements = readoutElements[key];
       const magnitude = norm(vector).toFixed(2);
-      const componentX = vector.x.toFixed(1);
-      const componentY = vector.y.toFixed(1);
+      const componentX = vector.x.toFixed(2);
+      const componentY = vector.y.toFixed(2);
 
       elements.root.classList.toggle('visible', selected[key]);
       setMathDigits(elements.magnitude, magnitude);
@@ -2523,7 +2533,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     const anchor = screenToWorld(cursor);
     const currentSpan = view.xmax - view.xmin;
     const factor = Math.exp(event.deltaY * 0.0012);
-    const newSpan = clamp(currentSpan * factor, 500, 9000);
+    const newSpan = clamp(currentSpan * factor, 1, 18);
     const xFraction = (cursor.x - plotRect.left) / plotRect.width;
     const yFraction = (plotRect.bottom - cursor.y) / plotRect.height;
 

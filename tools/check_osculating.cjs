@@ -58,7 +58,7 @@ function load(dimensions) {
   `;
   if (dimensions === 2) {
     pure += String.raw`
-      const view = { xmin: 0, xmax: 4000, ymin: 0, ymax: 4000 };
+      const view = { ...DEFAULT_VIEW };
       const plotRect = { left: 110, right: 710, top: 45, bottom: 645, width: 600, height: 600 };
     `;
     pure += fn('worldToScreen') + fn('clipToPlot') + fn('drawArrow');
@@ -86,7 +86,7 @@ function load(dimensions) {
       },
       drawTestArrow(v) {
         commands.length = 0;
-        if (typeof drawArrow === 'function') drawArrow(V(2000, 2000), v, 1, '#2775b6');
+        if (typeof drawArrow === 'function') drawArrow(V(4, 4), v, 1, '#2775b6');
         return commands;
       },
       project: PROJECT
@@ -103,7 +103,7 @@ function load(dimensions) {
 for (const dimensions of [2, 3]) {
   const app = load(dimensions);
   const { V, add, sub, scale, dot, norm, osculatingGeometry: geometry, osculatingPoint: point } = app;
-  const fixtureScale = dimensions === 3 ? 1/2000 : 1;
+  const fixtureScale = dimensions === 3 ? 1/2000 : 1/500;
   const metric = v => scale(v,fixtureScale);
   const data = Object.fromEntries(Object.entries({
     position: V(3000, 2000, 2000), velocity: V(0, 100, 0),
@@ -112,13 +112,13 @@ for (const dimensions of [2, 3]) {
   const circle = geometry(data);
   if (dimensions === 2) {
     for (const length of [21, 35, 200, 1500]) for (let i = 0; i < 16; i++) {
-      const angle = i * Math.PI / 8, v = V(length * Math.cos(angle), length * Math.sin(angle));
+      const angle = i * Math.PI / 8, v = metric(V(length * Math.cos(angle), length * Math.sin(angle)));
       const commands = app.drawTestArrow(v);
       assert.equal(commands.filter(c => c[0] === 'beginPath').length, 1);
       assert.equal(commands.filter(c => c[0] === 'fill').length, 1);
       assert.equal(commands.filter(c => c[0] === 'stroke').length, 0);
       const vertices = commands.filter(c => c[0] === 'moveTo' || c[0] === 'lineTo').map(c => V(c[1], c[2]));
-      const a = app.project(V(2000, 2000)), b = app.project(add(V(2000, 2000), v)), d = sub(b, a), magnitude = norm(d);
+      const a = app.project(V(4, 4)), b = app.project(add(V(4, 4), v)), d = sub(b, a), magnitude = norm(d);
       assert.equal(vertices.length, 7, 'Single connected shaft and swept head');
       close(norm(sub(vertices[3], b)), 0);
       for (const p of vertices) {
@@ -162,7 +162,7 @@ for (const dimensions of [2, 3]) {
   for (const t of [0, .1, 2, 5, mcua.duration]) {
     const c = geometry(app.derivatives(mcua, t));
     assert(c.defined);
-    const expected = dimensions === 2 ? 1000 : 1;
+    const expected = dimensions === 2 ? 2 : 1;
     close(c.radius, expected, expected * .002);
   }
   const rest = { closed: false, duration: 10, position: () => V(2000, 2000, 2000) };

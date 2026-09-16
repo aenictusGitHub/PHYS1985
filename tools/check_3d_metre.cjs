@@ -25,8 +25,16 @@ assert(circle.defined);close(circle.radius,1,1e-5);
 const ballistic=api.TRAJECTORIES.ballistic;
 close(ballistic.duration,10*Math.PI/Math.sqrt(2000));
 const launch=api.derivatives(ballistic,0);
-close(launch.speed,Math.sqrt(20));close(launch.acceleration.y,-9.81,1e-7);
-close(launch.position.z,1);assert.equal(Math.hypot(...Object.values(launch.jerk)),0);
+close(launch.speed,Math.sqrt(20));close(launch.acceleration.z,-9.81,1e-7);
+close(launch.position.y,1);close(launch.position.z,0);
+assert.equal(Math.hypot(...Object.values(launch.jerk)),0);
+for(let i=0;i<=96;i++){
+  const data=api.derivatives(ballistic,ballistic.duration*i/96);
+  close(data.position.y,1);close(data.velocity.y,0);close(data.acceleration.x,0);
+  close(data.acceleration.y,0);close(data.acceleration.z,-9.81,1e-7);
+}
+assert(ballistic.equations.includes(String.raw`y(t)=y_0`));
+assert(ballistic.equations.some(p=>p.startsWith('z(t)=')&&p.includes(String.raw`-\frac{1}{2}gt^2`)));
 assert(ballistic.parameters.some(p=>p.includes('g=9.81')));
 assert(Object.values(api.TRAJECTORIES).every(item=>item.parameters.every(p=>!p.includes('2000'))));
 if(process.env.REFERENCE_3D_ZIP){
@@ -37,6 +45,9 @@ if(process.env.REFERENCE_3D_ZIP){
     close(item.scaleV,old.scaleV*timeScale);close(item.scaleA,old.scaleA*timeScale**2);
     for(let i=0;i<=64;i++){
       const time=old.duration*i/64,before=previous.derivatives(old,time),after=api.derivatives(item,time*timeScale);
+      // The ballistic plane has since been corrected: gravity points along -z.
+      if(key==='ballistic')for(const field of ['position','velocity','acceleration','jerk'])
+        [before[field].y,before[field].z]=[before[field].z,before[field].y];
       for(const [field,order] of [['position',0],['velocity',1],['acceleration',2],['jerk',3]])
         for(const axis of ['x','y','z'])close(after[field][axis],before[field][axis]/2000/timeScale**order,order>=2?1e-5:2e-6);
       const p=api.scene(after.position),q=previous.scene(before.position);
@@ -47,4 +58,4 @@ if(process.env.REFERENCE_3D_ZIP){
     }
   }
 }
-console.log('PASS: 17 metre-scale trajectories, SI derivatives, 1 m circle, physical gravity and unchanged projected geometry.');
+console.log('PASS: 17 metre-scale trajectories, SI derivatives, 1 m circle, gravity along -z and metre-scale geometry.');

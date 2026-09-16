@@ -1676,12 +1676,13 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       jerk() { return V(0, 0, 0); },
       equations: [
         String.raw`x(t)=x_0+v_0\cos(\theta_0)t`,
-        String.raw`y(t)=y_0+v_0\sin(\theta_0)t-\frac{1}{2}gt^2`,
-        String.raw`z(t)=z_0`,
+        String.raw`y(t)=y_0`,
+        String.raw`z(t)=z_0+v_0\sin(\theta_0)t-\frac{1}{2}gt^2`,
       ],
       parameters: [
-        String.raw`x_0=y_0=0\,\mathrm{m},\qquad z_0=1\,\mathrm{m}`,
+        String.raw`x_0=z_0=0\,\mathrm{m},\qquad y_0=1\,\mathrm{m}`,
         String.raw`v_0=\sqrt{20}\simeq 4.47\,\mathrm{m\,s^{-1}},\qquad \theta_0=60^\circ,\qquad g=9.81\,\mathrm{m\,s^{-2}}`,
+        String.raw`\vec a=\vec g=-g\,\vec e_z`,
       ],
       position(t) {
         const v0 = Math.sqrt(20);
@@ -1689,8 +1690,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         const g = 9.81;
         return V(
           v0 * t * Math.cos(theta),
+          PARAMETERS.y0,
           v0 * t * Math.sin(theta) - 0.5 * g * t * t,
-          PARAMETERS.z0,
         );
       },
     },
