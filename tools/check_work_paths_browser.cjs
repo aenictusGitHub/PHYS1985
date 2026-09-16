@@ -9,15 +9,19 @@ const {chromium}=require('playwright');
     page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(()=>{
       const proto=CanvasRenderingContext2D.prototype;
-      for(const name of ['clearRect','beginPath','moveTo','stroke','arc']){
+      for(const name of ['clearRect','beginPath','moveTo','stroke','fill','arc']){
         const original=proto[name];proto[name]=function(...args){
           if(this.canvas.id==='path-canvas'){
-            if(name==='clearRect')this.canvas.testVectors={arrows:[],bodies:[]};
+            if(name==='clearRect')this.canvas.testVectors={arrows:[],bodies:[],field:[]};
             if(name==='beginPath')this.testOrigin=null;
             if(name==='moveTo'&&!this.testOrigin)this.testOrigin=args;
             if(name==='arc'&&args[2]===7)this.canvas.testVectors?.bodies.push(args.slice(0,2));
-            if(name==='stroke'&&['#7758a6','#d9683b'].includes(this.strokeStyle))
-              this.canvas.testVectors?.arrows.push({origin:this.testOrigin,color:this.strokeStyle});
+            if(name==='stroke'&&['#7758a6','#d9683b'].includes(this.strokeStyle)){
+              const vector={origin:this.testOrigin,color:this.strokeStyle,alpha:this.globalAlpha,width:this.lineWidth};
+              this.canvas.testVectors?.[this.lineWidth<2?'field':'arrows'].push(vector);
+              this.testVector=vector;
+            }
+            if(name==='fill'&&this.testVector){this.testVector.tip=this.testOrigin;this.testVector.length=Math.hypot(...this.testOrigin.map((x,i)=>x-this.testVector.origin[i]));this.testVector=null;}
           }
           return original.apply(this,args);
         };
@@ -39,6 +43,59 @@ const {chromium}=require('playwright');
       }
     };
     await seek(3);await vectorCounts(2);
+    const checkField=async()=>{
+      const rendered=await page.locator('#path-canvas').evaluate(el=>el.testVectors);
+      assert(rendered.field.length>10,'The background force field remains visible');
+      assert(rendered.field.every(a=>a.color==='#7758a6'&&a.alpha>=.7&&a.width>=1.5));
+      assert(rendered.arrows.every(a=>a.alpha===1),'Field translucency must not leak into foreground vectors');
+      assert.equal(await page.locator('#path-vector-legend .path-vector-key').first().evaluate(el=>el.style.getPropertyValue('--vector-color')),'#7758a6');
+    };
+    await checkField();const beforeFieldToggle=await number('path-current-w1');
+    await page.uncheck('#path-show-field');assert.equal(await page.locator('#path-canvas').evaluate(el=>el.testVectors.field.length),0);await vectorCounts(2);
+    await page.check('#path-show-field');await checkField();assert.equal(await number('path-current-w1'),beforeFieldToggle);
+    // An intensity change used to be cancelled by division by that same value.
+    // Measure the rendered tips at matching grid points, not only the physics.
+    const setStrength=async value=>page.locator('#path-strength').evaluate((el,value)=>{el.value=String(value);el.dispatchEvent(new Event('input',{bubbles:true}));},value);
+    const snapshot=()=>page.locator('#path-canvas').evaluate(el=>el.testVectors);
+    for(const width of [1440,390]){
+      await page.setViewportSize({width,height:1000});
+      for(const mode of ['paths','integrals']){
+        await page.selectOption('#motion-mode',mode);
+        for(const field of ['vortex','central','cellular','periodic','gravity']){
+          await page.selectOption('#path-field',field);
+          const low=field==='gravity'?5:.5;
+          await setStrength(low);await seek(3);const a=await snapshot();
+          await setStrength(2*low);await seek(3);const b=await snapshot();
+          assert(a.field.length>10);
+          for(const vector of a.field){
+            const match=b.field.find(v=>Math.hypot(...v.origin.map((x,i)=>x-vector.origin[i]))<1e-6);
+            assert(match);assert(Math.abs(match.length/vector.length-2)<1e-6,'Doubling intensity doubles background arrows');
+          }
+          const af=a.arrows.filter(v=>v.color==='#7758a6'),bf=b.arrows.filter(v=>v.color==='#7758a6');
+          assert(af.length>0);assert.equal(af.length,bf.length);
+          for(let i=0;i<af.length;i++)assert(Math.abs(bf[i].length/af[i].length-2)<1e-6,'Foreground force uses a fixed scale too');
+          assert.deepEqual(a.bodies,b.bodies,'Intensity does not change the imposed paths or framing');
+          const av=a.arrows.filter(v=>v.color==='#d9683b'),bv=b.arrows.filter(v=>v.color==='#d9683b');
+          assert.deepEqual(av,bv,'Imposed velocities remain unchanged');
+          if(process.env.SCREENSHOT_DIR&&field==='vortex'&&mode==='paths'){
+            await setStrength(.2);await seek(3);await page.locator('#path-viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,`field-weak-${width}.png`)});
+            await setStrength(2);await seek(3);await page.locator('#path-viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,`field-strong-${width}.png`)});
+          }
+        }
+        if(mode==='paths')await page.selectOption('#path-experiment','loop');else await page.selectOption('#integral-route','loop');
+        assert(await page.locator('#path-reverse-row').isVisible());
+        const layout=await page.locator('#path-reverse-row').evaluate(el=>{
+          const r=el.getBoundingClientRect(),text=el.querySelector('span').getBoundingClientRect();
+          return {width:r.width,textWidth:text.width,textHeight:text.height,lineHeight:parseFloat(getComputedStyle(el).lineHeight)};
+        });
+        assert(layout.textWidth>layout.width*.8,'Label uses the available width, not the swatch column');
+        assert(layout.textHeight<=2*layout.lineHeight+1,'No word-by-word vertical stacking');
+        if(process.env.SCREENSHOT_DIR&&mode==='paths')await page.locator('#path-reverse-row').screenshot({path:path.join(process.env.SCREENSHOT_DIR,`contour-label-${width}.png`)});
+        if(mode==='paths')await page.selectOption('#path-experiment','compare');else await page.selectOption('#integral-route','0');
+      }
+    }
+    await page.setViewportSize({width:1440,height:1000});await page.selectOption('#motion-mode','paths');await page.selectOption('#path-field','vortex');await seek(3);
+    if(process.env.SCREENSHOT_DIR)await page.locator('#path-viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,'work-field-desktop.png')});
     const legend=await page.locator('#path-vector-legend').boundingBox();
     await seek(6);await vectorCounts(2);assert.deepEqual(await page.locator('#path-vector-legend').boundingBox(),legend,'Legend must not follow the particles');
     await page.uncheck('#path-show-vectors');await vectorCounts(0);assert(!(await page.locator('#path-vector-legend').isVisible()));
@@ -62,6 +119,7 @@ const {chromium}=require('playwright');
     for(const field of ['gravity','periodic','cellular','central','vortex']){
       await page.selectOption('#path-field',field);
       await page.click('#path-end');
+      await checkField();
       assert(Number.isFinite(await number('path-w1')));
       assert.equal(await page.locator('#path-field-formula > div:visible').count(),1);
       assert.equal(await page.locator('mjx-merror,[data-mml-node="merror"]').count(),0);
@@ -77,6 +135,8 @@ const {chromium}=require('playwright');
     if(process.env.SCREENSHOT_DIR)await page.locator('#path-visualization').screenshot({path:path.join(process.env.SCREENSHOT_DIR,'work-paths-desktop.png')});
     await page.setViewportSize({width:390,height:844});
     await page.waitForTimeout(120);
+    await checkField();
+    if(process.env.SCREENSHOT_DIR)await page.locator('#path-viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,'work-field-mobile.png')});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'No mobile horizontal overflow');
     const mobileLegend=await page.locator('#path-vector-legend').boundingBox(),scene=await page.locator('#path-viewport').boundingBox();
     assert(mobileLegend.x>=scene.x&&mobileLegend.x+mobileLegend.width<=scene.x+scene.width,'Mobile legend fits within the scene');
@@ -97,7 +157,7 @@ const {chromium}=require('playwright');
       await page.selectOption('#path-field',field);await page.selectOption('#integral-route',route);
       for(const t of [0,5.42,10,20]){await seek(t);await checkIntegrals();}
     }
-    await page.selectOption('#path-field','vortex');await page.selectOption('#integral-route','1');await seek(7);await vectorCounts(1);
+    await page.selectOption('#path-field','vortex');await page.selectOption('#integral-route','1');await seek(7);await vectorCounts(1);await checkField();
     if(process.env.SCREENSHOT_DIR)await page.locator('#path-visualization').screenshot({path:path.join(process.env.SCREENSHOT_DIR,'work-integrals-desktop.png')});
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(120);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Integral mode mobile width');

@@ -521,6 +521,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .path-button-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; }
 .phys-app .path-transport { grid-template-columns: 1fr 1.3fr; }
 #path-reverse-row { margin-top: .8rem; }
+#path-controls .check-row { grid-template-columns: auto minmax(0,1fr); }
+#path-controls .check-row > span { min-width: 0; }
 #path-controls .equation-section p { overflow-wrap: anywhere; }
 @container workspace (max-width: 760px) {
   .path-grid { grid-template-columns: minmax(0,1fr); }
@@ -1159,10 +1161,11 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
             <button id="path-swap" type="button">Échanger A et B</button>
             <button id="path-defaults" type="button">Position initiale</button>
           </div>
-          <label class="check-row" id="path-reverse-row" hidden><input id="path-reverse" type="checkbox" />Inverser le sens du contour</label>
+          <label class="check-row" id="path-reverse-row" hidden><input id="path-reverse" type="checkbox" /><span>Inverser le sens du contour</span></label>
           <label class="field-label compact" for="path-strength" id="path-strength-label">Intensité du champ</label>
           <input id="path-strength" type="range" min="0.2" max="2" step="0.1" value="1" />
           <output class="dynamic-math-output"><span id="path-strength-value" class="math-digits"></span><span id="path-strength-unit">\(\,\mathrm N\)</span><span id="path-gravity-unit" hidden>\(\,\mathrm{m\,s^{-2}}\)</span></output>
+          <p class="microcopy block-note">À échelle fixe, la longueur des flèches varie avec l’intensité du champ.</p>
           <p id="path-mass-note" class="microcopy block-note" hidden>Pour la pesanteur, \(m=1\,\mathrm{kg}\), \(\vec F=-mg\,\vec e_z\).</p>
         </section>
         <section class="panel-section">
@@ -1182,7 +1185,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         </section>
         <section class="panel-section">
           <h2>Affichage</h2>
-          <label class="check-row"><input id="path-show-field" type="checkbox" checked />Champ de force</label>
+          <label class="check-row"><input id="path-show-field" type="checkbox" checked /><span>Champ de force</span></label>
           <label class="check-row"><input id="path-show-vectors" type="checkbox" checked /><span id="path-vectors-description">Force et vitesse sur les deux chemins</span></label>
         </section>
         <section class="panel-section equation-section">
@@ -1485,7 +1488,7 @@ const ImposedWork = (() => {
 
 function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onModeChange}) {
   const $=id=>document.getElementById(id), M=ImposedWork;
-  const colors=['#2775b6','#b5688b'], ink='#233449', muted='#607185', loopColor='#268576';
+  const colors=['#2775b6','#b5688b'], ink='#233449', muted='#607185', loopColor='#268576', forceColor='#7758a6';
   const defaults=()=>({a:[Math.PI-1.5,1.5*Math.PI-.4],b:[Math.PI+2,1.5*Math.PI+.6],bend:1.3,fieldId:'vortex',forceScale:1,mass:1});
   let config=defaults(), data, active=false, playing=false, time=0, duration=10, frame=0, last=null, drag=null;
   let tickKey='',sceneTickKey='',lastStatus='';
@@ -1493,6 +1496,9 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
   const integralMode=()=>$('motion-mode').value==='integrals';
   const mode=()=>integralMode()?($('integral-route').value==='loop'?'loop':'single'):$('path-experiment').value;
   const reversed=()=>$('path-reverse').checked;
+  // Fixed reference values, not the current slider value: changing intensity
+  // must change arrow lengths, for both the field and the particle's force.
+  const forceReference=()=>config.fieldId==='gravity'?config.mass*9.81:1;
   const numeric=(id,x,n=3)=>setMathDigits($(id),Math.abs(x)<.5*10**(-n)?(0).toFixed(n):x.toFixed(n));
   const fmt=x=>Math.abs(x)<.0005?'0.000':x.toFixed(3);
   function line(ctx,points,color,width=2,dash=[]) {
@@ -1548,11 +1554,15 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
     }
     sceneTickKey=key;
     if($('path-show-field').checked){
-      const step=Math.max(.55,34/t.scale), ref=config.fieldId==='gravity'?config.mass*config.forceScale:config.forceScale*Math.SQRT2;
+      const step=Math.max(.55,34/t.scale), ref=forceReference()*(config.fieldId==='gravity'?1:Math.SQRT2);
+      // Same violet as the particle's force; smaller, slightly translucent
+      // arrows distinguish the background field without making it disappear.
+      c.save();c.globalAlpha=.72;
       for(let x=Math.ceil(first[0]/step)*step;x<=end[0];x+=step)for(let y=Math.ceil(first[1]/step)*step;y<=end[1];y+=step){
-        const f=forceAt(x,y,0,config), p=t.to([x,y]), factor=20/ref;
-        drawArrow(c,...p,f.x*factor,-f.y*factor,{color:'rgba(38,133,118,.30)',lineWidth:1,headLength:4});
+        const f=forceAt(x,y,0,config), p=t.to([x,y]), factor=24/ref;
+        drawArrow(c,...p,f.x*factor,-f.y*factor,{color:forceColor,lineWidth:1.5,headLength:5});
       }
+      c.restore();
     }
     data.routes.forEach((route,k)=>{
       if(mode()==='single'&&k!==Number($('integral-route').value))return;
@@ -1580,7 +1590,7 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
     position('path-a',t.to(config.a).map((v,i)=>v+(i===1?-25:0)));position('path-b',t.to(config.b).map((v,i)=>v+(i===1?-25:0)));
     // Both particles use the same force and velocity scales. The fixed legend
     // replaces moving labels and their leader lines without changing geometry.
-    const ref=config.fieldId==='gravity'?config.mass*config.forceScale:config.forceScale;
+    const ref=forceReference();
     const maxSpeed=data.maxD*(mode()==='loop'?2:1)/duration;
     const velocityScale=Math.min(90,Math.min(w,h)*.25/Math.max(.01,maxSpeed));
     const visible=$('path-show-vectors').checked;
@@ -1591,7 +1601,7 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
         if(Math.hypot(...d)<2)return;
         // Keep a linear scale over the whole experiment (no per-vector normalization).
         // The wider force remains readable if the two vectors become collinear.
-        drawArrow(c,...p,...d,{color:k?'#d9683b':'#7758a6',lineWidth:k?2.5:3.5,headLength:k?9:12});
+        drawArrow(c,...p,...d,{color:k?'#d9683b':forceColor,lineWidth:k?2.5:3.5,headLength:k?9:12});
       });
     }
   }
@@ -1676,7 +1686,7 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
   function drawIntegrals(q) {
     const model=getIntegrals(),s=model.sample(q);
     drawIntegralPlot('time',model.timePoints,{x:s.t,y:s.power},duration,'#2775b6');
-    drawIntegralPlot('space',model.spacePoints,{x:s.length,y:s.ft},model.totalLength,'#7758a6');
+    drawIntegralPlot('space',model.spacePoints,{x:s.length,y:s.ft},model.totalLength,forceColor);
     numeric('integral-wtime',s.timeWork,6);numeric('integral-wspace',s.spaceWork,6);numeric('integral-error',s.error,6);numeric('integral-distance',s.length,3);
     $('integral-error').dataset.raw=String(s.error);
   }
