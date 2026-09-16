@@ -35,9 +35,10 @@ canvas { display:block; width:100%; height:100%; }
 .readout-card { border-top:2px solid var(--card-color) !important; }
 .readout-card strong,.readout-card small { display:block; }
 .readout-card small { color:var(--muted); }
-.insight-panel { background:white; border:1px solid var(--line); border-radius:var(--radius); padding:1rem 1.2rem; margin:.85rem 0; }
-.insight-panel h2 { font:600 1.1rem var(--title-font); margin:0; }
-.insight-panel p { font-size:var(--text-ui); line-height:1.55; color:var(--muted); margin:.6rem 0; }
+.insight-panel { background:white;align-self:start;min-width:0; }
+.insight-content { padding:.5rem 1.2rem 1rem; }
+.insight-content p { font-size:var(--text-ui);line-height:1.55;color:var(--muted);margin:.6rem 0; }
+.insight-content .microcopy { font-size:var(--text-secondary); }
 .force-comparison { max-width:32rem; margin:.9rem 0; }
 .force-comparison>div { display:grid; grid-template-columns:4rem 1fr; gap:.5rem; align-items:center; margin:.5rem 0; font-size:var(--text-ui); }
 .force-comparison i { display:block; height:.45rem; border-radius:.15rem; background:#2775b6; }
@@ -52,8 +53,11 @@ canvas { display:block; width:100%; height:100%; }
 .phys-app select:disabled { opacity:.7; }
 .tension-key { display:flex; flex-wrap:wrap; gap:.6rem 1.2rem; padding-top:.4rem; font-size:var(--text-formula); color:#7758a6; }
 .dynamic-legend { position:absolute; top:1rem; right:1rem; font-size:var(--text-ui); color:var(--muted); }
-.scene-layout { container:atwood-scene / inline-size; }
-.scene-layout.atwood-layout { display:grid;grid-template-columns:minmax(0,1.7fr) minmax(17rem,1fr);gap:.85rem; }
+.scene-layout { container:pulley-scene / inline-size;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(17rem,1fr);gap:.85rem; }
+.scene-sidebar { display:flex;flex-direction:column;gap:.85rem;min-width:0;align-self:start; }
+.scene-sidebar>.visual-card { width:100%; }
+.motion-card { align-self:start; }
+.atwood-layout>.scene-sidebar { grid-column:1 / -1; }
 .atwood-energy { background:#fff; }
 /* Same vertical meter and neutral legend as the mechanical-energy app. */
 .balance-content { min-height:340px;display:flex;gap:1.2rem;align-items:center;padding:1.25rem; }
@@ -73,8 +77,8 @@ canvas { display:block; width:100%; height:100%; }
 .energy-total>div { display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;margin-top:.6rem;font-size:var(--text-value); }
 .energy-total output { flex-shrink:0; }
 .energy-reference { margin:.7rem 0 0;padding:0 1.25rem 1rem;color:var(--muted); }
-@container atwood-scene (max-width:44rem) { .atwood-layout>.motion-card,.atwood-layout>.atwood-energy { grid-column:1 / -1; } }
-@media(max-width:1100px) { .scene-layout.atwood-layout { grid-template-columns:1fr; } }
+@container pulley-scene (max-width:44rem) { .scene-layout>.visual-card,.scene-layout>.scene-sidebar { grid-column:1 / -1; } }
+@media(max-width:1100px) { .scene-layout { grid-template-columns:1fr; } }
 @media(max-width:1250px) { .phys-app[data-app="pulleys"] .readout-panel { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:480px) { .scene-wrap { height:540px; } }
 
@@ -484,15 +488,20 @@ const PulleyPhysics=(()=>{
   const models=['fixed','mobile','tackle'];
   const allModels=[...models,'atwood'];
   const defaults={model:'tackle',pairs:2,mass:10,g:9.81,height:.5,speed:.25,mode:'prescribed',mass2:16,effort:1.25,inertia:false,pulleyMass:2};
+  // I/R² = mp/2 = m1 + m2: rotation receives half of the kinetic energy.
+  const atwoodDefaults=Object.freeze({mass:1,mass2:3,inertia:true,pulleyMass:8});
   const ATWOOD_HEIGHT=20,ATWOOD_MAX_HEIGHT=20;
+  const FIXED_HEIGHT=5,FIXED_MAX_HEIGHT=20;
+  const defaultHeight=model=>model==='atwood'?ATWOOD_HEIGHT:model==='fixed'?FIXED_HEIGHT:defaults.height;
+  const maxHeight=model=>model==='atwood'?ATWOOD_MAX_HEIGHT:model==='fixed'?FIXED_MAX_HEIGHT:1;
   function parameters(input={}){
     if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).some(k=>!Object.hasOwn(defaults,k)))throw new Error('Paramètres inconnus.');
-    const p={...defaults,...input};
-    if(p.model==='atwood'&&!Object.hasOwn(input,'height'))p.height=ATWOOD_HEIGHT;
+    const p={...defaults,...(input.model==='atwood'?atwoodDefaults:{}),...input};
+    if(!Object.hasOwn(input,'height'))p.height=defaultHeight(p.model);
     if(p.model==='atwood'&&p.height!==ATWOOD_HEIGHT)throw new Error('La course de la machine d’Atwood est fixée à 20 m.');
     if(!allModels.includes(p.model)||!['prescribed','dynamic'].includes(p.mode)||typeof p.inertia!=='boolean'||!Number.isInteger(p.pairs)||p.pairs<1||p.pairs>4||
       ![p.mass,p.g,p.height,p.speed].every(Number.isFinite)||p.mass<1||p.mass>50||
-      p.g<1||p.g>20||p.height<.2||p.height>(p.model==='atwood'?ATWOOD_MAX_HEIGHT:1)||p.speed<.05||p.speed>1||
+      p.g<1||p.g>20||p.height<.2||p.height>maxHeight(p.model)||p.speed<.05||p.speed>1||
       ![p.mass2,p.effort,p.pulleyMass].every(Number.isFinite)||p.mass2<1||p.mass2>50||p.effort<0||p.effort>2||p.pulleyMass<.1||p.pulleyMass>10)throw new Error('Paramètres hors limites.');
     return p;
   }
@@ -566,7 +575,9 @@ const PulleyPhysics=(()=>{
     const n=ratio(p),q=Math.max(0,Math.min(n*p.height,pull)),rise=q/n;
     const r=Math.max(9,Math.min(22,(w-100)/(p.model==='tackle'?4*p.pairs+4:8)));
     const top=95,maxPull=n*p.height;
-    const scale=Math.min(110,(h-top-2*r-200)/(p.model==='mobile'?maxPull:maxPull+p.height));
+    // The fixed pulley uses the full safe vertical travel, with a spatial
+    // scale chosen before playback. The body and the force arrows stay in view.
+    const scale=p.model==='fixed'?(h-108-(top+2*r+65))/p.height:Math.min(110,(h-top-2*r-200)/(p.model==='mobile'?maxPull:maxPull+p.height));
     const moving=[],fixed=[],legs=[],arcs=[];
     let load,handle,anchor,bar=null,initialLoad;
     if(p.model==='fixed'){
@@ -618,7 +629,7 @@ const PulleyPhysics=(()=>{
     for(const kind of ['fixed','moving'])g[kind].forEach((wheel,i)=>wheel.angle-=initial[kind][i].angle);
     return g;
   }
-  return {models,allModels,defaults,ATWOOD_HEIGHT,ATWOOD_MAX_HEIGHT,parameters,ratio,Experiment,DynamicExperiment,dynamicCoefficients,geometry,dynamicGeometry};
+  return {models,allModels,defaults,atwoodDefaults,ATWOOD_HEIGHT,ATWOOD_MAX_HEIGHT,FIXED_HEIGHT,FIXED_MAX_HEIGHT,defaultHeight,maxHeight,parameters,ratio,Experiment,DynamicExperiment,dynamicCoefficients,geometry,dynamicGeometry};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=PulleyPhysics;
 
@@ -651,6 +662,12 @@ async function startPulleyApp(){
     }
     function pause(){state.playing=false;state.last=null;if(state.frame)cancelAnimationFrame(state.frame);state.frame=0;$('play').textContent='Lire';$('play').setAttribute('aria-pressed','false');}
     const dynamic=()=>state.sim instanceof PP.DynamicExperiment;
+    function changedParameters(changes){
+      const switching=changes.model!==undefined&&changes.model!==state.sim.p.model;
+      const p={...state.sim.p,...(switching&&changes.model==='atwood'?PP.atwoodDefaults:{}),...changes};
+      if(switching&&!Object.hasOwn(changes,'height')&&(['atwood','fixed'].includes(p.model)||['atwood','fixed'].includes(state.sim.p.model)))p.height=PP.defaultHeight(p.model);
+      return p;
+    }
     function configure(p){const next=p.mode==='dynamic'||p.model==='atwood'?new PP.DynamicExperiment(p):new PP.Experiment(p);pause();state.drag=null;state.sim=next;sync();render();}
     function restart(){configure(state.sim.p);}
     function play(){if(state.sim.done)restart();state.playing=true;state.last=null;$('play').textContent='Pause';$('play').setAttribute('aria-pressed','true');if(!state.frame)state.frame=requestAnimationFrame(frame);}
@@ -658,7 +675,7 @@ async function startPulleyApp(){
     function frame(now){state.frame=0;if(!state.playing)return;if(state.last!==null)state.sim.advance(Math.min(.1,Math.max(0,(now-state.last)/1000))*Number($('playback').value));state.last=now;if(state.sim.done)pause();render();if(state.playing)state.frame=requestAnimationFrame(frame);}
     function sync(){
       const p=state.sim.p,n=state.sim.n,dyn=dynamic(),atwood=p.model==='atwood';
-      $('height').max=atwood?PP.ATWOOD_MAX_HEIGHT:1;$('height').step=atwood?.1:.05;
+      $('height').max=PP.maxHeight(p.model);$('height').step=atwood||p.model==='fixed'?.1:.05;
       $('height-control').hidden=atwood;$('height').disabled=atwood;$('atwood-course-note').hidden=!atwood;
       $('scene-layout').className='scene-layout'+(atwood?' atwood-layout':'');$('atwood-energy').hidden=!atwood;
       if(atwood){
@@ -680,8 +697,7 @@ async function startPulleyApp(){
       $('inertia-label').textContent=p.model==='tackle'?'Inertie des poulies':'Inertie de la poulie';
       caption('pulley-mass-label',p.model==='tackle'?'Masse de chaque poulie ':'Masse de la poulie ','m_p');
       $('inertia-note').textContent=p.model==='tackle'?'Disques homogènes de même rayon. La masse des poulies mobiles est aussi soulevée.':p.model==='mobile'?'Une seule poulie mobile, modélisée par un disque homogène. Sa masse est soulevée avec la charge.':'Une seule poulie fixe, modélisée par un disque homogène. Sa masse intervient uniquement dans l’inertie de rotation.';
-      for(const id of ['acceleration-readout','kinetic-card','rotation-card','balance-card','velocity-option','acceleration-option'])$(id).hidden=!dyn;
-      if(!dyn&&['velocity','acceleration'].includes($('chart').value))$('chart').value='distance';
+      for(const id of ['acceleration-readout','kinetic-card','rotation-card','balance-card'])$(id).hidden=!dyn;
       $('force-comparison').hidden=dyn;$('tension-key').hidden=!dyn;
       caption('mass-label',atwood?'Masse gauche ':'Masse soulevée ',atwood?'m_1':'m');
       caption('height-label',dyn?'Course maximale depuis le départ ':'Hauteur à gagner ','H');
@@ -765,7 +781,7 @@ async function startPulleyApp(){
       if($('forces').checked){
         const leg=g.legs[0],cy=(leg.a[1]+leg.b[1])/2;
         label('scene-labels','tension',tex`\vec T`,leg.a[0]-Math.max(18,font),cy,C.tension);
-        arrow(ctx,[x,y],[x,y+54],C.body,2.7);label('scene-labels','weight',tex`m\vec g`,x+27,y+43,C.body);
+        arrow(ctx,[x,y],[x,y+54],C.body,2.7);label('scene-labels','weight',tex`m\vec g`,state.sim.p.model==='fixed'?x-37:x+27,y+43,C.body);
         const end=[g.handle[0],g.handle[1]+g.direction*54/s.n];arrow(ctx,g.handle,end,C.force,2.7);
         label('scene-labels','effort',tex`\vec F`,g.handle[0]+Math.max(24,font*1.5),(g.handle[1]+end[1])/2,C.force);
       }
@@ -813,7 +829,7 @@ async function startPulleyApp(){
           if($('forces').checked&&leg.support)arrow(ctx,[x,cy+s.tensions[i]*forceScale/2],[x,cy-s.tensions[i]*forceScale/2],C.tension,2.7);
         });
         if($('forces').checked){
-          arrow(ctx,[x,y],[x,y+s.weight*forceScale],C.body,2.8);label('scene-labels','weight',tex`M\vec g`,x+34,y+44,C.body);
+          arrow(ctx,[x,y],[x,y+s.weight*forceScale],C.body,2.8);label('scene-labels','weight',tex`M\vec g`,p.model==='fixed'?x-37:x+34,y+44,C.body);
           const end=[g.handle[0],g.handle[1]+g.direction*s.force*forceScale];arrow(ctx,g.handle,end,C.force,2.8);
           label('scene-labels','effort',tex`\vec F`,g.handle[0]+28,(g.handle[1]+end[1])/2,C.force);
         }
@@ -823,26 +839,27 @@ async function startPulleyApp(){
       label('scene-labels','dynamic-status',status,w-100,30,C.muted,true);
     }
     function legend(){
-      const work=$('chart').value==='work',key=work?'work':'distance';if(state.legend===key)return;state.legend=key;
-      $('chart-title').textContent=work?'Travail et énergie gagnée':'Déplacements au cours du temps';
-      const specs=work?[[tex`W_{\mathrm{app}}`,C.tension,false],[tex`\Delta U`,C.energy,true]]:[[tex`\ell`,C.force,false],['h',C.body,true]];
+      const key=$('chart').value,work=key==='work',velocity=key==='velocity',acceleration=key==='acceleration';if(state.legend===key)return;state.legend=key;
+      $('chart-title').textContent=work?'Travail et énergie gagnée':velocity?'Vitesses au cours du temps':acceleration?'Accélérations au cours du temps':'Déplacements au cours du temps';
+      const specs=work?[[tex`W_{\mathrm{app}}`,C.tension,false],[tex`\Delta U`,C.energy,true]]:velocity?[['u',C.force,false],['v',C.body,true]]:acceleration?[[tex`a_{\mathrm{corde}}`,C.force,false],['a',C.body,true]]:[[tex`\ell`,C.force,false],['h',C.body,true]];
       $('chart-key').replaceChildren(...specs.map(([value,color,dashed])=>{const el=document.createElement('span'),swatch=document.createElement('i'),symbol=document.createElement('span');swatch.style.borderColor=color;swatch.style.borderTopStyle=dashed?'dashed':'solid';math(symbol,value);el.append(swatch,symbol);return el;}));
-      $('chart-note').textContent=work?'Les deux courbes se superposent : le travail fourni devient de l’énergie potentielle. Aucun gain de travail dans le modèle idéal.':'La corde tirée parcourt n fois la montée de la charge. La partie pâle indique la suite du levage. Cliquez sur le graphique pour choisir l’instant.';
+      $('chart-note').textContent=work?'Les deux courbes se superposent : le travail fourni devient de l’énergie potentielle. Aucun gain de travail dans le modèle idéal.':velocity?'La traction impose une vitesse constante à la corde. La charge monte à une vitesse n fois plus faible. Les phases de démarrage et d’arrêt ne sont pas modélisées.':acceleration?'À vitesse prescrite constante, les accélérations de la corde et de la charge sont nulles. Les phases de démarrage et d’arrêt ne sont pas modélisées.':'La corde tirée parcourt n fois la montée de la charge. La partie pâle indique la suite du levage. Cliquez sur le graphique pour choisir l’instant.';
     }
     function drawHistory(s){
       if(dynamic()){drawDynamicHistory(s);return;}
       legend();const {ctx,w,h}=surface('history-canvas'),left=68,right=w-25,top=40,bottom=h-48;if(right<=left)return;
-      const work=$('chart').value==='work',max=work?s.weight*state.sim.p.height:state.sim.n*state.sim.p.height;
+      const chart=$('chart').value,work=chart==='work',velocity=chart==='velocity',acceleration=chart==='acceleration';
+      const max=work?s.weight*state.sim.p.height:velocity?s.pullSpeed:acceleration?1:state.sim.n*state.sim.p.height;
       const base=10**Math.floor(Math.log10(max/4)),step=[1,2,2.5,5,10].find(v=>v*base>=max/4-1e-12)*base,ymax=step*4;
-      const X=t=>left+(right-left)*t/s.duration,Y=v=>bottom-(bottom-top)*v/ymax;
-      const precision=step=>{let d=0;while(d<5&&Math.abs(step*10**d-Math.round(step*10**d))>1e-8)d++;return d;},decimals=precision(step);
-      for(let i=0;i<=4;i++){const value=ymax*i/4,y=Y(value);line(ctx,[[left,y],[right,y]],C.grid);numericLabel('history-labels','y'+i,value,38,y,decimals);}
+      const ymin=acceleration?-ymax:0,X=t=>left+(right-left)*t/s.duration,Y=v=>bottom-(bottom-top)*(v-ymin)/(ymax-ymin);
+      const precision=step=>{let d=0;while(d<5&&Math.abs(step*10**d-Math.round(step*10**d))>1e-8)d++;return d;},decimals=precision((ymax-ymin)/4);
+      for(let i=0;i<=4;i++){const value=ymin+(ymax-ymin)*i/4,y=Y(value);line(ctx,[[left,y],[right,y]],C.grid);numericLabel('history-labels','y'+i,value,38,y,decimals);}
       const count=w<450?2:4;
       const timeDigits=precision(s.duration/count);
       for(let i=0;i<=count;i++){const t=s.duration*i/count,x=X(t);line(ctx,[[x,top],[x,bottom]],C.grid);numericLabel('history-labels','x'+i,t,x,bottom+17,timeDigits);}
-      label('history-labels','unit',work?tex`E\ [\mathrm J]`:tex`d\ [\mathrm m]`,left+26,16,C.muted);label('history-labels','time',tex`t\ [\mathrm s]`,(left+right)/2,h-12,C.muted);
-      const specs=work?[[s.work,max,C.tension,[]],[s.potential,max,C.energy,[6,5]]]:[[s.pull,max,C.force,[]],[s.height,state.sim.p.height,C.body,[6,5]]];
-      for(const [current,final,color,dash]of specs){ctx.globalAlpha=.2;line(ctx,[[X(0),Y(0)],[X(s.duration),Y(final)]],color,2,dash);ctx.globalAlpha=1;line(ctx,[[X(0),Y(0)],[X(s.t),Y(current)]],color,2.5,dash);circle(ctx,X(s.t),Y(current),3,color);}
+      label('history-labels','unit',work?tex`E\ [\mathrm J]`:velocity?tex`v\ [\mathrm{m\,s^{-1}}]`:acceleration?tex`a\ [\mathrm{m\,s^{-2}}]`:tex`d\ [\mathrm m]`,left+40,16,C.muted);label('history-labels','time',tex`t\ [\mathrm s]`,(left+right)/2,h-12,C.muted);
+      const specs=work?[[0,s.work,max,C.tension,[]],[0,s.potential,max,C.energy,[6,5]]]:velocity?[[s.pullSpeed,s.pullSpeed,s.pullSpeed,C.force,[]],[s.loadSpeed,s.loadSpeed,s.loadSpeed,C.body,[6,5]]]:acceleration?[[0,0,0,C.force,[]],[0,0,0,C.body,[6,5]]]:[[0,s.pull,max,C.force,[]],[0,s.height,state.sim.p.height,C.body,[6,5]]];
+      for(const [initial,current,final,color,dash]of specs){ctx.globalAlpha=.2;line(ctx,[[X(0),Y(initial)],[X(s.duration),Y(final)]],color,2,dash);ctx.globalAlpha=1;line(ctx,[[X(0),Y(initial)],[X(s.t),Y(current)]],color,2.5,dash);circle(ctx,X(s.t),Y(current),3,color);}
       line(ctx,[[X(s.t),top],[X(s.t),bottom]],'#899caf',1.2,[3,4]);
     }
     function dynamicSeries(){
@@ -890,11 +907,7 @@ async function startPulleyApp(){
     $('play').addEventListener('click',()=>state.playing?pause():play());$('restart').addEventListener('click',restart);$('reset').addEventListener('click',()=>configure(PP.defaults));
     function changeParameter(key,value){
       if(key==='height'&&state.sim.p.model==='atwood')return;
-      const p={...state.sim.p,[key]:value};
-      if(key==='model'&&value!==state.sim.p.model){
-        if(value==='atwood')p.height=PP.ATWOOD_HEIGHT;
-        else if(state.sim.p.model==='atwood')p.height=PP.defaults.height;
-      }
+      const p=changedParameters({[key]:value});
       // Keep the applied force (in N) when comparing pulley inertia or masses.
       // Only clamp if a new configuration lowers the allowed force range.
       if(dynamic()&&p.model!=='atwood'&&['mass','pairs','inertia','pulleyMass'].includes(key))p.effort=Math.min(2,state.sim.force/PP.dynamicCoefficients(p).threshold);
@@ -941,7 +954,7 @@ async function startPulleyApp(){
     if(document.modelContext?.registerTool){
       const register=tool=>{try{Promise.resolve(document.modelContext.registerTool(tool,{signal:controller.signal})).catch(error=>console.warn('Outil facultatif indisponible.',error));}catch(error){console.warn('Outil facultatif indisponible.',error);}};
       register({name:'read_pulley_experiment',description:'Lire le montage de poulies, ses paramètres et son état instantané.',annotations:{readOnlyHint:true},inputSchema:{type:'object',properties:{},additionalProperties:false},execute:()=>({parameters:{...state.sim.p},state:state.sim.at(),playing:state.playing})});
-      register({name:'configure_pulley_experiment',description:'Choisir le montage et les paramètres visibles. Recommence et met en pause. En dynamique, effort est F/F_eq, entre 0 et 2. Atwood impose le mode dynamique et une course fixe de 20 m.',inputSchema:{type:'object',properties:{model:{type:'string',enum:PP.allModels},mode:{type:'string',enum:['prescribed','dynamic']},pairs:{type:'integer',minimum:1,maximum:4},mass:{type:'number',minimum:1,maximum:50},mass2:{type:'number',minimum:1,maximum:50},height:{type:'number',minimum:.2,maximum:PP.ATWOOD_MAX_HEIGHT,description:'Course maximale en mètres : fixée à 20 pour Atwood, réglable de 0.2 à 1 pour les autres montages.'},speed:{type:'number',minimum:.05,maximum:1},effort:{type:'number',minimum:0,maximum:2},inertia:{type:'boolean'},pulleyMass:{type:'number',minimum:.1,maximum:10}},additionalProperties:false},execute:p=>{if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!['model','pairs','mass','height','speed','mode','mass2','effort','inertia','pulleyMass'].includes(k)))throw new Error('Paramètre inconnu.');const next={...state.sim.p,...p};if(p.model!==undefined&&p.model!==state.sim.p.model&&!Object.hasOwn(p,'height')){if(p.model==='atwood')next.height=PP.ATWOOD_HEIGHT;else if(state.sim.p.model==='atwood')next.height=PP.defaults.height;}configure(next);return {parameters:{...state.sim.p},state:state.sim.at()};}});
+      register({name:'configure_pulley_experiment',description:'Choisir le montage et les paramètres visibles. Recommence et met en pause. En dynamique, effort est F/F_eq, entre 0 et 2. La poulie fixe propose une course de 5 m par défaut, réglable jusqu’à 20 m. Atwood impose le mode dynamique et une course fixe de 20 m. À sa sélection, ses valeurs par défaut sont m1=1 kg, m2=3 kg, mp=8 kg avec inertie, sauf paramètres explicitement fournis.',inputSchema:{type:'object',properties:{model:{type:'string',enum:PP.allModels},mode:{type:'string',enum:['prescribed','dynamic']},pairs:{type:'integer',minimum:1,maximum:4},mass:{type:'number',minimum:1,maximum:50},mass2:{type:'number',minimum:1,maximum:50},height:{type:'number',minimum:.2,maximum:PP.ATWOOD_MAX_HEIGHT,description:'Course maximale en mètres : fixée à 20 pour Atwood, réglable de 0.2 à 20 pour la poulie fixe et de 0.2 à 1 pour la poulie mobile et le palan.'},speed:{type:'number',minimum:.05,maximum:1},effort:{type:'number',minimum:0,maximum:2},inertia:{type:'boolean'},pulleyMass:{type:'number',minimum:.1,maximum:10}},additionalProperties:false},execute:p=>{if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!['model','pairs','mass','height','speed','mode','mass2','effort','inertia','pulleyMass'].includes(k)))throw new Error('Paramètre inconnu.');configure(changedParameters(p));return {parameters:{...state.sim.p},state:state.sim.at()};}});
       register({name:'control_pulley_experiment',description:'Lire, mettre en pause, recommencer ou choisir un instant du levage.',inputSchema:{type:'object',properties:{action:{type:'string',enum:['play','pause','restart','seek']},time:{type:'number',minimum:0}},required:['action'],additionalProperties:false},execute:p=>{if(!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).some(k=>!['action','time'].includes(k))||!['play','pause','restart','seek'].includes(p.action)||p.action==='seek'&&(!Number.isFinite(p.time)||p.time<0||p.time>state.sim.duration)||p.action!=='seek'&&p.time!==undefined)throw new Error('Commande non valide.');if(p.action==='seek')seek(p.time);else if(p.action==='play')play();else if(p.action==='pause')pause();else restart();return {state:state.sim.at(),playing:state.playing};}});
     }
     window.addEventListener('pagehide',()=>{pause();controller.abort();observer.disconnect();});
@@ -1033,6 +1046,18 @@ async function startPulleyApp(){
           <div class="energy-total"><span data-tex="E=K_1+K_2+K_{\mathrm{rot}}+U_1+U_2"></span><div><span>Énergie totale</span><output id="atwood-e"></output></div></div>
           <p class="energy-reference microcopy">Les indices 1 et 2 désignent les masses gauche et droite. Origines : <span data-tex="U_1(0)=U_2(0)=0"></span> ; <span data-tex="E(t)=E(0)"></span>.</p>
         </section>
+        <div id="scene-sidebar" class="scene-sidebar">
+        <section id="insight-panel" class="visual-card insight-panel" aria-labelledby="insight-title">
+          <header class="card-heading"><h2 id="insight-title"></h2></header>
+          <div class="insight-content"><p id="insight"></p><div class="force-comparison" id="force-comparison"><div><span>Poids</span><i id="weight-bar"></i></div><div><span>Effort</span><i id="force-bar"></i></div></div><p class="microcopy" id="energy-note"></p><div id="tension-key" class="tension-key" hidden></div></div>
+        </section>
+        <section id="history-card" class="visual-card history-card" aria-labelledby="chart-title">
+          <header class="card-heading"><h2 id="chart-title">Déplacements au cours du temps</h2><select id="chart" aria-label="Grandeurs du graphique"><option value="distance">Déplacements</option><option value="work">Travail et énergie</option><option value="velocity" id="velocity-option">Vitesses</option><option value="acceleration" id="acceleration-option">Accélérations</option></select></header>
+          <div id="chart-key" class="chart-key"></div>
+          <div id="history" class="history-wrap" role="slider" tabindex="0" aria-label="Instant sur le graphique" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><canvas id="history-canvas" aria-hidden="true"></canvas><div id="history-labels" class="plot-labels" aria-hidden="true"></div></div>
+          <p id="chart-note" class="microcopy scene-note"></p>
+        </section>
+        </div>
         </div>
       <section class="readout-panel" aria-label="Effort et travail">
         <article class="readout-card" style="--card-color:#268576"><span id="force-symbol" data-tex="F=mg/n"></span><strong id="force-value"></strong><small id="force-caption">effort de traction</small></article>
@@ -1042,13 +1067,6 @@ async function startPulleyApp(){
         <article id="kinetic-card" class="readout-card" style="--card-color:#2775b6" hidden><span data-tex="K_{\mathrm{trans}}+K_{\mathrm{rot}}"></span><strong id="kinetic-value"></strong><small>énergie cinétique totale</small></article>
         <article id="rotation-card" class="readout-card" style="--card-color:#a77942" hidden><span data-tex="K_{\mathrm{rot}}"></span><strong id="rotation-value"></strong><small>dont rotation des poulies</small></article>
         <article id="balance-card" class="readout-card" style="--card-color:#607185" hidden><span data-tex="W_{\mathrm{app}}-\Delta U-K"></span><strong id="balance-value"></strong><small>écart du bilan énergétique</small></article>
-      </section>
-      <section class="insight-panel"><h2 id="insight-title"></h2><p id="insight"></p><div class="force-comparison" id="force-comparison"><div><span>Poids</span><i id="weight-bar"></i></div><div><span>Effort</span><i id="force-bar"></i></div></div><p class="microcopy" id="energy-note"></p><div id="tension-key" class="tension-key" hidden></div></section>
-      <section class="visual-card">
-        <header class="card-heading"><h2 id="chart-title">Déplacements au cours du temps</h2><select id="chart" aria-label="Grandeurs du graphique"><option value="distance">Déplacements</option><option value="work">Travail et énergie</option><option value="velocity" id="velocity-option" hidden>Vitesses</option><option value="acceleration" id="acceleration-option" hidden>Accélérations</option></select></header>
-        <div id="chart-key" class="chart-key"></div>
-        <div id="history" class="history-wrap" role="slider" tabindex="0" aria-label="Instant sur le graphique" aria-valuemin="0" aria-valuemax="8" aria-valuenow="0"><canvas id="history-canvas" aria-hidden="true"></canvas><div id="history-labels" class="plot-labels" aria-hidden="true"></div></div>
-        <p id="chart-note" class="microcopy scene-note"></p>
       </section>
     </main>
   </div>
