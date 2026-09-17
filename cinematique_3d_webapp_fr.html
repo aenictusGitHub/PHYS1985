@@ -1082,13 +1082,18 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <span class="microcopy">La taille des pointes reste fixe</span>
         </div>
 
-        <label class="field-label compact" for="trail-duration">Traînée visible</label>
-        <input id="trail-duration" type="range" min="0.5" max="12" value="4" step="0.5" disabled />
-        <div class="range-readout-row">
-          <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
-            <span id="trail-duration-output-digits" class="math-digits">4.0</span><span class="tex-math">\(\,\mathrm s\)</span>
-          </output>
-          <label class="inline-check"><input id="full-trail" type="checkbox" checked /> Historique complet</label>
+        <label class="check-row solo-check">
+          <input id="full-trail" type="checkbox" checked aria-controls="trail-duration-controls" />
+          <span>Historique complet</span>
+        </label>
+        <div id="trail-duration-controls" hidden>
+          <label class="field-label compact" for="trail-duration">Traînée visible</label>
+          <input id="trail-duration" type="range" min="0.5" max="12" value="4" step="0.5" disabled />
+          <div class="range-readout-row">
+            <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
+              <span id="trail-duration-output-digits" class="math-digits">4.0</span><span class="tex-math">\(\,\mathrm s\)</span>
+            </output>
+          </div>
         </div>
 
         <label class="check-row solo-check">
@@ -1102,6 +1107,12 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <p id="curvature-status" class="microcopy" hidden></p>
           <p class="microcopy">Le cercle osculateur est le cercle qui épouse le mieux la courbe localement. Le rayon relie le mobile au centre du cercle. Le tracé garde l’échelle des positions, sans le facteur des vecteurs. En 3D, le cercle est dans le plan de la vitesse et de l’accélération centripète.</p>
         </div>
+
+        <label class="check-row solo-check">
+          <input id="space-grid-toggle" type="checkbox" aria-describedby="space-grid-help" />
+          <span>Quadrillage de l’espace</span>
+        </label>
+        <p id="space-grid-help" class="microcopy">Même pas que les graduations : <span class="tex-math">\(1\,\mathrm m\)</span>. Le quadrillage englobe le parcours complet. Dans les vues de face, de côté et du dessus, seule la grille du plan visible est tracée.</p>
 
         <label class="check-row solo-check">
           <input id="projection-toggle" type="checkbox" />
@@ -1830,6 +1841,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     trailDuration: 4,
     fullTrail: true,
     projections: false,
+    spaceGrid: false,
   };
 
   const camera = {
@@ -1860,9 +1872,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     vectorScale: document.getElementById('vector-scale'),
     vectorScaleOutputDigits: document.getElementById('vector-scale-output-digits'),
     trailDuration: document.getElementById('trail-duration'),
+    trailDurationControls: document.getElementById('trail-duration-controls'),
     trailDurationOutputDigits: document.getElementById('trail-duration-output-digits'),
     fullTrail: document.getElementById('full-trail'),
     projections: document.getElementById('projection-toggle'),
+    spaceGrid: document.getElementById('space-grid-toggle'),
     osculating: document.getElementById('osculating-toggle'),
     curvatureDetails: document.getElementById('curvature-details'),
     curvatureValue: document.getElementById('curvature-value'),
@@ -2101,6 +2115,132 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     ctx.restore();
   }
 
+  const gridTrajectoryBoundsCache = new WeakMap();
+  let gridRangeCache = { key: '', ranges: null };
+
+  function gridTrajectoryBounds(item) {
+    if (gridTrajectoryBoundsCache.has(item)) return gridTrajectoryBoundsCache.get(item);
+    const minimum = V(Infinity,Infinity,Infinity), maximum = V(-Infinity,-Infinity,-Infinity);
+    const duration = trajectoryTimeMax(item);
+    // Measure the complete experiment, not the growing trail. This keeps
+    // the frame fixed throughout playback, including open trajectories.
+    for (let i = 0; i <= 4096; i++) {
+      const point = toScene(item.position(duration*i/4096));
+      for (const axis of ['x','y','z']) {
+        minimum[axis] = Math.min(minimum[axis],point[axis]);
+        maximum[axis] = Math.max(maximum[axis],point[axis]);
+      }
+    }
+    const corners = [];
+    for (const x of [minimum.x,maximum.x]) for (const y of [minimum.y,maximum.y])
+      for (const z of [minimum.z,maximum.z]) corners.push(V(x,y,z));
+    gridTrajectoryBoundsCache.set(item,corners);
+    return corners;
+  }
+
+  function gridDepthAxis(basis) {
+    return [['x',V(1,0,0)],['y',V(0,0,1)],['z',V(0,1,0)]]
+      .find(([,unit]) => Math.abs(dot(unit,basis.forward)) > .985)?.[0];
+  }
+
+  function enclosingGridRanges(basis, item) {
+    const ranges = currentAxisRanges();
+    const points = gridTrajectoryBounds(item);
+    const sceneCoordinate = { x:'x', y:'z', z:'y' };
+    const depthAxis = gridDepthAxis(basis);
+    const normalCoordinate = sceneCoordinate[depthAxis];
+    const extent = { minimum:V(Infinity,Infinity,Infinity), maximum:V(-Infinity,-Infinity,-Infinity) };
+    const include = point => {
+      for (const axis of ['x','y','z']) {
+        extent.minimum[axis] = Math.min(extent.minimum[axis],point[axis]);
+        extent.maximum[axis] = Math.max(extent.maximum[axis],point[axis]);
+      }
+    };
+    for (const point of points) {
+      include(point);
+      if (!depthAxis) continue;
+      // A coordinate-plane grid and a point at another depth have different
+      // perspective scales. Intersect the viewing ray with that plane so its
+      // visible outline, too, encloses the full trajectory (not just 0..2 m).
+      const ray = sub(point,basis.cameraPosition);
+      const factor = -basis.cameraPosition[normalCoordinate]/ray[normalCoordinate];
+      if (Number.isFinite(factor) && factor > 0 && dot(ray,basis.forward) > 10)
+        include(add(basis.cameraPosition,scale(ray,factor)));
+    }
+    for (const axis of ['x','y','z']) {
+      const coordinate = sceneCoordinate[axis];
+      const minimum = Math.min(ranges[axis].minimum,
+        Math.floor((extent.minimum[coordinate]+1e-7)/AXIS_TICK_STEP_WORLD)*AXIS_TICK_STEP_WORLD);
+      const maximum = Math.max(ranges[axis].maximum,
+        Math.ceil((extent.maximum[coordinate]-1e-7)/AXIS_TICK_STEP_WORLD)*AXIS_TICK_STEP_WORLD);
+      ranges[axis] = {minimum,maximum,ticks:axisTickValues(minimum,maximum)};
+    }
+    return ranges;
+  }
+
+  function currentGridRanges(basis) {
+    const key = [state.trajectoryKey,camera.yaw,camera.pitch,camera.distance,
+      camera.target.x,camera.target.y,camera.target.z].join('|');
+    if (key !== gridRangeCache.key)
+      gridRangeCache = {key,ranges:enclosingGridRanges(basis,currentTrajectory())};
+    return gridRangeCache.ranges;
+  }
+
+  function spaceGridSegments(basis, ranges) {
+    const directions = [
+      { axis: 'x', unit: V(1,0,0) },
+      { axis: 'y', unit: V(0,0,1) },
+      { axis: 'z', unit: V(0,1,0) },
+    ];
+    // In aligned views, use one coordinate plane, not stacked perspective
+    // grids that would make one tick interval appear to have several sizes.
+    const depthAxis = gridDepthAxis(basis);
+    const values = axis => axis === depthAxis ? [0] : ranges[axis].ticks;
+    const segments = [];
+    for (const direction of directions) {
+      if (direction.axis === depthAxis) continue;
+      const [u,v] = directions.filter(other => other !== direction);
+      for (const tu of values(u.axis)) for (const tv of values(v.axis)) {
+        if (tu === 0 && tv === 0) continue; // Keep the arrowed axes distinct.
+        const offset = add(scale(u.unit,tu),scale(v.unit,tv));
+        segments.push([
+          add(offset,scale(direction.unit,ranges[direction.axis].minimum)),
+          add(offset,scale(direction.unit,ranges[direction.axis].maximum)),
+        ]);
+      }
+    }
+    return segments;
+  }
+
+  function projectGridSegment(a, b, basis) {
+    const da = dot(sub(a,basis.cameraPosition),basis.forward);
+    const db = dot(sub(b,basis.cameraPosition),basis.forward);
+    if (da <= 10 && db <= 10) return null;
+    if (da < 10) a = add(a,scale(sub(b,a),(10-da)/(db-da)));
+    else if (db < 10) b = add(a,scale(sub(b,a),(10-da)/(db-da)));
+    return clipScreenSegment(projectWorld(a,basis),projectWorld(b,basis),
+      { left: 16, top: 16, right: viewportWidth-16, bottom: viewportHeight-16 });
+  }
+
+  function drawSpaceGrid(basis) {
+    if (!state.spaceGrid) return;
+    ctx.save();
+    ctx.strokeStyle = '#aebdcd';
+    ctx.globalAlpha = .55;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    for (const [a,b] of spaceGridSegments(basis,currentGridRanges(basis))) {
+      const segment = projectGridSegment(a,b,basis);
+      if (!segment) continue;
+      const [start,end] = segment;
+      ctx.moveTo(start.x,start.y);
+      ctx.lineTo(end.x,end.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function referenceAxes(basis, ranges) {
     const axes = [];
     const bounds = { left: 16, top: 16, right: viewportWidth-16, bottom: viewportHeight-16 };
@@ -2133,7 +2273,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   }
 
   function drawReferenceFrame(basis) {
-    const axes = referenceAxes(basis,currentAxisRanges());
+    const axes = referenceAxes(basis,state.spaceGrid ? currentGridRanges(basis) : currentAxisRanges());
     const axisColor = '#52627a';
     ctx.save();
     ctx.strokeStyle = axisColor;
@@ -2200,7 +2340,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     // position enters this layout, so labels cannot jump during playback.
     const key = [viewportWidth, viewportHeight, camera.yaw, camera.pitch,
       camera.distance, camera.target.x, camera.target.y, camera.target.z,
-      mathIsReady, getComputedStyle(dom.axisLabels.x).fontSize].join('|');
+      state.spaceGrid, state.trajectoryKey, mathIsReady, getComputedStyle(dom.axisLabels.x).fontSize].join('|');
     if (key === axisLabelLayoutKey) return;
     axisLabelLayoutKey = key;
     const occupied = [], sizes = new Map();
@@ -2602,6 +2742,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   function drawScene(item, data) {
     ctx.clearRect(0, 0, viewportWidth, viewportHeight);
     const basis = cameraBasis();
+    drawSpaceGrid(basis);
     drawReferenceFrame(basis);
     drawOsculatingCircle(updateCurvatureReadout(data), basis);
     drawTrail(item, basis);
@@ -2872,9 +3013,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   dom.fullTrail.addEventListener('change', () => {
     state.fullTrail = dom.fullTrail.checked;
     dom.trailDuration.disabled = state.fullTrail;
+    dom.trailDurationControls.hidden = state.fullTrail;
     updateAndDraw();
   });
   dom.osculating.addEventListener('change', updateAndDraw);
+  dom.spaceGrid.addEventListener('change', () => {
+    state.spaceGrid = dom.spaceGrid.checked;
+    updateAndDraw();
+  });
   dom.projections.addEventListener('change', () => {
     state.projections = dom.projections.checked;
     updateAndDraw();
@@ -2935,7 +3081,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.trajectory.value = state.trajectoryKey;
     dom.fullTrail.checked = state.fullTrail;
     dom.trailDuration.disabled = state.fullTrail;
+    dom.trailDurationControls.hidden = state.fullTrail;
     dom.projections.checked = state.projections;
+    dom.spaceGrid.checked = state.spaceGrid;
     configureTimelineForCurrentTrajectory();
     updateEquationPanel();
     resizeCanvas();

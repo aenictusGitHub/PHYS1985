@@ -33,6 +33,33 @@ const {chromium}=require('playwright');
   await page.locator('#play-button').click();
   await page.locator('#time-slider').evaluate(el=>{el.value='5';el.dispatchEvent(new Event('input',{bubbles:true}));});
   const before=await page.locator('#time-slider').inputValue();
+  // Full history hides the complete limited-trail control, without resetting
+  // the saved duration, seeking or changing playback. Check both layouts.
+  for(const width of [1440,390]) {
+    await page.setViewportSize({width,height:1000});
+    const full=page.locator('#full-trail'),controls=page.locator('#trail-duration-controls'),slider=page.locator('#trail-duration');
+    assert(await full.isVisible());
+    assert(await full.isChecked());
+    assert(!await controls.isVisible());
+    assert(!await slider.isVisible());
+    assert(await slider.isDisabled());
+    await full.uncheck();
+    assert(await controls.isVisible());
+    assert(await slider.isVisible());
+    assert(!await slider.isDisabled());
+    await slider.evaluate(el=>{el.value='7';el.dispatchEvent(new Event('input',{bubbles:true}));});
+    await full.check();
+    assert(!await page.locator('label[for="trail-duration"]').isVisible());
+    assert(!await page.locator('#trail-duration-output').isVisible());
+    await full.focus();await page.keyboard.press('Space');
+    assert(await controls.isVisible());
+    assert.equal(await slider.inputValue(),'7');
+    assert.equal(await page.locator('#trail-duration-output-digits').getAttribute('data-value'),'7.0');
+    await page.keyboard.press('Space');
+    assert(!await controls.isVisible());
+    assert.equal(await page.locator('#time-slider').inputValue(),before);
+    assert.equal(await page.locator('#play-button').innerText(),'Lire');
+  }
   const labels=()=>page.locator('.axis-math-label').evaluateAll(elements=>elements.filter(el=>!el.hidden).map(el=>{
     const r=el.getBoundingClientRect();return {id:el.id||el.parentElement.id+':'+el.textContent,value:el.querySelector('[data-value]')?.dataset.value,x:r.x,y:r.y,w:r.width,h:r.height};
   }));

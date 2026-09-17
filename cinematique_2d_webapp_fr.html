@@ -1050,13 +1050,18 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <span class="microcopy">La taille des pointes reste fixe</span>
         </div>
 
-        <label class="field-label compact" for="trail-duration">Traînée visible</label>
-        <input id="trail-duration" type="range" min="0.5" max="12" value="10" step="0.5" disabled />
-        <div class="range-readout-row">
-          <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
-            <span id="trail-duration-output-digits" class="math-digits">10.0</span><span class="tex-math">\(\,\mathrm s\)</span>
-          </output>
-          <label class="inline-check"><input id="full-trail" type="checkbox" checked /> Historique complet</label>
+        <label class="check-row solo-check">
+          <input id="full-trail" type="checkbox" checked aria-controls="trail-duration-controls" />
+          <span>Historique complet</span>
+        </label>
+        <div id="trail-duration-controls" hidden>
+          <label class="field-label compact" for="trail-duration">Traînée visible</label>
+          <input id="trail-duration" type="range" min="0.5" max="12" value="10" step="0.5" disabled />
+          <div class="range-readout-row">
+            <output id="trail-duration-output" class="dynamic-math-output" aria-label="Durée de la traînée visible">
+              <span id="trail-duration-output-digits" class="math-digits">10.0</span><span class="tex-math">\(\,\mathrm s\)</span>
+            </output>
+          </div>
         </div>
 
         <label class="check-row solo-check">
@@ -1774,6 +1779,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     vectorScale: document.getElementById('vector-scale'),
     vectorScaleOutputDigits: document.getElementById('vector-scale-output-digits'),
     trailDuration: document.getElementById('trail-duration'),
+    trailDurationControls: document.getElementById('trail-duration-controls'),
     trailDurationOutputDigits: document.getElementById('trail-duration-output-digits'),
     fullTrail: document.getElementById('full-trail'),
     projections: document.getElementById('projection-toggle'),
@@ -2694,6 +2700,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   dom.fullTrail.addEventListener('change', () => {
     state.fullTrail = dom.fullTrail.checked;
     dom.trailDuration.disabled = state.fullTrail;
+    dom.trailDurationControls.hidden = state.fullTrail;
     updateAndDraw();
   });
   dom.osculating.addEventListener('change', updateAndDraw);
@@ -2855,6 +2862,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.trajectory.value = state.trajectoryKey;
     dom.fullTrail.checked = state.fullTrail;
     dom.trailDuration.disabled = state.fullTrail;
+    dom.trailDurationControls.hidden = state.fullTrail;
     dom.timeSlider.max = String(trajectoryTimeMax(currentTrajectory()));
     updateOriginControls();
     updateEquationPanel();

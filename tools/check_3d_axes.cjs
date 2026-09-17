@@ -46,5 +46,5 @@ for(const target of [V(2000,2000,2000),V(-5000,1000,7000)])for(let i=0;i<24;i++)
   }
   cases++;
 }
-assert(!/cube|corners|edges|grid/i.test(fn('drawReferenceFrame')),'Reference renderer contains no enclosing box');
+assert(!/cube|corners|edges|spaceGridSegments|drawSpaceGrid/i.test(fn('drawReferenceFrame')),'Reference renderer contains only axes; the optional grid is drawn separately');
 console.log('PASS: three axes at a common origin, positive tips, 1 m ticks, orthogonal views and '+cases+' camera/zoom/near-plane cases.');
