@@ -24,7 +24,7 @@ for(const item of Object.values(api.TRAJECTORIES))for(let i=0;i<=96;i++){
     assert(Object.values(data[field]).every(Number.isFinite));
   assert(Object.values(data.position).every(v=>v>=-.1&&v<=8.1),'All trajectories fit the metric view');
 }
-const circle=api.osculatingGeometry(api.derivatives(api.TRAJECTORIES.mcua,2));
+const circle=api.osculatingGeometry(api.derivatives(api.TRAJECTORIES.mc,2));
 assert(circle.defined);close(circle.radius,2,1e-5);
 const ballistic=api.TRAJECTORIES.ballistic,launch=api.derivatives(ballistic,0);
 close(launch.speed,Math.sqrt(80));close(launch.acceleration.y,-9.81,1e-7);
@@ -45,6 +45,7 @@ for(const [key,item] of Object.entries(api.TRAJECTORIES))for(const origin of [{x
 if(process.env.REFERENCE_2D_ZIP){
   const previous=load(process.env.REFERENCE_2D_ZIP).api;
   for(const [key,item] of Object.entries(api.TRAJECTORIES)){
+    if(key==='mc')continue; // Unified adjustable circular law has no fixed pre-rescaling counterpart.
     const old=previous.TRAJECTORIES[key],timeScale=key==='ballistic'?1/Math.sqrt(500):1;
     close(item.duration,old.duration*timeScale);
     close(item.scaleV,old.scaleV*timeScale);close(item.scaleA,old.scaleA*timeScale**2);
@@ -59,4 +60,4 @@ if(process.env.REFERENCE_2D_ZIP){
     }
   }
 }
-console.log('PASS: 17 metric 2D trajectories, 1 m grid, SI derivatives, curvature and physical gravity.');
+console.log('PASS: 17 metric 2D trajectories including unified MC, 1 m grid, SI derivatives, curvature and physical gravity.');

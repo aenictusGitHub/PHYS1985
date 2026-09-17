@@ -33,17 +33,22 @@ CHECKS = r'''
       close(derivatives(item, t).jerk, expected, 0.001, key + ' display @ ' + t);
     }
   });
-  const mcua = TRAJECTORIES.mcua;
+  const mcua = TRAJECTORIES.mc || TRAJECTORIES.mcua;
+  const adjustable = typeof mcParameters === 'undefined' ? null : mcParameters;
+  const originalCircular = adjustable ? {...adjustable} : null;
+  if (adjustable) Object.assign(adjustable, {R:2,omega:.5,alpha:.02});
+  const circularParameters = adjustable || PARAMETERS;
   for (const t of [0, 0.5, 5, mcua.duration]) {
-    const R = PARAMETERS.R;
-    const alpha = PARAMETERS.alpha;
-    const w = PARAMETERS.omega + alpha * t;
-    const phi = PARAMETERS.omega * t + 0.5 * alpha * t * t;
+    const R = circularParameters.R;
+    const alpha = circularParameters.alpha;
+    const w = circularParameters.omega + alpha * t;
+    const phi = circularParameters.omega * t + 0.5 * alpha * t * t;
     close(derivatives(mcua, t).jerk,
       V(R * (w ** 3 * Math.sin(phi) - 3 * w * alpha * Math.cos(phi)),
         R * (-(w ** 3) * Math.cos(phi) - 3 * w * alpha * Math.sin(phi)), 0),
       0.001, 'accelerated circle @ ' + t);
   }
+  if (adjustable) Object.assign(adjustable, originalCircular);
   for (const t of [0, 0.001, 5, TRAJECTORIES.ballistic.duration]) {
     assert(norm(derivatives(TRAJECTORIES.ballistic, t).jerk) === 0, 'ballistic must be exactly zero');
   }

@@ -70,7 +70,7 @@ const {chromium}=require('playwright');
       await seek(max*.37);await gridCheck(8);
       assert.equal(await page.locator('[data-mml-node="merror"]').count(),0);
     }
-    await page.locator('#trajectory-select').selectOption('mcua');
+    await page.locator('#trajectory-select').selectOption('mc');
     await page.locator('#osculating-toggle').check();await seek(2);
     assert.equal(await page.locator('#curvature-digits').getAttribute('data-value'),'2.00');
     if(process.env.SCREENSHOT_DIR)await page.locator('#viewport').screenshot({path:path.join(process.env.SCREENSHOT_DIR,`2d-metric-${width}.png`)});

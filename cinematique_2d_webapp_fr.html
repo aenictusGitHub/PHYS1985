@@ -263,7 +263,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 .equation.parameters { margin-top: 0.28rem; color: var(--muted); font-size: 0.76rem; }
 .equation.parameter-line + .equation.parameter-line { margin-top: -0.15rem; }
 /* MathJax cannot infer the relation spacing across separate numeric nodes. */
-.equation-numeric .math-digits { margin-inline-start: 0.278em; }
+.equation-numeric .math-digits, .mc-period .math-digits { margin-inline-start: 0.278em; }
+#mc-controls[hidden] { display: none !important; }
+.mc-period [hidden] { display: none !important; }
+.mc-period { display: flex; align-items: baseline; margin-top: .8rem; }
 
 .panel-footer {
   display: flex;
@@ -921,11 +924,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <optgroup label="Trajectoires du notebook">
             <option value="lissajous2">Lissajous (𝑛=2)</option>
             <option value="lissajous3">Lissajous (𝑛=3)</option>
-            <option value="mcua">Mouvement circulaire uniformément accéléré</option>
+            <option value="mc">Mouvement circulaire (MC)</option>
+            <option value="ballistic">Mouvement balistique</option>
             <option value="fish">Courbe poisson</option>
             <option value="astroid">Astroïde</option>
             <option value="quadrifolium">Quadrifolium</option>
-            <option value="ballistic">Mouvement balistique</option>
           </optgroup>
           <optgroup label="Courbes polaires">
             <option value="cardioid">Cardioïde</option>
@@ -944,6 +947,25 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
             <option value="butterfly">Papillon</option>
           </optgroup>
         </select>
+      </section>
+
+      <section id="mc-controls" class="panel-section" aria-label="Paramètres du mouvement circulaire" hidden>
+        <div class="section-heading-row">
+          <h2>Paramètres du MC</h2>
+          <button id="mc-reset" class="text-button" type="button">Réinitialiser</button>
+        </div>
+        <label class="field-label" for="mc-radius">Rayon <span class="tex-math">\(R\)</span></label>
+        <input id="mc-radius" type="range" min="0.25" max="3" step="0.05" value="2" aria-describedby="mc-help" />
+        <output for="mc-radius" class="dynamic-math-output"><span id="mc-radius-digits" class="math-digits">2.00</span><span class="tex-math">\(\,\mathrm m\)</span></output>
+        <label class="field-label compact" for="mc-omega">Vitesse angulaire initiale <span class="tex-math">\(\omega_0\)</span></label>
+        <input id="mc-omega" type="range" min="0.10" max="2" step="0.05" value="1" aria-describedby="mc-help" />
+        <output for="mc-omega" class="dynamic-math-output"><span id="mc-omega-digits" class="math-digits">1.00</span><span class="tex-math">\(\,\mathrm{rad\,s^{-1}}\)</span></output>
+        <label class="field-label compact" for="mc-alpha">Accélération angulaire <span class="tex-math">\(\alpha\)</span></label>
+        <input id="mc-alpha" type="range" min="-0.20" max="0.20" step="0.01" value="0" aria-describedby="mc-help mc-regime" />
+        <output for="mc-alpha" class="dynamic-math-output"><span id="mc-alpha-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm{rad\,s^{-2}}\)</span></output>
+        <div class="mc-period"><span id="mc-period-symbol" class="tex-math">\(T=\)</span><span id="mc-duration-symbol" class="tex-math" hidden>\(t_{\max}=\)</span><span id="mc-period-digits" class="math-digits">6.28</span><span class="tex-math">\(\,\mathrm s\)</span></div>
+        <p id="mc-regime" class="microcopy">Mouvement circulaire uniforme</p>
+        <p id="mc-help" class="microcopy">Modifier un paramètre recommence le mouvement. Le centre du cercle reste fixe ; la lecture ou la pause est conservée.</p>
       </section>
 
       <section class="panel-section">
@@ -1146,9 +1168,9 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   });
 
   const DEFAULT_VIEW = Object.freeze({ xmin: 0, xmax: 8, ymin: 0, ymax: 8 });
+  const MC_DEFAULTS = Object.freeze({ R: 2, omega: 1, alpha: 0 });
+  const mcParameters = { ...MC_DEFAULTS };
   const CLOSED_PERIOD = 2 * Math.PI / PARAMETERS.omega;
-  const MCUA_TURN_DURATION = (Math.sqrt(PARAMETERS.omega ** 2 + 4 * Math.PI * PARAMETERS.alpha) - PARAMETERS.omega) / PARAMETERS.alpha;
-  const MCUA_DURATION = 2 * MCUA_TURN_DURATION;
   const BALLISTIC_DURATION = 2 * PARAMETERS.v0 * Math.sin(PARAMETERS.launchAngleDeg * Math.PI / 180) / PARAMETERS.g;
   const AXIS_TICK_STEP = GRID_STEP_METRES;
 
@@ -1172,6 +1194,24 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   const deg2rad = (angle) => angle * Math.PI / 180;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const wrap = (value, period) => ((value % period) + period) % period;
+
+  function circularState(t) {
+    const { R, omega: omega0, alpha } = mcParameters;
+    const phase = omega0*t+.5*alpha*t*t;
+    return { R, alpha, omega:omega0+alpha*t, radial:V(Math.cos(phase),Math.sin(phase)), tangent:V(-Math.sin(phase),Math.cos(phase)) };
+  }
+
+  function circularDuration() {
+    // End after 4π of total angular travel (two turns). If the body reverses,
+    // count both directions rather than confusing travel with net angle.
+    const { omega, alpha } = mcParameters;
+    const travel = 4*Math.PI;
+    if (alpha === 0) return travel/omega;
+    if (alpha > 0) return 2*travel/(omega+Math.sqrt(omega*omega+2*alpha*travel));
+    const deceleration = -alpha, stopTravel = omega*omega/(2*deceleration);
+    if (travel <= stopTravel) return 2*travel/(omega+Math.sqrt(Math.max(0,omega*omega-2*deceleration*travel)));
+    return omega/deceleration+Math.sqrt(2*(travel-stopTravel)/deceleration);
+  }
 
   const TRAJECTORIES = Object.freeze({
     lissajous2: {
@@ -1222,27 +1262,36 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       },
     },
 
-    mcua: {
-      label: 'Mouvement circulaire uniformément accéléré',
-      duration: MCUA_DURATION,
-      closed: false,
-      scaleV: 0.50,
+    mc: {
+      label: 'Mouvement circulaire (MC)',
+      get duration() { return mcParameters.alpha === 0 ? 2*Math.PI/mcParameters.omega : circularDuration(); },
+      // Only the uniform law is periodic. Never wrap an accelerated motion.
+      get closed() { return mcParameters.alpha === 0; },
+      scaleV: 0.40,
       scaleA: 0.50,
+      scaleJ: 0.08,
       equations: [
-        String.raw`\varphi(t)=\frac{1}{2}\alpha t^2+\omega_0t+\theta_0`,
+        String.raw`\varphi(t)=\omega_0t+\frac12\alpha t^2`,
+        String.raw`\omega(t)=\omega_0+\alpha t`,
         String.raw`x(t)=x_0+R\cos\!\bigl(\varphi(t)\bigr)`,
         String.raw`y(t)=y_0+R\sin\!\bigl(\varphi(t)\bigr)`,
       ],
-      parameters: [
-        String.raw`x_0=y_0=4\,\mathrm m,\qquad R=2\,\mathrm m`,
-        String.raw`\omega_0=0.5\,\mathrm{rad\,s^{-1}},\qquad \alpha=0.02\,\mathrm{rad\,s^{-2}}`,
-        String.raw`\theta_0=0,\qquad \omega(t)=\omega_0+\alpha t`,
-        String.raw`T_{\mathrm{tour}}\simeq 10.40\,\mathrm s,\qquad t_{\max}=2T_{\mathrm{tour}}\simeq 20.80\,\mathrm s`,
-      ],
+      parameters: [String.raw`v=R|\omega(t)|,\qquad a_{\mathrm c}=R\omega^2(t)`,String.raw`|\vec a_{\mathrm t}|=R|\alpha|\quad(\omega\ne0)`],
       position(t) {
-        const { x0, y0, R, omega, alpha, theta0Deg } = PARAMETERS;
-        const phi = 0.5 * alpha * t * t + omega * t + deg2rad(theta0Deg);
-        return V(x0 + R * Math.cos(phi), y0 + R * Math.sin(phi));
+        const { R, radial } = circularState(t);
+        return add(V(PARAMETERS.x0,PARAMETERS.y0),scale(radial,R));
+      },
+      velocity(t) {
+        const { R, omega, tangent } = circularState(t);
+        return scale(tangent,R*omega);
+      },
+      acceleration(t) {
+        const { R, omega, alpha, radial, tangent } = circularState(t);
+        return add(scale(radial,-R*omega*omega),scale(tangent,R*alpha));
+      },
+      jerk(t) {
+        const { R, omega, alpha, radial, tangent } = circularState(t);
+        return add(scale(radial,-3*R*omega*alpha),scale(tangent,-R*omega**3));
       },
     },
 
@@ -1621,6 +1670,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   const jerkScales = new WeakMap();
   function jerkDisplayScale(item) {
+    // An explicit scale stays fixed even when the MCU parameters change.
+    if (item.scaleJ !== undefined) return item.scaleJ;
     if (!jerkScales.has(item)) {
       let maximum = 0;
       for (let i = 0; i <= 384; i += 1) {
@@ -1696,6 +1747,16 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   const dom = {
     trajectory: document.getElementById('trajectory-select'),
+    mcControls: document.getElementById('mc-controls'),
+    mcRadius: document.getElementById('mc-radius'),
+    mcOmega: document.getElementById('mc-omega'),
+    mcAlpha: document.getElementById('mc-alpha'),
+    mcRadiusDigits: document.getElementById('mc-radius-digits'),
+    mcOmegaDigits: document.getElementById('mc-omega-digits'),
+    mcAlphaDigits: document.getElementById('mc-alpha-digits'),
+    mcPeriodDigits: document.getElementById('mc-period-digits'),
+    mcRegime: document.getElementById('mc-regime'),
+    mcReset: document.getElementById('mc-reset'),
     equations: document.getElementById('trajectory-equations'),
     play: document.getElementById('play-button'),
     reset: document.getElementById('reset-button'),
@@ -1941,6 +2002,40 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     setMathDigits(dom.timeBadgeDigits, state.time.toFixed(2));
     setMathDigits(dom.vectorScaleOutputDigits, state.vectorScale.toFixed(2));
     setMathDigits(dom.trailDurationOutputDigits, state.trailDuration.toFixed(1));
+    updateMCReadouts();
+  }
+
+  function updateMCReadouts() {
+    const uniform = mcParameters.alpha === 0;
+    const values = {R:mcParameters.R.toFixed(2),omega:mcParameters.omega.toFixed(2),alpha:mcParameters.alpha.toFixed(2),tmax:circularDuration().toFixed(2)};
+    setMathDigits(dom.mcRadiusDigits,values.R);
+    setMathDigits(dom.mcOmegaDigits,values.omega);
+    setMathDigits(dom.mcAlphaDigits,values.alpha);
+    setMathDigits(dom.mcPeriodDigits,(uniform ? circularDuration()/2 : circularDuration()).toFixed(2));
+    document.getElementById('mc-period-symbol').hidden = !uniform;
+    document.getElementById('mc-duration-symbol').hidden = uniform;
+    dom.mcRegime.textContent = uniform ? 'Mouvement circulaire uniforme' : 'Mouvement circulaire uniformément accéléré. Pas de période : la durée affichée correspond à deux tours parcourus au total, même si le sens de rotation s’inverse.';
+    for (const element of dom.equations.querySelectorAll('[data-mc-value]'))
+      setMathDigits(element,values[element.dataset.mcValue]);
+    dom.mcRadius.setAttribute('aria-valuetext',`${values.R} mètres`);
+    dom.mcOmega.setAttribute('aria-valuetext',`${values.omega} radians par seconde`);
+    dom.mcAlpha.setAttribute('aria-valuetext',`${values.alpha} radians par seconde carrée`);
+  }
+
+  function changeMCParameters(radius, omega, alpha) {
+    if (![radius,omega,alpha].every(Number.isFinite)) return;
+    mcParameters.R = Math.round(clamp(radius,.25,3)*100)/100;
+    mcParameters.omega = Math.round(clamp(omega,.1,2)*100)/100;
+    mcParameters.alpha = Math.round(clamp(alpha,-.2,.2)*100)/100;
+    dom.mcRadius.value = String(mcParameters.R);
+    dom.mcOmega.value = String(mcParameters.omega);
+    dom.mcAlpha.value = String(mcParameters.alpha);
+    // New constant parameters define a new circular motion from the same initial
+    // phase. Keep the chosen origin, view and playback/paused state.
+    state.time = 0;
+    configureTimeline();
+    updateMCReadouts();
+    updateAndDraw();
   }
 
   function resetView() {
@@ -2029,7 +2124,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     let velocity;
     let acceleration;
 
-    if (item.closed) {
+    if (item.velocity && item.acceleration) {
+      velocity = item.velocity(t);
+      acceleration = item.acceleration(t);
+    } else if (item.closed) {
       const pm = positionAt(item, t - h);
       const pp = positionAt(item, t + h);
       velocity = scale(sub(pp, pm), 1 / (2 * h));
@@ -2059,6 +2157,11 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       const tangentUnit = scale(velocity, 1 / speed);
       tangential = scale(tangentUnit, dot(acceleration, tangentUnit));
       centripetal = sub(acceleration, tangential);
+      if (item === TRAJECTORIES.mc) {
+        const circle = circularState(t);
+        tangential = scale(circle.tangent,circle.R*circle.alpha);
+        centripetal = scale(circle.radial,-circle.R*circle.omega*circle.omega);
+      }
     }
 
     const jerk = jerkAt(item, item.closed ? wrap(t, item.duration) : t);
@@ -2439,6 +2542,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   function updateEquationPanel() {
     const item = currentTrajectory();
     const frame = equationFrame(item, origin);
+    const isMC = state.trajectoryKey === 'mc';
+    dom.mcControls.hidden = !isMC;
     // Only the numbers below change during an origin drag. Keeping the TeX
     // and line count fixed avoids reflow, delayed updates and mobile jumps.
     if (mathIsReady && window.MathJax?.typesetClear) window.MathJax.typesetClear([dom.equations]);
@@ -2446,8 +2551,15 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       ...item.equations.map((equation) => `<div class="equation"><span class="tex-math">\\(\\displaystyle ${equation}\\)</span></div>`),
       ...['x', 'y'].map(axis => `<div class="equation parameters equation-numeric"><span class="tex-math">\\(${axis}_{${frame.subscript}}=\\)</span><span class="math-digits" data-offset-axis="${axis}"></span><span class="tex-math">\\(\\,\\mathrm m\\)</span></div>`),
       ...frame.parameters.map((parameter) => `<div class="equation parameters parameter-line"><span class="tex-math">\\(${parameter}\\)</span></div>`),
+      ...(isMC ? [
+        ['R',String.raw`R=`,String.raw`\mathrm m`],
+        ['omega',String.raw`\omega_0=`,String.raw`\mathrm{rad\,s^{-1}}`],
+        ['alpha',String.raw`\alpha=`,String.raw`\mathrm{rad\,s^{-2}}`],
+        ['tmax',String.raw`t_{\max}=`,String.raw`\mathrm s`],
+      ].map(([key,symbol,unit])=>`<div class="equation parameters equation-numeric"><span class="tex-math">\\(${symbol}\\)</span><span class="math-digits" data-mc-value="${key}"></span><span class="tex-math">\\(\\,${unit}\\)</span></div>`) : []),
     ].join('');
     updateEquationOffsets();
+    updateMCReadouts();
     if (mathIsReady) void queueTypeset([dom.equations]);
   }
 
@@ -2527,19 +2639,26 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     positionOriginHandle();
   }
 
+  function configureTimeline() {
+    const timeMax = trajectoryTimeMax(currentTrajectory());
+    dom.timeSlider.max = String(timeMax);
+    dom.timeSlider.step = String(Math.max(0.001, timeMax / 6000));
+  }
+
   function onTrajectoryChanged() {
     state.trajectoryKey = dom.trajectory.value;
     state.time = 0;
-    const item = currentTrajectory();
-    const timeMax = trajectoryTimeMax(item);
-    dom.timeSlider.max = String(timeMax);
-    dom.timeSlider.step = String(Math.max(0.001, timeMax / 6000));
+    configureTimeline();
     resetView();
     updateEquationPanel();
     updateAndDraw();
   }
 
   dom.trajectory.addEventListener('change', onTrajectoryChanged);
+  dom.mcRadius.addEventListener('input',()=>changeMCParameters(Number(dom.mcRadius.value),mcParameters.omega,mcParameters.alpha));
+  dom.mcOmega.addEventListener('input',()=>changeMCParameters(mcParameters.R,Number(dom.mcOmega.value),mcParameters.alpha));
+  dom.mcAlpha.addEventListener('input',()=>changeMCParameters(mcParameters.R,mcParameters.omega,Number(dom.mcAlpha.value)));
+  dom.mcReset.addEventListener('click',()=>changeMCParameters(MC_DEFAULTS.R,MC_DEFAULTS.omega,MC_DEFAULTS.alpha));
   dom.play.addEventListener('click', () => setPlaying(!state.playing));
   dom.reset.addEventListener('click', () => {
     state.time = 0;

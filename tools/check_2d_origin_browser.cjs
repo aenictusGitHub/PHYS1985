@@ -44,7 +44,7 @@ const close=(a,b,tol=.02)=>assert(Math.abs(a-b)<tol,`${a} != ${b}`);
       const left=el.previousElementSibling.getBoundingClientRect(),number=el.getBoundingClientRect();
       return {gap:number.x-left.right,expected:parseFloat(getComputedStyle(el).marginInlineStart)};
     }));
-    assert.equal(gaps.length,4);
+    assert.equal(gaps.length,key==='mc'?8:4); // Four additional live equation parameters for MC.
     for(const g of gaps){assert(g.gap>=3&&g.gap<=9,'Visible math spacing after =');close(g.gap,g.expected,.15);}
     assert(!(await page.locator('#trajectory-equations').innerHTML()).includes('x_0=y_0=4'),'Old origin constants are removed');
   };

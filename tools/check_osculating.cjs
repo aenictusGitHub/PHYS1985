@@ -158,7 +158,7 @@ for (const dimensions of [2, 3]) {
       close(dot(sub(point(helix, i / 32 * 2 * Math.PI), helix.position), V(0, -b, a)), 0, 1e-6);
     }
   }
-  const mcua = app.TRAJECTORIES.mcua;
+  const mcua = app.TRAJECTORIES.mc || app.TRAJECTORIES.mcua;
   for (const t of [0, .1, 2, 5, mcua.duration]) {
     const c = geometry(app.derivatives(mcua, t));
     assert(c.defined);
