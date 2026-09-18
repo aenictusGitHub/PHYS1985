@@ -228,6 +228,8 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .equations { overflow-x: auto; color: #24324b; font-size: 0.83rem; }
 .equations p { margin: 0.45rem 0; }
 .equations mjx-container { margin: 0.45rem 0 !important; }
+.phys-app .equation-section mjx-container[display="true"] { max-width: 100%; text-align: left; }
+.phys-app .equation-section mjx-container[display="true"] > svg { max-width: 100%; height: auto; }
 .field-formula[hidden] { display: none; }
 .equations .equation-note {
   margin-top: 0.75rem;
@@ -935,6 +937,19 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 }
 
 </style>
+  <style>
+.phys-share { margin-top: 1rem; min-width: 0; }
+.phys-share > button { min-height: 40px; padding: .45rem 1rem; font: inherit; border: 1px solid #cbd8e5; border-radius: 9px; color: #225b87; background: white; cursor: pointer; }
+.phys-share > button:focus-visible, .phys-share textarea:focus-visible { outline: 3px solid #82b3d9; outline-offset: 2px; }
+.phys-share-panel { margin-top: .65rem; min-width: 0; }
+.phys-share-panel[hidden] { display: none !important; }
+.phys-share-panel label { display: block; width: auto; font-size: .8rem; line-height: 1.4; margin-bottom: .4rem; }
+.phys-share-panel textarea { display: block; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 4em; resize: vertical; overflow-wrap: anywhere; border: 1px solid #cbd8e5; border-radius: 6px; padding: .5rem; color: #233449; background: #fff; font: .75rem/1.4 system-ui, sans-serif; }
+.phys-share-status { font: .78rem/1.45 system-ui, sans-serif; color: #54667d; overflow-wrap: anywhere; margin: .4rem 0 0; }
+.phys-share-status:empty { display: none; }
+.phys-share-status[data-error=true] { color: #a33232; }
+
+</style>
 </head>
 <body class="phys-app" data-app="energy">
   <div id="app-shell">
@@ -1093,35 +1108,38 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         <h2>Relations</h2>
         <div class="equations">
           <div class="field-formula" data-force-field="cellular">
-            <p>\[\vec{F}(x,y)=F_0\!\left(\sin\frac{x}{L_0}\cos\frac{y}{L_0},-\cos\frac{x}{L_0}\sin\frac{y}{L_0}\right)\]</p>
+            <p>\[\begin{aligned}F_x&=F_0\sin\frac{x}{L_0}\cos\frac{y}{L_0}\\[4pt]F_y&=-F_0\cos\frac{x}{L_0}\sin\frac{y}{L_0}\end{aligned}\]</p>
             <p class="equation-note">Champ de force périodique non conservatif.</p>
           </div>
           <div class="field-formula" data-force-field="periodic" hidden>
-            <p>\[\vec{F}(x,y)=-F_0\!\left(\sin\frac{x-x_c}{L_0},\sin\frac{y-y_c}{L_0}\right)\]</p>
+            <p>\[\begin{aligned}F_x&=-F_0\sin\frac{x-x_c}{L_0}\\[4pt]F_y&=-F_0\sin\frac{y-y_c}{L_0}\end{aligned}\]</p>
             <p class="equation-note">Champ conservatif formant des puits périodiques autour du centre \(C\).</p>
           </div>
           <div class="field-formula" data-force-field="central" hidden>
-            <p>\[\vec{F}(x,y)=-F_0\frac{(x-x_c,\,y-y_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
+            <p>\[\begin{aligned}F_x&=-\frac{F_0\,\Delta x}{\sqrt{L_0^2+\Delta x^2+\Delta y^2}}\\[4pt]F_y&=-\frac{F_0\,\Delta y}{\sqrt{L_0^2+\Delta x^2+\Delta y^2}}\end{aligned}\]</p>
+            <p class="equation-note">Avec \(\Delta x=x-x_c\) et \(\Delta y=y-y_c\).</p>
             <p class="equation-note">Champ central, attractif, conservatif et borné.</p>
           </div>
           <div class="field-formula" data-force-field="vortex" hidden>
-            <p>\[\vec{F}(x,y)=F_0\frac{(-(y-y_c),\,x-x_c)}{\sqrt{L_0^2+(x-x_c)^2+(y-y_c)^2}}\]</p>
+            <p>\[\begin{aligned}F_x&=-\frac{F_0\,\Delta y}{\sqrt{L_0^2+\Delta x^2+\Delta y^2}}\\[4pt]F_y&=\frac{F_0\,\Delta x}{\sqrt{L_0^2+\Delta x^2+\Delta y^2}}\end{aligned}\]</p>
+            <p class="equation-note">Avec \(\Delta x=x-x_c\) et \(\Delta y=y-y_c\).</p>
             <p class="equation-note">Champ tournant autour du centre \(C\), spatial, non conservatif et borné.</p>
           </div>
           <div class="field-formula" data-force-field="rotating" hidden>
-            <p>\[\vec{F}(t)=F_0\!\left(\cos(\omega_0 t),\,\sin(\omega_0 t)\right)\]</p>
+            <p>\[\begin{aligned}F_x&=F_0\cos(\omega_0t)\\[4pt]F_y&=F_0\sin(\omega_0t)\end{aligned}\]</p>
             <p class="equation-note">Champ uniforme tournant, explicitement dépendant du temps, avec \(\omega_0=\frac{2\pi}{10\,\mathrm s}\).</p>
           </div>
           <div class="field-formula" data-force-field="traveling" hidden>
-            <p>\[\vec{F}(x,y,t)=F_0\!\left(\sin\!\left(\frac{x}{L_0}-\omega_0t\right)\cos\frac{y}{L_0},\,-\cos\!\left(\frac{x}{L_0}-\omega_0t\right)\sin\frac{y}{L_0}\right)\]</p>
+            <p>\[\begin{aligned}F_x&=F_0\sin\varphi\cos\frac{y}{L_0}\\[4pt]F_y&=-F_0\cos\varphi\sin\frac{y}{L_0}\end{aligned}\]</p>
+            <p>\[\varphi=\frac{x}{L_0}-\omega_0t\]</p>
             <p class="equation-note">Champ non uniforme dont les tourbillons se déplacent avec le temps; la figure montre sa configuration à l’instant courant \(t\).</p>
           </div>
           <div class="field-formula" data-force-field="gravity" hidden>
-            <p>\[\vec{F}=-mg\,\vec e_z,\qquad U_g(z)=mgz\]</p>
+            <p>\[\begin{aligned}\vec{F}&=-mg\,\vec e_z\\[4pt]U_g(z)&=mgz\end{aligned}\]</p>
             <p class="equation-note">Champ de pesanteur uniforme, conservatif et dirigé verticalement vers le bas.</p>
           </div>
-          <p>\[P(t)=\vec{F}(t)\cdot\vec{v}(t)=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\]</p>
-          <p>\[W_{A\to t}=\int_{t_A}^{t}P(\tau)\,\mathrm d\tau=K(t)-K_A\]</p>
+          <p>\[\begin{aligned}P(t)&=\vec{F}(t)\cdot\vec{v}(t)\\[4pt]&=Fv\cos\theta=\frac{\mathrm dK}{\mathrm dt}\end{aligned}\]</p>
+          <p>\[\begin{aligned}W_{A\to t}&=\int_{t_A}^{t}P(\tau)\,\mathrm d\tau\\[4pt]&=K(t)-K_A\end{aligned}\]</p>
           <p class="equation-note">Pour les champs spatiaux, \(L_0=1\,\mathrm m\) et \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\). Le théorème reste valable pour chaque choix car \(\vec{F}\) est la force résultante.</p>
         </div>
       </section>
@@ -1190,18 +1208,17 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
         </section>
         <section class="panel-section equation-section">
           <h2>Travail le long d’un chemin</h2>
-          <div id="path-field-formula"></div>
+          <div id="path-field-formula" class="equations"></div>
           <p class="microcopy">Pour les champs spatiaux : \(L_0=1\,\mathrm m\), \(C=(\pi L_0,\tfrac{3\pi}{2}L_0)\).</p>
           <div id="path-comparison-relations">
             <p>\[W_i=\int_{C_i:A\to B}\vec F\cdot\mathrm d\vec r\]</p>
             <p>\[\oint_{C_1- C_2}\vec F\cdot\mathrm d\vec r=W_1-W_2\]</p>
-            <p id="path-conservative-formula">\[\vec F=-\nabla U\ \Rightarrow\ W_i=U(A)-U(B)\]</p>
+            <p id="path-conservative-formula">\[\begin{aligned}\vec F&=-\nabla U\\[4pt]\Rightarrow\quad W_i&=U(A)-U(B)\end{aligned}\]</p>
           </div>
           <div id="integral-relations" hidden>
-            <p>\[P=\vec F\cdot\vec v,\qquad F_\parallel=\vec F\cdot\vec e_\tau\]</p>
-            <p>\[\mathrm d\vec r=\vec v\,\mathrm dt=\vec e_\tau\,\mathrm d\ell\]</p>
-            <p>\[\int_0^t P(\tau)\,\mathrm d\tau=\int_{C_{A\to M(t)}}\vec F\cdot\mathrm d\vec r\]</p>
-            <p>\[=\int_0^{\ell(t)}F_\parallel(\ell)\,\mathrm d\ell\]</p>
+            <p>\[\begin{aligned}P&=\vec F\cdot\vec v\\[4pt]F_\parallel&=\vec F\cdot\vec e_\tau\end{aligned}\]</p>
+            <p>\[\begin{aligned}\mathrm d\vec r&=\vec v\,\mathrm dt\\[4pt]&=\vec e_\tau\,\mathrm d\ell\end{aligned}\]</p>
+            <p>\[\begin{aligned}&\int_0^t P(\tau)\,\mathrm d\tau\\[4pt]&\quad=\int_{C_{A\to M(t)}}\vec F\cdot\mathrm d\vec r\\[4pt]&\quad=\int_0^{\ell(t)}F_\parallel(\ell)\,\mathrm d\ell\end{aligned}\]</p>
             <p class="microcopy">\(\vec e_\tau\) est le vecteur unitaire tangent orienté dans le sens du mouvement. \(F_\parallel\) est une composante signée, pas le module de la force. Cette égalité ne suppose pas que le champ soit conservatif.</p>
           </div>
           <p class="microcopy">Le trajet et la vitesse sont imposés par un dispositif extérieur. On calcule uniquement le travail du champ \(\vec F\), pas celui de la force résultante : ce travail seul n’est donc pas nécessairement égal à \(\Delta K\).</p>
@@ -1795,8 +1812,143 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
     if(block){block.removeAttribute('data-force-field');block.dataset.pathField=id;block.hidden=id!==config.fieldId;$('path-field-formula').append(block);}
   }
   rebuild();
-  return {isActive:()=>active,render:()=>{tickKey='';sceneTickKey='';integralTickKeys={};render();}};
+  return {isActive:()=>active,
+    capture:()=>({config:PhysShare.clone(config),time,duration}),
+    restore:(s,ui)=>{
+      PhysShare.member(s.config.fieldId,M.stationary);PhysShare.range(s.duration,.1,120);PhysShare.range(s.time,0,s.duration);
+      stop();drag=null;config=PhysShare.clone(s.config);duration=s.duration;ui();
+      // Update the field's explanatory text/ranges before reinstating its intensity.
+      $('path-field').value=config.fieldId;$('path-field').dispatchEvent(new Event('change'));
+      config=PhysShare.clone(s.config);$('path-time').max=duration;ui();data=M.build(config,forceAt);time=s.time;
+      integralCache=null;tickKey='';sceneTickKey='';integralTickKeys={};activate();render();
+    },
+    render:()=>{tickKey='';sceneTickKey='';integralTickKeys={};render();}};
 }
+
+</script>
+  <script>
+/* Versioned, local-only configuration links. No server, storage or telemetry. */
+(() => {
+  'use strict';
+  const PREFIX = '#configuration=', MAX_BYTES = 8 * 1024 * 1024;
+  const clone = x => JSON.parse(JSON.stringify(x));
+  const pick = (x, keys) => Object.fromEntries(keys.split(' ').map(k => [k, clone(x[k])]));
+  function check(x, depth = 0, budget = {n: 0}) {
+    if (++budget.n > 600000 || depth > 18) throw Error('Configuration trop volumineuse.');
+    if (x === null || typeof x === 'boolean') return;
+    if (typeof x === 'number') { if (!Number.isFinite(x) || Math.abs(x) > 1e30) throw Error('Nombre non valide.'); return; }
+    if (typeof x === 'string') { if (x.length > 3000) throw Error('Texte trop long.'); return; }
+    if (!x || typeof x !== 'object') throw Error('Configuration non valide.');
+    for (const k of Object.keys(x)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(k)) throw Error('Clé non autorisée.');
+      check(x[k], depth + 1, budget);
+    }
+  }
+  function set(target, source) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) throw Error('Objet attendu.');
+    for (const [k, v] of Object.entries(source)) {
+      if (!Object.hasOwn(target, k) || typeof v !== typeof target[k]) throw Error('Paramètre non reconnu : ' + k);
+      if (v && typeof v === 'object' && !Array.isArray(v)) set(target[k], v);
+      else target[k] = clone(v);
+    }
+  }
+  function range(x, min, max) { if (typeof x !== 'number' || !Number.isFinite(x) || x < min || x > max) throw Error('Valeur hors limites.'); return x; }
+  function member(x, options) { if (!options.includes(x)) throw Error('Choix non reconnu.'); return x; }
+  function controls() {
+    return Object.fromEntries([...document.querySelectorAll('input[id],select[id]')]
+      .filter(e => !e.closest('[data-share-ui]') && !['file', 'password', 'button', 'submit'].includes(e.type))
+      .map(e => [e.id, ['checkbox', 'radio'].includes(e.type) ? e.checked : e.value]));
+  }
+  function applyControls(values) {
+    for (const [id, v] of Object.entries(values || {})) {
+      const e = document.getElementById(id);
+      if (!e || e.closest('[data-share-ui]') || !e.matches('input,select')) continue;
+      if (['checkbox', 'radio'].includes(e.type)) { if (typeof v === 'boolean') e.checked = v; }
+      else if (typeof v === 'string' && (!e.matches('select') || [...e.options].some(o => o.value === v))) e.value = v;
+    }
+  }
+  function bytes64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192)); return btoa(s).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, ''); }
+  async function streamBytes(stream) {
+    const r = stream.getReader(), chunks = []; let size = 0;
+    for (;;) { const {done, value} = await r.read(); if (done) break; size += value.length; if (size > MAX_BYTES) { await r.cancel(); throw Error('Configuration trop volumineuse.'); } chunks.push(value); }
+    const bytes = new Uint8Array(size); let at = 0; for (const c of chunks) { bytes.set(c, at); at += c.length; } return bytes;
+  }
+  async function encode(snapshot) {
+    check(snapshot); const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+    if (bytes.length > MAX_BYTES) throw Error('Historique trop long pour un lien. Recommencez une expérience plus courte.');
+    const gzip = typeof CompressionStream === 'function';
+    return (gzip ? '1z.' : '1j.') + bytes64(gzip ? await streamBytes(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))) : bytes);
+  }
+  async function decode(encoded) {
+    if (encoded.length > MAX_BYTES * 1.4 || !/^1[zj]\.[A-Za-z0-9_-]+$/.test(encoded)) throw Error('Lien incomplet ou format non reconnu.');
+    const raw = Uint8Array.from(atob(encoded.slice(3).replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
+    const bytes = encoded[1] === 'z' ? await streamBytes(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))) : raw;
+    const result = JSON.parse(new TextDecoder().decode(bytes)); check(result); return result;
+  }
+  let adapter, ready = false, loaded = false, status, panel, linkField, shareButton;
+  function capture() {
+    if (!ready) throw Error('L’application se prépare encore.');
+    const snapshot = {version: 1, app: adapter.id, data: clone(adapter.capture()), controls: controls(), details: [...document.querySelectorAll('details:not([data-share-ui])')].map(e => e.open)};
+    check(snapshot); return snapshot;
+  }
+  async function restore(snapshot) {
+    check(snapshot);
+    if (snapshot.version !== 1 || snapshot.app !== adapter.id || !snapshot.data || !snapshot.controls) throw Error('Ce lien concerne une autre application ou une version non prise en charge.');
+    const old = ready ? capture() : null;
+    const apply = s => {
+      const ui = () => applyControls(s.controls); ui(); adapter.restore(clone(s.data), ui); ui();
+      [...document.querySelectorAll('details:not([data-share-ui])')].forEach((e, i) => { if (typeof s.details?.[i] === 'boolean') e.open = s.details[i]; });
+    };
+    try { apply(snapshot); } catch (error) { if (old) apply(old); throw error; }
+  }
+  async function makeLink() {
+    const snapshot = capture(); // Capture synchronously, before asynchronous compression.
+    const url = new URL(location.href); url.search = ''; url.hash = PREFIX + await encode(snapshot); return url.href;
+  }
+  function message(text, error = false) { status.textContent = text; status.dataset.error = String(error); }
+  function mount() {
+    const host = document.querySelector('.app-header') || document.querySelector('header') || document.body;
+    const wrap = document.createElement('div'); wrap.dataset.shareUi = ''; wrap.className = 'phys-share';
+    const button = document.createElement('button'); shareButton=button;button.disabled=true;button.type = 'button'; button.id = 'share-configuration'; button.textContent = 'Partager'; button.title = 'Créer un lien conservant paramètres, options, vue et instant — ouvert en pause';
+    panel = document.createElement('div'); panel.className = 'phys-share-panel'; panel.hidden = true;
+    const label = document.createElement('label'); label.htmlFor = 'share-configuration-link'; label.textContent = 'Lien vers cet état, ouvert en pause';
+    linkField = document.createElement('textarea'); linkField.id = label.htmlFor; linkField.readOnly = true; linkField.rows = 2; linkField.spellcheck = false;
+    status = document.createElement('p'); status.className = 'phys-share-status'; status.setAttribute('role', 'status');
+    panel.append(label, linkField); wrap.append(button, panel, status); host.append(wrap);
+    // Editing/selecting the link must not trigger the simulation's shortcuts.
+    wrap.addEventListener('keydown', e => e.stopPropagation());
+    linkField.addEventListener('click', () => linkField.select());
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const url = await makeLink(); linkField.value = url; panel.hidden = false;
+        let copied = false; try { await navigator.clipboard.writeText(url); copied = true; } catch (_) { linkField.focus(); linkField.select(); }
+        const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+        message((copied ? 'Lien copié.' : 'Copiez le lien ci-dessus.') + (local ? ' Lien local : nécessite ce même fichier ou serveur. La version publiée permettra le partage aux étudiants.' : ' La configuration s’ouvrira en pause.') + (url.length > 16000 ? ' Lien long : certains outils de messagerie peuvent le tronquer.' : ''));
+      } catch (error) { message(error.message, true); }
+      finally { button.disabled = false; }
+    });
+  }
+  let restoreSequence=0;
+  async function restoreLocation() {
+    const sequence=++restoreSequence,hash=location.hash;
+    if (!hash.startsWith(PREFIX)) return false;
+    adapter.pause?.();
+    try {
+      const snapshot=await decode(hash.slice(PREFIX.length));
+      if(sequence!==restoreSequence)return false;
+      await restore(snapshot);if(!panel.hidden)linkField.value=location.href;message('Configuration restaurée — en pause.');return true;
+    } catch (error) {if(sequence===restoreSequence)message('Lien non chargé : ' + error.message, true);return false;}
+  }
+  async function register(a) {
+    if (adapter) throw Error('Une seule application par page.');
+    adapter = a; mount(); ready = true;
+    window.addEventListener('hashchange',()=>{void restoreLocation();});
+    try {return await restoreLocation();}
+    finally {loaded=true;shareButton.disabled=false;}
+  }
+  window.PhysShare = Object.freeze({register, capture, restore, makeLink, encode, decode, pick, set, range, member, clone, get ready() { return loaded; }});
+})();
 
 </script>
   <script>
@@ -3018,12 +3170,20 @@ function createImposedWorkUI({forceAt,canvasContext,drawArrow,setMathDigits,onMo
     window.MathJax.startup.promise
       .then(() => window.MathJax.typesetPromise())
       .then(() => initializeMathGlyphs())
-      .then(() => {
+      .then(async () => {
         mathIsReady = true;
         chartTickSignature = "";
         updateParameterOutputs();
         render(true);
         dom.loading.hidden = true;
+        await window.PhysShare?.register({id:'energy',pause:()=>setPlaying(false),
+          capture:()=>({parameters:{...state.parameters},time:state.time,playbackRate:state.playbackRate,loop:state.loop,view:{...state.view},display:{...state.display},nonGravitySettings:state.nonGravitySettings,imposed:imposedWork.capture()}),
+          restore:(s,ui)=>{
+            PhysShare.member(s.parameters.fieldId,Object.keys(FIELD_TYPES));PhysShare.range(s.parameters.duration,.1,120);PhysShare.range(s.time,0,s.parameters.duration);PhysShare.range(s.view.zoom,.01,100);
+            setPlaying(false);state.drag=null;state.parameters={...s.parameters};state.time=s.time;state.playbackRate=s.playbackRate;state.loop=s.loop;state.nonGravitySettings=s.nonGravitySettings;
+            PhysShare.set(state.view,s.view);PhysShare.set(state.display,s.display);setControlsFromParameters();recompute({resetTime:false});ui();imposedWork.restore(s.imposed,ui);render(true);
+          }
+        });
       })
       .catch(() => {
         dom.loading.textContent = "Les formules mathématiques n’ont pas pu être préparées.";

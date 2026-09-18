@@ -908,6 +908,19 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 }
 
 </style>
+  <style>
+.phys-share { margin-top: 1rem; min-width: 0; }
+.phys-share > button { min-height: 40px; padding: .45rem 1rem; font: inherit; border: 1px solid #cbd8e5; border-radius: 9px; color: #225b87; background: white; cursor: pointer; }
+.phys-share > button:focus-visible, .phys-share textarea:focus-visible { outline: 3px solid #82b3d9; outline-offset: 2px; }
+.phys-share-panel { margin-top: .65rem; min-width: 0; }
+.phys-share-panel[hidden] { display: none !important; }
+.phys-share-panel label { display: block; width: auto; font-size: .8rem; line-height: 1.4; margin-bottom: .4rem; }
+.phys-share-panel textarea { display: block; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 4em; resize: vertical; overflow-wrap: anywhere; border: 1px solid #cbd8e5; border-radius: 6px; padding: .5rem; color: #233449; background: #fff; font: .75rem/1.4 system-ui, sans-serif; }
+.phys-share-status { font: .78rem/1.45 system-ui, sans-serif; color: #54667d; overflow-wrap: anywhere; margin: .4rem 0 0; }
+.phys-share-status:empty { display: none; }
+.phys-share-status[data-error=true] { color: #a33232; }
+
+</style>
 </head>
 <body class="phys-app" data-app="kinematics-2d">
   <div id="app-shell">
@@ -1105,7 +1118,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
       <footer class="panel-footer">
         <span>© J. Martin</span>
-        <span>Faire glisser pour déplacer · molette pour zoomer</span>
+        <span>Faire glisser pour déplacer · pincer à deux doigts ou utiliser la molette pour zoomer</span>
       </footer>
     </aside>
 
@@ -1140,6 +1153,131 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   </div>
 
   <noscript>Cette application nécessite JavaScript.</noscript>
+  <script>
+/* Versioned, local-only configuration links. No server, storage or telemetry. */
+(() => {
+  'use strict';
+  const PREFIX = '#configuration=', MAX_BYTES = 8 * 1024 * 1024;
+  const clone = x => JSON.parse(JSON.stringify(x));
+  const pick = (x, keys) => Object.fromEntries(keys.split(' ').map(k => [k, clone(x[k])]));
+  function check(x, depth = 0, budget = {n: 0}) {
+    if (++budget.n > 600000 || depth > 18) throw Error('Configuration trop volumineuse.');
+    if (x === null || typeof x === 'boolean') return;
+    if (typeof x === 'number') { if (!Number.isFinite(x) || Math.abs(x) > 1e30) throw Error('Nombre non valide.'); return; }
+    if (typeof x === 'string') { if (x.length > 3000) throw Error('Texte trop long.'); return; }
+    if (!x || typeof x !== 'object') throw Error('Configuration non valide.');
+    for (const k of Object.keys(x)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(k)) throw Error('Clé non autorisée.');
+      check(x[k], depth + 1, budget);
+    }
+  }
+  function set(target, source) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) throw Error('Objet attendu.');
+    for (const [k, v] of Object.entries(source)) {
+      if (!Object.hasOwn(target, k) || typeof v !== typeof target[k]) throw Error('Paramètre non reconnu : ' + k);
+      if (v && typeof v === 'object' && !Array.isArray(v)) set(target[k], v);
+      else target[k] = clone(v);
+    }
+  }
+  function range(x, min, max) { if (typeof x !== 'number' || !Number.isFinite(x) || x < min || x > max) throw Error('Valeur hors limites.'); return x; }
+  function member(x, options) { if (!options.includes(x)) throw Error('Choix non reconnu.'); return x; }
+  function controls() {
+    return Object.fromEntries([...document.querySelectorAll('input[id],select[id]')]
+      .filter(e => !e.closest('[data-share-ui]') && !['file', 'password', 'button', 'submit'].includes(e.type))
+      .map(e => [e.id, ['checkbox', 'radio'].includes(e.type) ? e.checked : e.value]));
+  }
+  function applyControls(values) {
+    for (const [id, v] of Object.entries(values || {})) {
+      const e = document.getElementById(id);
+      if (!e || e.closest('[data-share-ui]') || !e.matches('input,select')) continue;
+      if (['checkbox', 'radio'].includes(e.type)) { if (typeof v === 'boolean') e.checked = v; }
+      else if (typeof v === 'string' && (!e.matches('select') || [...e.options].some(o => o.value === v))) e.value = v;
+    }
+  }
+  function bytes64(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192)); return btoa(s).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, ''); }
+  async function streamBytes(stream) {
+    const r = stream.getReader(), chunks = []; let size = 0;
+    for (;;) { const {done, value} = await r.read(); if (done) break; size += value.length; if (size > MAX_BYTES) { await r.cancel(); throw Error('Configuration trop volumineuse.'); } chunks.push(value); }
+    const bytes = new Uint8Array(size); let at = 0; for (const c of chunks) { bytes.set(c, at); at += c.length; } return bytes;
+  }
+  async function encode(snapshot) {
+    check(snapshot); const bytes = new TextEncoder().encode(JSON.stringify(snapshot));
+    if (bytes.length > MAX_BYTES) throw Error('Historique trop long pour un lien. Recommencez une expérience plus courte.');
+    const gzip = typeof CompressionStream === 'function';
+    return (gzip ? '1z.' : '1j.') + bytes64(gzip ? await streamBytes(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))) : bytes);
+  }
+  async function decode(encoded) {
+    if (encoded.length > MAX_BYTES * 1.4 || !/^1[zj]\.[A-Za-z0-9_-]+$/.test(encoded)) throw Error('Lien incomplet ou format non reconnu.');
+    const raw = Uint8Array.from(atob(encoded.slice(3).replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
+    const bytes = encoded[1] === 'z' ? await streamBytes(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))) : raw;
+    const result = JSON.parse(new TextDecoder().decode(bytes)); check(result); return result;
+  }
+  let adapter, ready = false, loaded = false, status, panel, linkField, shareButton;
+  function capture() {
+    if (!ready) throw Error('L’application se prépare encore.');
+    const snapshot = {version: 1, app: adapter.id, data: clone(adapter.capture()), controls: controls(), details: [...document.querySelectorAll('details:not([data-share-ui])')].map(e => e.open)};
+    check(snapshot); return snapshot;
+  }
+  async function restore(snapshot) {
+    check(snapshot);
+    if (snapshot.version !== 1 || snapshot.app !== adapter.id || !snapshot.data || !snapshot.controls) throw Error('Ce lien concerne une autre application ou une version non prise en charge.');
+    const old = ready ? capture() : null;
+    const apply = s => {
+      const ui = () => applyControls(s.controls); ui(); adapter.restore(clone(s.data), ui); ui();
+      [...document.querySelectorAll('details:not([data-share-ui])')].forEach((e, i) => { if (typeof s.details?.[i] === 'boolean') e.open = s.details[i]; });
+    };
+    try { apply(snapshot); } catch (error) { if (old) apply(old); throw error; }
+  }
+  async function makeLink() {
+    const snapshot = capture(); // Capture synchronously, before asynchronous compression.
+    const url = new URL(location.href); url.search = ''; url.hash = PREFIX + await encode(snapshot); return url.href;
+  }
+  function message(text, error = false) { status.textContent = text; status.dataset.error = String(error); }
+  function mount() {
+    const host = document.querySelector('.app-header') || document.querySelector('header') || document.body;
+    const wrap = document.createElement('div'); wrap.dataset.shareUi = ''; wrap.className = 'phys-share';
+    const button = document.createElement('button'); shareButton=button;button.disabled=true;button.type = 'button'; button.id = 'share-configuration'; button.textContent = 'Partager'; button.title = 'Créer un lien conservant paramètres, options, vue et instant — ouvert en pause';
+    panel = document.createElement('div'); panel.className = 'phys-share-panel'; panel.hidden = true;
+    const label = document.createElement('label'); label.htmlFor = 'share-configuration-link'; label.textContent = 'Lien vers cet état, ouvert en pause';
+    linkField = document.createElement('textarea'); linkField.id = label.htmlFor; linkField.readOnly = true; linkField.rows = 2; linkField.spellcheck = false;
+    status = document.createElement('p'); status.className = 'phys-share-status'; status.setAttribute('role', 'status');
+    panel.append(label, linkField); wrap.append(button, panel, status); host.append(wrap);
+    // Editing/selecting the link must not trigger the simulation's shortcuts.
+    wrap.addEventListener('keydown', e => e.stopPropagation());
+    linkField.addEventListener('click', () => linkField.select());
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const url = await makeLink(); linkField.value = url; panel.hidden = false;
+        let copied = false; try { await navigator.clipboard.writeText(url); copied = true; } catch (_) { linkField.focus(); linkField.select(); }
+        const local = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+        message((copied ? 'Lien copié.' : 'Copiez le lien ci-dessus.') + (local ? ' Lien local : nécessite ce même fichier ou serveur. La version publiée permettra le partage aux étudiants.' : ' La configuration s’ouvrira en pause.') + (url.length > 16000 ? ' Lien long : certains outils de messagerie peuvent le tronquer.' : ''));
+      } catch (error) { message(error.message, true); }
+      finally { button.disabled = false; }
+    });
+  }
+  let restoreSequence=0;
+  async function restoreLocation() {
+    const sequence=++restoreSequence,hash=location.hash;
+    if (!hash.startsWith(PREFIX)) return false;
+    adapter.pause?.();
+    try {
+      const snapshot=await decode(hash.slice(PREFIX.length));
+      if(sequence!==restoreSequence)return false;
+      await restore(snapshot);if(!panel.hidden)linkField.value=location.href;message('Configuration restaurée — en pause.');return true;
+    } catch (error) {if(sequence===restoreSequence)message('Lien non chargé : ' + error.message, true);return false;}
+  }
+  async function register(a) {
+    if (adapter) throw Error('Une seule application par page.');
+    adapter = a; mount(); ready = true;
+    window.addEventListener('hashchange',()=>{void restoreLocation();});
+    try {return await restoreLocation();}
+    finally {loaded=true;shareButton.disabled=false;}
+  }
+  window.PhysShare = Object.freeze({register, capture, restore, makeLink, encode, decode, pick, set, range, member, clone, get ready() { return loaded; }});
+})();
+
+</script>
   <script>
 (() => {
   'use strict';
@@ -1909,9 +2047,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   let viewportHeight = 1;
   let devicePixelRatio = 1;
   let plotRect = { left: 80, top: 40, width: 400, height: 400, right: 480, bottom: 440 };
-  let dragging = false;
-  let dragX = 0;
-  let dragY = 0;
+  const pointers = new Map();
+  let panPointer = null;
+  let pinch = null;
+  let touchOrigin = null;
 
   let mathIsReady = false;
   let mathTypesetQueue = Promise.resolve();
@@ -2728,36 +2867,34 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     });
   });
 
-  const pointerWorld = (event) => {
+  const pointerScreen = (event) => {
     const rect = canvas.getBoundingClientRect();
-    return screenToWorld(V(event.clientX - rect.left, event.clientY - rect.top));
+    return V(event.clientX - rect.left, event.clientY - rect.top);
   };
-  const beginOriginDrag = (event, target, jump) => {
-    if (event.button !== 0 || originDrag || dragging) return;
-    const point = pointerWorld(event);
-    if (jump && (point.x < view.xmin || point.x > view.xmax || point.y < view.ymin || point.y > view.ymax)) return;
-    event.preventDefault();
-    if (jump) setOrigin(point);
-    originDrag = { pointerId: event.pointerId, target, offset: sub(origin, point) };
-    target.setPointerCapture(event.pointerId);
+  const zoomView = (anchor, cursor, spanX, spanY) => {
+    const xFraction = (cursor.x - plotRect.left) / plotRect.width;
+    const yFraction = (plotRect.bottom - cursor.y) / plotRect.height;
+    view.xmin = anchor.x - xFraction * spanX;
+    view.xmax = view.xmin + spanX;
+    view.ymin = anchor.y - yFraction * spanY;
+    view.ymax = view.ymin + spanY;
+    updateAndDraw();
   };
-  const moveOriginDrag = (event) => {
-    if (!originDrag || event.pointerId !== originDrag.pointerId) return;
-    const point = add(pointerWorld(event), originDrag.offset);
-    setOrigin(V(clamp(point.x, view.xmin, view.xmax), clamp(point.y, view.ymin, view.ymax)));
+  const pinchGeometry = (ids) => {
+    const [a, b] = ids.map(id => pointers.get(id).point);
+    return { center: scale(add(a, b), .5), distance: Math.hypot(b.x - a.x, b.y - a.y) };
   };
-  const stopOriginDrag = (event) => {
-    if (!originDrag || event.pointerId !== originDrag.pointerId) return;
-    const { target, pointerId } = originDrag;
+  const beginPinch = () => {
+    const ids = [...pointers.keys()].slice(0, 2), { center, distance } = pinchGeometry(ids);
+    // A second finger takes precedence over moving O. Undo the first finger's
+    // tentative origin change, including a tap in "Déplacer l’origine" mode.
+    if (originDrag && touchOrigin) setOrigin(touchOrigin);
     originDrag = null;
-    if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+    panPointer = null;
+    pinch = { ids, distance: Math.max(1, distance), anchor: screenToWorld(center),
+      spanX: view.xmax - view.xmin, spanY: view.ymax - view.ymin };
+    viewport.classList.add('dragging');
   };
-  dom.originHandle.addEventListener('pointerdown', (event) => beginOriginDrag(event, dom.originHandle, false));
-  dom.originHandle.addEventListener('pointermove', moveOriginDrag);
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    dom.originHandle.addEventListener(type, stopOriginDrag);
-    canvas.addEventListener(type, stopOriginDrag);
-  }
   dom.originHandle.addEventListener('keydown', (event) => {
     const directions = { ArrowLeft: V(-1, 0), ArrowRight: V(1, 0), ArrowUp: V(0, 1), ArrowDown: V(0, -1) };
     if (!directions[event.key]) return;
@@ -2765,24 +2902,52 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     setOrigin(add(origin, scale(directions[event.key], event.shiftKey ? 1 : 0.1)));
   });
 
-  canvas.addEventListener('pointerdown', (event) => {
-    if (movingOrigin) { beginOriginDrag(event, canvas, true); return; }
-    if (event.button !== 0 || dragging || originDrag) return;
-    dragging = true;
-    dragX = event.clientX;
-    dragY = event.clientY;
-    viewport.classList.add('dragging');
-    canvas.setPointerCapture(event.pointerId);
+  viewport.addEventListener('pointerdown', (event) => {
+    const onOrigin = dom.originHandle.contains(event.target);
+    if ((!onOrigin && event.target !== canvas) || event.button !== 0) return;
+    // Multi-touch is supported; a mouse or pen cannot hijack another pointer.
+    if (pointers.size && (event.pointerType !== 'touch'
+      || [...pointers.values()].some(pointer => pointer.type !== 'touch'))) return;
+    event.preventDefault();
+    if (!pointers.size) touchOrigin = { ...origin };
+    const point = pointerScreen(event);
+    pointers.set(event.pointerId, { point, type: event.pointerType });
+    viewport.setPointerCapture(event.pointerId);
+    if (pointers.size >= 2) {
+      if (!pinch) beginPinch();
+      return;
+    }
+    if (movingOrigin || onOrigin) {
+      const world = screenToWorld(point);
+      if (!onOrigin && (world.x < view.xmin || world.x > view.xmax || world.y < view.ymin || world.y > view.ymax)) return;
+      if (!onOrigin) setOrigin(world);
+      originDrag = { pointerId: event.pointerId, offset: sub(origin, world) };
+    } else {
+      panPointer = event.pointerId;
+      viewport.classList.add('dragging');
+    }
   });
 
-  canvas.addEventListener('pointermove', (event) => {
-    if (originDrag) { moveOriginDrag(event); return; }
-    if (!dragging) return;
-    const dx = event.clientX - dragX;
-    const dy = event.clientY - dragY;
-    dragX = event.clientX;
-    dragY = event.clientY;
-
+  viewport.addEventListener('pointermove', (event) => {
+    const pointer = pointers.get(event.pointerId);
+    if (!pointer) return;
+    event.preventDefault();
+    const previous = pointer.point;
+    pointer.point = pointerScreen(event);
+    if (pinch) {
+      if (!pinch.ids.includes(event.pointerId)) return;
+      const { center, distance } = pinchGeometry(pinch.ids);
+      const spanX = clamp(pinch.spanX * pinch.distance / Math.max(1, distance), 1, 18);
+      zoomView(pinch.anchor, center, spanX, spanX * pinch.spanY / pinch.spanX);
+      return;
+    }
+    if (originDrag?.pointerId === event.pointerId) {
+      const point = add(screenToWorld(pointer.point), originDrag.offset);
+      setOrigin(V(clamp(point.x, view.xmin, view.xmax), clamp(point.y, view.ymin, view.ymax)));
+      return;
+    }
+    if (panPointer !== event.pointerId) return;
+    const dx = pointer.point.x - previous.x, dy = pointer.point.y - previous.y;
     const spanX = view.xmax - view.xmin;
     const spanY = view.ymax - view.ymin;
     const shiftX = dx * spanX / plotRect.width;
@@ -2794,32 +2959,39 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     updateAndDraw();
   });
 
-  const stopDragging = (event) => {
-    if (!dragging) return;
-    dragging = false;
-    viewport.classList.remove('dragging');
-    if (event?.pointerId !== undefined && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  const stopPointer = (event) => {
+    if (!pointers.delete(event.pointerId)) return;
+    if (originDrag?.pointerId === event.pointerId) originDrag = null;
+    if (panPointer === event.pointerId) panPointer = null;
+    if (pinch?.ids.includes(event.pointerId)) {
+      pinch = null;
+      if (pointers.size >= 2) beginPinch();
+      // Rebase at the remaining finger: no jump and no accidental move of O.
+      else if (pointers.size === 1) panPointer = pointers.keys().next().value;
+    }
+    if (!pointers.size) touchOrigin = null;
+    viewport.classList.toggle('dragging', pinch !== null || panPointer !== null);
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
   };
-  canvas.addEventListener('pointerup', stopDragging);
-  canvas.addEventListener('pointercancel', stopDragging);
-  canvas.addEventListener('lostpointercapture', stopDragging);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) viewport.addEventListener(type, stopPointer);
+  const cancelPointers = () => {
+    const ids = [...pointers.keys()];
+    pointers.clear();panPointer = null;pinch = null;originDrag = null;touchOrigin = null;
+    viewport.classList.remove('dragging');
+    for (const id of ids) if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
+  };
+  window.addEventListener('blur', cancelPointers);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelPointers(); });
 
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const cursor = V(event.clientX - rect.left, event.clientY - rect.top);
+    if (pointers.size) return;
+    const cursor = pointerScreen(event);
     const anchor = screenToWorld(cursor);
     const currentSpan = view.xmax - view.xmin;
     const factor = Math.exp(event.deltaY * 0.0012);
     const newSpan = clamp(currentSpan * factor, 1, 18);
-    const xFraction = (cursor.x - plotRect.left) / plotRect.width;
-    const yFraction = (plotRect.bottom - cursor.y) / plotRect.height;
-
-    view.xmin = anchor.x - xFraction * newSpan;
-    view.xmax = view.xmin + newSpan;
-    view.ymin = anchor.y - yFraction * newSpan;
-    view.ymax = view.ymin + newSpan;
-    updateAndDraw();
+    zoomView(anchor, cursor, newSpan, newSpan * (view.ymax - view.ymin) / currentSpan);
   }, { passive: false });
 
   document.addEventListener('keydown', (event) => {
@@ -2863,7 +3035,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     dom.fullTrail.checked = state.fullTrail;
     dom.trailDuration.disabled = state.fullTrail;
     dom.trailDurationControls.hidden = state.fullTrail;
-    dom.timeSlider.max = String(trajectoryTimeMax(currentTrajectory()));
+    configureTimeline();
     updateOriginControls();
     updateEquationPanel();
     resizeCanvas();
@@ -2887,9 +3059,26 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
     if (loadingMessage.isConnected) loadingMessage.remove();
 
+    const shared = await window.PhysShare?.register({id:'kinematics-2d',pause:()=>setPlaying(false),
+      capture:()=>({state:PhysShare.pick(state,'trajectoryKey time playbackSpeed loop vectorScale trailDuration fullTrail projections grid'),mc:{...mcParameters},origin:{...origin},view:{...view},movingOrigin}),
+      restore:(s,ui)=>{
+        PhysShare.member(s.state.trajectoryKey,Object.keys(TRAJECTORIES));
+        PhysShare.range(s.mc.R,.25,3);PhysShare.range(s.mc.omega,.1,2);PhysShare.range(s.mc.alpha,-.2,.2);
+        if(!(s.view.xmax>s.view.xmin&&s.view.ymax>s.view.ymin))throw Error('Vue non valide.');
+        for(const key of ['xmin','xmax','ymin','ymax'])PhysShare.range(s.view[key],-1e4,1e4);
+        PhysShare.range(s.view.xmax-s.view.xmin,.001,1e4);PhysShare.range(s.view.ymax-s.view.ymin,.001,1e4);
+        setPlaying(false);originDrag=null;PhysShare.set(mcParameters,s.mc);PhysShare.set(state,s.state);state.playing=false;
+        PhysShare.range(state.time,0,trajectoryTimeMax(currentTrajectory()));
+        PhysShare.set(view,s.view);PhysShare.set(origin,s.origin);ui();
+        movingOrigin=!!s.movingOrigin;dom.moveOrigin.setAttribute('aria-pressed',String(movingOrigin));viewport.classList.toggle('moving-origin',movingOrigin);
+        dom.trailDuration.disabled=state.fullTrail;dom.trailDurationControls.hidden=state.fullTrail;
+        configureTimeline();updateEquationPanel();updateMCReadouts();updateOriginControls();updateDynamicMathOutputs();updateAndDraw();
+      }
+    });
+
     if (navigator.webdriver) {
       setPlaying(false);
-      state.time = 2.4;
+      if (!shared) state.time = 2.4;
       updateAndDraw();
     } else {
       requestAnimationFrame(animate);

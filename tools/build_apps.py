@@ -24,6 +24,8 @@ APPS = {
     "equilibres_statiques_webapp_fr": ("statics", "equilibres_statiques_webapp_fr_source"),
 }
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
+SHARE_LINK = '<link rel="stylesheet" href="./phys1985-share.css" />'
+SHARE_SCRIPT = '<script src="./phys1985-share.js" defer></script>'
 
 
 def build(name, source, archive_root, app_kind):
@@ -40,6 +42,13 @@ def build(name, source, archive_root, app_kind):
     html = html.replace("<body>", f'<body class="phys-app" data-app="{app_kind}">')
     if f'data-app="{app_kind}"' not in html:
         raise ValueError(f"Unexpected body element in {name}")
+    if 'PhysShare?.register' in files['app.js'].decode('utf-8'):
+        if SHARE_LINK not in html:
+            html = html.replace(THEME_LINK, THEME_LINK + '\n  ' + SHARE_LINK)
+        if SHARE_SCRIPT not in html:
+            html = html.replace('<script src="./app.js" defer></script>', SHARE_SCRIPT + '\n  <script src="./app.js" defer></script>')
+        for filename in ('phys1985-share.js', 'phys1985-share.css'):
+            files[filename] = (PROJECT / 'assets' / filename).read_bytes()
     files["index.html"] = html.encode("utf-8")
     files["phys1985-theme.css"] = (PROJECT / "assets/phys1985-theme.css").read_bytes()
     bindings = {
@@ -50,6 +59,9 @@ def build(name, source, archive_root, app_kind):
     }
     if "physics.js" in files:
         bindings['<script src="./physics.js" defer></script>'] = ("script", "physics.js")
+    if SHARE_SCRIPT in html:
+        bindings[SHARE_SCRIPT] = ("script", "phys1985-share.js")
+        bindings[SHARE_LINK] = ("style", "phys1985-share.css")
     for reference, (tag, filename) in bindings.items():
         if html.count(reference) != 1:
             raise ValueError(f"Missing or duplicate {reference} in {name}")

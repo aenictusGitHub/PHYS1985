@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict'),vm=require('node:vm'),path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const zip=path.join(__dirname,'..','potentiel_force_webapp_fr.zip');
-const read=file=>execFileSync('unzip',['-p',zip,'potentiel_force_webapp_fr_source/'+file],{encoding:'utf8'});
+const read=file=>process.env.POTENTIAL_SOURCE?require('node:fs').readFileSync(path.join(process.env.POTENTIAL_SOURCE,file),'utf8'):execFileSync('unzip',['-p',zip,'potentiel_force_webapp_fr_source/'+file],{encoding:'utf8'});
 const source=read('physics.js')+'\n'+read('app.js'),html=read('index.html');
 const models=vm.runInNewContext(source.split("if (typeof document")[0]+';PotentialModels');
 assert.equal(models.stability(1),'stable');
@@ -70,6 +70,33 @@ for(const energy of [.5e-21,argon.energy,4e-21])for(const length of [.25e-9,argo
   }
 }
 console.log('Potential physics: analytical gradients, curvature, stable/unstable equilibria, pair minimum and bounded sweep passed.');
+
+const access=vm.runInNewContext(source.split("if (typeof document")[0]+';PotentialEnergy');
+for(const model of ['wells','pair','gravity'])for(const E of [-1,-.5,-.01,0,.1,.5,1,2,100]){
+  const a=access.analyse(model,E,models.definitions[model].start);
+  for(const r of a.roots)near(models.reduced(model,r.q).u,E,2e-8);
+  for(const [lo,hi]of a.intervals){
+    const q=!Number.isFinite(lo)?hi-1:!Number.isFinite(hi)?lo+1:(lo+hi)/2;
+    assert(models.reduced(model,q).u<=E+1e-8);
+  }
+}
+const left=models.equilibria('wells')[0].q,barrier=models.reduced('wells',models.equilibria('wells')[1].q).u;
+assert.equal(access.analyse('wells',.6,left).roots.length,4);
+assert.equal(access.analyse('wells',.6,left).roots.filter(r=>r.reachable).length,2);
+assert.equal(access.analyse('wells',barrier+.01,left).roots.length,2);
+assert.equal(access.analyse('wells',barrier,left).roots.filter(r=>r.stationary).length,1);
+assert(access.analyse('wells',barrier,left).status.includes('seuil'));
+assert(access.analyse('wells',models.reduced('wells',left).u,left).status.includes('repos'));
+assert.equal(access.analyse('pair',-1,2**(1/6)).roots.length,1);
+assert(access.analyse('pair',-1,2**(1/6)).roots[0].stationary);
+assert(access.analyse('pair',-.0001,1.4).roots[1].q>models.definitions.pair.max);
+assert.equal(access.analyse('pair',0,1.4).roots.length,1);
+assert.equal(access.analyse('gravity',0,1.5).roots.length,0);
+near(access.analyse('gravity',-.01,1.5).roots[0].q,100);
+const polygon=access.forbidden([{x:0,y:0,u:0},{x:2,y:0,u:2},{x:0,y:2,u:2}],1);
+assert.equal(polygon.length,4);assert(polygon.every(p=>p.u>=1));
+assert.equal(access.forbidden([{x:0,y:0,u:0},{x:1,y:0,u:0},{x:0,y:1,u:0}],1).length,0);
+console.log('Accessibility: global roots, disconnected wells, barrier threshold, rest vs turning, escape, out-of-frame roots and 2D clipping passed.');
 
 const plane=vm.runInNewContext(read('physics.js')+';PotentialPlane');
 for(const model of Object.keys(plane.definitions))for(const energy of [.2,1,4])for(const length of [.5,1,2]){
@@ -159,6 +186,7 @@ function canvasContext(id) {
       if(key==='setLineDash')target.dash=[...args[0]];
       if(key==='stroke')strokes.push({points,color:target.strokeStyle,width:target.lineWidth,dash:target.dash});
       if(key==='fill')fills.push({points,color:target.fillStyle});
+      if(key==='fillRect')fills.push({rect:[...args],color:target.fillStyle});
     };
   }});plots.set(id,{context,strokes,circles,fills});return context;
 }
@@ -167,9 +195,11 @@ class Element {
   set id(id){this._id=id;nodes.set(id,this);}get id(){return this._id;}
   append(...children){this.children.push(...children);}replaceChildren(...children){this.children=children;}
   setAttribute(k,v){this.attrs[k]=String(v);}getAttribute(k){return this.attrs[k];}
+  removeAttribute(k){delete this.attrs[k];}focus(){}
   querySelector(tag){return this.children.find(el=>el.tag===tag);}
   cloneNode(deep){const el=new Element(this.tag);el.attrs={...this.attrs};el.style={...this.style};el.dataset={...this.dataset};if(deep)el.children=this.children.map(c=>typeof c==='string'?c:c.cloneNode(true));return el;}
   addEventListener(k,fn){this.events[k]=fn;}fire(k,args={}){this.events[k]?.({target:this,preventDefault(){},...args});}click(){this.fire('click');}
+  dispatchEvent(event){this.fire(event.type);return true;}
   closest(){return null;}setPointerCapture(id){this.capture=id;}hasPointerCapture(id){return this.capture===id;}releasePointerCapture(){this.capture=undefined;}
   getBoundingClientRect(){return {left:0,top:0,width,height:['plane-surface','surface-canvas'].includes(this.id)?Math.min(500,Math.max(320,width-20)):['plane-map','plane-canvas'].includes(this.id)?Math.min(460,Math.max(260,width-40)):this.id?.startsWith('stage')?150:this.id?.startsWith('force')?215:255};}
   getContext(){return plots.get(this.id)?.context||canvasContext(this.id);}
@@ -202,7 +232,7 @@ function typeset(text) {
 }
 const document={readyState:'complete',getElementById:$,createElement:t=>new Element(t),createElementNS:(_,t)=>new Element(t),
   querySelectorAll:()=>[...nodes.values()].filter(el=>el.dataset.tex).concat(staticMath),addEventListener:(event,fn)=>{docEvents[event]=fn;}};
-const context={document,window:{devicePixelRatio:1},console:{error:e=>errors.push(e)},ResizeObserver:class{observe(){}},
+const context={document,window:{devicePixelRatio:1},console:{error:e=>errors.push(e)},ResizeObserver:class{observe(){}},Event:class{constructor(type){this.type=type;}},
   requestAnimationFrame:fn=>{frames.set(++frameId,fn);return frameId;},cancelAnimationFrame:id=>frames.delete(id),
   MathJax:{startup:{promise:Promise.resolve(),document:{updateDocument(){}}},tex2svg:typeset}};
 const tick=t=>{const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(t));};
@@ -256,6 +286,38 @@ function checkArrowGeometry(F,model) {
 async function checkUI(){
   vm.runInNewContext(source,context);await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(errors,[]);assert($('loading').hidden);
+  assert(!html.includes('class="motion-summary"'),'No visible motion summary');
+  assert($('motion-diagnostics').hidden,'Diagnostic values stay hidden');
+  assert(!html.includes('Sortir du cadre'),'Shortened accessibility note');
+  assert($('dimension-options').hidden&&$('dimension-current-2').hidden);
+  $('dimension-toggle').click();assert(!$('dimension-options').hidden);
+  $('dimension-2').click();
+  assert.equal($('dimension').value,'2');assert($('view-1d').hidden&&!$('view-2d').hidden);
+  assert($('motion-position-1d').hidden&&!$('motion-position-2d').hidden);
+  assert($('dimension-current-1').hidden&&!$('dimension-current-2').hidden);assert($('dimension-options').hidden);
+  assert.equal($('dimension-2').getAttribute('aria-selected'),'true');
+  $('dimension-toggle').click();$('dimension-1').click();
+  assert.equal($('dimension').value,'1');assert(!$('view-1d').hidden&&$('view-2d').hidden);
+  assert(!$('motion-position-1d').hidden&&$('motion-position-2d').hidden);
+  assert(!$('energy-accessibility').checked,'Energy overlay off by default');assert($('energy-guide').hidden);
+  assert(!plots.get('potential-canvas').strokes.some(s=>s.color==='#167e8b'),'No E line before opt-in');
+  $('energy-accessibility').checked=true;$('energy-accessibility').fire('change');
+  near(value('energy-level-value'),value('motion-energy'),.00051);
+  assert($('energy-regime').textContent.includes('Confinement'));
+  const initialPlot=plots.get('potential-canvas');
+  const energyLine=initialPlot.strokes.find(s=>s.color==='#167e8b'&&s.width===1.2);
+  assert(energyLine,'Thin turquoise total-energy line');assert.deepEqual([...energyLine.dash],[6,4]);
+  const zeroLine=initialPlot.strokes.find(s=>s.color==='#8b97a6');
+  assert(zeroLine&&zeroLine.width<1,'Fine zero reference');assert.deepEqual([...zeroLine.dash],[]);
+  assert.deepEqual(zeroLine.points.map(p=>p[0]),energyLine.points.map(p=>p[0]),'Zero reference spans the full plot');
+  assert(initialPlot.fills.some(f=>f.color==='#eef1f4'&&f.rect),'Very light forbidden regions');
+  assert(html.includes('zero-reference-legend')&&html.includes('data-tex="U=0"'),'Zero reference is explained');
+  assert(!/\\mathrm\s+d(?:U|x|r)/.test(source+html),'Derivative d remains italic');
+  const originalEnergy=value('energy-level-value');
+  $('energy-accessibility').checked=false;$('energy-accessibility').fire('change');assert($('energy-guide').hidden);
+  assert(!plots.get('potential-canvas').strokes.some(s=>s.color==='#167e8b'));
+  assert(plots.get('potential-canvas').strokes.some(s=>s.color==='#8b97a6'),'Zero reference remains when E is hidden');
+  $('energy-accessibility').checked=true;$('energy-accessibility').fire('change');assert(!$('energy-guide').hidden);near(value('energy-level-value'),originalEnergy);
   for(const model of ['wells','pair','gravity'])for(const viewport of [240,300,640,1100]) {
     width=viewport;$('model-select').value=model;$('model-select').fire('change');
     assert.equal($('body-1').hidden,model==='wells');
@@ -424,8 +486,10 @@ async function checkUI(){
   // and the same selected point in every view.
   width=640;$('model-select').value='wells';$('model-select').fire('change');
   set('motion-mass',2);set('motion-v0',.4);const x0=value('position-value'),E0=value('motion-energy');
+  const fixedLevel=$('energy-level-value').dataset.number,turns=$('energy-turns').textContent;
   near(value('motion-kinetic'),.16);$('motion-play').click();tick(0);for(let i=1;i<=120;i++)tick(i*1000/60);
   assert.equal($('motion-play').textContent,'Pause');assert.equal(frames.size,1);assert(Math.abs(value('position-value')-x0)>.01);near(value('motion-time'),2,.02);near(value('motion-energy'),E0,.002);
+  assert.equal($('energy-level-value').dataset.number,fixedLevel,'Level remains fixed throughout dynamics');assert.equal($('energy-turns').textContent,turns,'Turning point positions remain fixed');
   $('motion-play').click();const pausedX=value('position-value'),pausedT=value('motion-time');assert.equal(frames.size,0);tick(5000);near(value('position-value'),pausedX);near(value('motion-time'),pausedT);
   $('motion-play').click();tick(6000);tick(6016);$('motion-play').click();assert(value('motion-time')>pausedT,'Pause resumes without resetting time');
   $('motion-restart').click();near(value('position-value'),x0);near(value('motion-time'),0);near(value('motion-kinetic'),.16);
@@ -437,8 +501,28 @@ async function checkUI(){
     $('motion-restart').click();near(value('position-value'),start);near(value('motion-time'),0);
   }
   $('dimension').value='2';$('dimension').fire('change');$('plane-model').value='bowl';$('plane-model').fire('change');
+  // Initial velocity is a launch reference, independent of the current force.
+  const velocityArrow=id=>plots.get(id).strokes.find(s=>s.color==='#d05a20'&&s.width===2.6);
+  assert($('plane-velocity-key').hidden&&!velocityArrow('plane-canvas'));
+  $('plane-show-surface').checked=true;$('plane-show-surface').fire('change');
+  set('motion-v0',2);set('motion-angle',0);
+  const launch=velocityArrow('plane-canvas');assert(launch&&!$('plane-velocity-key').hidden);
+  assert(velocityArrow('surface-canvas')&&!$('surface-velocity-key').hidden);
+  assert.deepEqual([...launch.dash],[5,3]);near(launch.points[0][1],launch.points[1][1]);assert(launch.points[1][0]>launch.points[0][0]);
+  near(value('plane-velocity-value'),2);near(value('surface-velocity-value'),2);
+  set('motion-angle',90);let upward=velocityArrow('plane-canvas');near(upward.points[0][0],upward.points[1][0]);assert(upward.points[1][1]<upward.points[0][1]);
+  set('motion-angle',-94);let downward=velocityArrow('plane-canvas');assert(downward.points[1][0]<downward.points[0][0]&&downward.points[1][1]>downward.points[0][1]);
+  $('plane-force').checked=false;$('plane-force').fire('change');assert(velocityArrow('plane-canvas')&&velocityArrow('surface-canvas'),'Velocity is independent of force visibility');
+  const fixedLaunch=velocityArrow('plane-canvas').points.map(p=>[...p]);
+  $('motion-play').click();tick(0);tick(30);$('motion-play').click();assert.deepEqual(velocityArrow('plane-canvas').points,fixedLaunch,'Arrow stays at initial position while the particle moves');
+  $('motion-restart').click();set('motion-v0',0);assert($('plane-velocity-key').hidden&&$('surface-velocity-key').hidden);assert(!velocityArrow('plane-canvas')&&!velocityArrow('surface-canvas'));
+  $('plane-force').checked=true;$('plane-force').fire('change');
   $('plane-show-surface').checked=true;$('plane-show-surface').fire('change');set('motion-mass',1);set('motion-v0',.3);set('motion-angle',90);
   const initialXY=[value('plane-x-value'),value('plane-y-value')];near(value('motion-kinetic'),.045);$('motion-play').click();tick(0);for(let i=1;i<=60;i++)tick(i*1000/60);
+  near(value('plane-energy-level'),value('motion-energy'),.001);
+  assert(plots.get('plane-x-canvas').strokes.some(s=>s.color==='#167e8b'&&s.width===1.2),'Thin turquoise E in 2D cuts');
+  $('energy-accessibility').checked=false;$('energy-accessibility').fire('change');assert($('plane-energy-guide').hidden);assert.equal($('motion-play').textContent,'Pause','Display toggles do not pause dynamics');
+  $('energy-accessibility').checked=true;$('energy-accessibility').fire('change');assert(!$('plane-energy-guide').hidden);
   const trajectory=plots.get('plane-canvas').strokes.find(s=>s.color==='#8495a7');assert(trajectory&&trajectory.points.length>30);assert(plots.get('surface-canvas').strokes.some(s=>s.color==='#8495a7'));
   const g=plane.geometry(width,$('plane-map').getBoundingClientRect().height);near(trajectory.points[0][0],g.X(initialXY[0]));near(trajectory.points[0][1],g.Y(initialXY[1]));
   const movingT=value('motion-time');$('surface-top').click();assert.equal($('motion-play').textContent,'Pause');near(value('motion-time'),movingT,1e-9);

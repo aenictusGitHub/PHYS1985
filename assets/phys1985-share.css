@@ -1,0 +1,10 @@
+.phys-share { margin-top: 1rem; min-width: 0; }
+.phys-share > button { min-height: 40px; padding: .45rem 1rem; font: inherit; border: 1px solid #cbd8e5; border-radius: 9px; color: #225b87; background: white; cursor: pointer; }
+.phys-share > button:focus-visible, .phys-share textarea:focus-visible { outline: 3px solid #82b3d9; outline-offset: 2px; }
+.phys-share-panel { margin-top: .65rem; min-width: 0; }
+.phys-share-panel[hidden] { display: none !important; }
+.phys-share-panel label { display: block; width: auto; font-size: .8rem; line-height: 1.4; margin-bottom: .4rem; }
+.phys-share-panel textarea { display: block; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 4em; resize: vertical; overflow-wrap: anywhere; border: 1px solid #cbd8e5; border-radius: 6px; padding: .5rem; color: #233449; background: #fff; font: .75rem/1.4 system-ui, sans-serif; }
+.phys-share-status { font: .78rem/1.45 system-ui, sans-serif; color: #54667d; overflow-wrap: anywhere; margin: .4rem 0 0; }
+.phys-share-status:empty { display: none; }
+.phys-share-status[data-error=true] { color: #a33232; }
