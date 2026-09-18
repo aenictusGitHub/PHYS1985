@@ -26,6 +26,8 @@ APPS = {
 THEME_LINK = '<link rel="stylesheet" href="./phys1985-theme.css" />'
 SHARE_LINK = '<link rel="stylesheet" href="./phys1985-share.css" />'
 SHARE_SCRIPT = '<script src="./phys1985-share.js" defer></script>'
+TOUCH_LINK = '<link rel="stylesheet" href="./phys1985-touch.css" />'
+TOUCH_SCRIPT = '<script src="./phys1985-touch.js" defer></script>'
 
 
 def build(name, source, archive_root, app_kind):
@@ -49,13 +51,21 @@ def build(name, source, archive_root, app_kind):
             html = html.replace('<script src="./app.js" defer></script>', SHARE_SCRIPT + '\n  <script src="./app.js" defer></script>')
         for filename in ('phys1985-share.js', 'phys1985-share.css'):
             files[filename] = (PROJECT / 'assets' / filename).read_bytes()
-    files["index.html"] = html.encode("utf-8")
     files["phys1985-theme.css"] = (PROJECT / "assets/phys1985-theme.css").read_bytes()
+    if TOUCH_LINK not in html:
+        html = html.replace('</head>', '  ' + TOUCH_LINK + '\n</head>')
+    if TOUCH_SCRIPT not in html:
+        html = html.replace('<script src="./app.js" defer></script>', TOUCH_SCRIPT + '\n  <script src="./app.js" defer></script>')
+    for filename in ('phys1985-touch.js', 'phys1985-touch.css'):
+        files[filename] = (PROJECT / 'assets' / filename).read_bytes()
+    files["index.html"] = html.encode("utf-8")
     bindings = {
         '<script src="./vendor/mathjax/tex-svg.js" defer></script>': ("script", "vendor/mathjax/tex-svg.js"),
         '<link rel="stylesheet" href="./style.css" />': ("style", "style.css"),
         THEME_LINK: ("style", "phys1985-theme.css"),
         '<script src="./app.js" defer></script>': ("script", "app.js"),
+        TOUCH_LINK: ("style", "phys1985-touch.css"),
+        TOUCH_SCRIPT: ("script", "phys1985-touch.js"),
     }
     if "physics.js" in files:
         bindings['<script src="./physics.js" defer></script>'] = ("script", "physics.js")

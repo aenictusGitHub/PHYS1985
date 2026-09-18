@@ -1,0 +1,37 @@
+/* Deliberately override legacy touch-action:none on native-zoom surfaces. */
+.phys-app [data-phys-pinch="only"] { touch-action: pinch-zoom !important; }
+.phys-app [data-phys-pinch="vertical"] { touch-action: pan-y pinch-zoom !important; }
+.phys-app input[type="range"] { touch-action: pan-y pinch-zoom; }
+
+/* WebKit's native menu ignores some sizing rules. Keep native select semantics
+   and keyboard/picker behaviour, while drawing a consistent, sizeable control. */
+.phys-app select, .phys-app select:hover, .phys-app select:focus {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23546b80' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .6rem center;
+}
+.phys-app input[type="range"]::-webkit-slider-runnable-track { touch-action: pan-y pinch-zoom; }
+.phys-app input[type="range"]::-webkit-slider-thumb { touch-action: pan-y pinch-zoom; }
+.phys-app input[type="range"]::-moz-range-track { touch-action: pan-y pinch-zoom; }
+.phys-app input[type="range"]::-moz-range-thumb { touch-action: pan-y pinch-zoom; }
+.phys-app .phys-touch-help { display: none; }
+
+@media (any-pointer: coarse) {
+  .phys-app .panel-footer { flex-wrap: wrap; }
+  .phys-app .phys-touch-help { display: block; flex-basis: 100%; }
+  .phys-app button, .phys-app select, .phys-app .text-button,
+  .phys-app .viewport-toolbar button, .phys-app .preset-grid button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .phys-app select { padding-right: 2rem; }
+  .phys-app summary { min-height: 44px; padding-top: .65rem; padding-bottom: .65rem; }
+  .phys-app .phys-touch-check { min-height: 44px; align-items: center; }
+  .phys-app input[type="checkbox"] { width: 22px; height: 22px; flex-shrink: 0; }
+  .phys-app input[type="range"] { height: 44px; }
+  .phys-app input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -10px; }
+  .phys-app input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; }
+  .phys-app .mass-handle, .phys-app .body-handle, .phys-app .path-point { width: 44px; height: 44px; }
+}
