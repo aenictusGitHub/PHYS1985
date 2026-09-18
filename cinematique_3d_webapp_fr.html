@@ -1602,6 +1602,8 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   function draw(ctx, kind, x, y, {angle = 0, time = 0} = {}) {
     if (!valid(kind) || kind === 'point' || ![x,y,angle,time].every(Number.isFinite)) return false;
     ctx.save(); ctx.translate(x,y); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // Keep their physical centre fixed while slightly reducing these two icons.
+    if (kind === 'butterfly' || kind === 'ladybug') ctx.scale(.85,.85);
     // Slow illustrative wingbeat, tied to simulation time: frozen in pause.
     ctx.rotate(angle); const phase = 2 * Math.PI * 3 * time;
     if (kind === 'fly') fly(ctx,phase);
