@@ -28,6 +28,7 @@ SHARE_LINK = '<link rel="stylesheet" href="./phys1985-share.css" />'
 SHARE_SCRIPT = '<script src="./phys1985-share.js" defer></script>'
 TOUCH_LINK = '<link rel="stylesheet" href="./phys1985-touch.css" />'
 TOUCH_SCRIPT = '<script src="./phys1985-touch.js" defer></script>'
+MOBILE_SCRIPT = '<script src="./phys1985-mobile.js" defer></script>'
 
 
 def build(name, source, archive_root, app_kind):
@@ -58,6 +59,10 @@ def build(name, source, archive_root, app_kind):
         html = html.replace('<script src="./app.js" defer></script>', TOUCH_SCRIPT + '\n  <script src="./app.js" defer></script>')
     for filename in ('phys1985-touch.js', 'phys1985-touch.css'):
         files[filename] = (PROJECT / 'assets' / filename).read_bytes()
+    if app_kind in ('kinematics-2d', 'kinematics-3d'):
+        if MOBILE_SCRIPT not in html:
+            html = html.replace('<script src="./app.js" defer></script>', MOBILE_SCRIPT + '\n  <script src="./app.js" defer></script>')
+        files['phys1985-mobile.js'] = (PROJECT / 'assets/phys1985-mobile.js').read_bytes()
     files["index.html"] = html.encode("utf-8")
     bindings = {
         '<script src="./vendor/mathjax/tex-svg.js" defer></script>': ("script", "vendor/mathjax/tex-svg.js"),
@@ -69,6 +74,8 @@ def build(name, source, archive_root, app_kind):
     }
     if "physics.js" in files:
         bindings['<script src="./physics.js" defer></script>'] = ("script", "physics.js")
+    if MOBILE_SCRIPT in html:
+        bindings[MOBILE_SCRIPT] = ("script", "phys1985-mobile.js")
     if SHARE_SCRIPT in html:
         bindings[SHARE_SCRIPT] = ("script", "phys1985-share.js")
         bindings[SHARE_LINK] = ("style", "phys1985-share.css")
