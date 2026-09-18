@@ -328,7 +328,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
   background: linear-gradient(145deg, #fbfdff 0%, #eef3f8 100%);
 }
 
-#viewport canvas { display: block; width: 100%; height: 100%; }
+#viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
 #loading-message {
   position: absolute;
@@ -1137,14 +1137,14 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <h2>Mouvement</h2>
         <div id="trajectory-equations" class="equations"></div>
         <div class="equations jerk-relation">
-          <div class="equation"><span class="tex-math">\(\displaystyle \vec{\jmath}(t)=\frac{\mathrm d\vec a}{\mathrm dt}=\frac{\mathrm d^3\vec r}{\mathrm dt^3}\)</span></div>
+          <div class="equation"><span class="tex-math">\(\displaystyle \vec{\jmath}(t)=\frac{d\vec a}{dt}=\frac{d^3\vec r}{dt^3}\)</span></div>
           <p class="microcopy">L’à-coup mesure la variation du vecteur accélération. Unité : <span class="tex-math">\(\mathrm{m\,s^{-3}}\)</span>.</p>
         </div>
       </section>
 
       <footer class="panel-footer">
         <span>© J. Martin</span>
-        <span>Faire glisser pour tourner · Maj + glisser pour déplacer · molette pour zoomer</span>
+        <span>Un doigt pour tourner · deux doigts pour zoomer ou déplacer · souris : Maj + glisser pour déplacer, molette pour zoomer</span>
       </footer>
     </aside>
 
@@ -3064,24 +3064,64 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     updateAndDraw();
   }
 
-  let dragging = false;
-  let dragMode = 'rotate';
-  let previousPointer = null;
+  const pointers = new Map();
+  let pinch = null;
+  const zoomDistance = value => Math.max(5200, Math.min(26000, value));
+  const pointerScreen = event => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+  const pinchGeometry = ids => {
+    const [a, b] = ids.map(id => pointers.get(id).point);
+    return { center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      separation: Math.hypot(b.x - a.x, b.y - a.y) };
+  };
+  // Anchor the pinch in the screen-parallel plane through the camera target.
+  // Moving both fingers also pans; neither action changes yaw or pitch.
+  const screenOffset = (point, distance, basis) => add(
+    scale(basis.right, (point.x - viewportWidth / 2) * distance / basis.focal),
+    scale(basis.up, (viewportHeight / 2 - point.y) * distance / basis.focal),
+  );
+  const beginPinch = () => {
+    const ids = [...pointers.keys()].slice(0, 2), { center, separation } = pinchGeometry(ids);
+    const basis = cameraBasis();
+    pinch = { ids, separation: Math.max(1, separation), distance: camera.distance, basis,
+      anchor: add(camera.target, screenOffset(center, camera.distance, basis)) };
+  };
+  const cancelPointers = () => {
+    const ids = [...pointers.keys()];
+    pointers.clear();pinch = null;canvas.style.cursor = 'grab';
+    for (const id of ids) if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  };
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   canvas.addEventListener('pointerdown', (event) => {
-    dragging = true;
-    dragMode = (event.shiftKey || event.button === 1 || event.button === 2) ? 'pan' : 'rotate';
-    previousPointer = { x: event.clientX, y: event.clientY };
+    if (event.button < 0 || event.button > 2) return;
+    if (pointers.size && (event.pointerType !== 'touch'
+      || [...pointers.values()].some(pointer => pointer.type !== 'touch'))) return;
+    event.preventDefault();
+    pointers.set(event.pointerId, { point: pointerScreen(event), type: event.pointerType,
+      mode: (event.shiftKey || event.button === 1 || event.button === 2) ? 'pan' : 'rotate' });
     canvas.setPointerCapture(event.pointerId);
     canvas.style.cursor = 'grabbing';
+    if (pointers.size >= 2 && !pinch) beginPinch();
   });
   canvas.addEventListener('pointermove', (event) => {
-    if (!dragging || !previousPointer) return;
-    const dx = event.clientX - previousPointer.x;
-    const dy = event.clientY - previousPointer.y;
-    previousPointer = { x: event.clientX, y: event.clientY };
+    const pointer = pointers.get(event.pointerId);
+    if (!pointer) return;
+    event.preventDefault();
+    const previous = pointer.point;
+    pointer.point = pointerScreen(event);
+    if (pinch) {
+      if (!pinch.ids.includes(event.pointerId)) return;
+      const { center, separation } = pinchGeometry(pinch.ids);
+      camera.distance = zoomDistance(pinch.distance * pinch.separation / Math.max(1, separation));
+      camera.target = sub(pinch.anchor, screenOffset(center, camera.distance, pinch.basis));
+      updateAndDraw();
+      return;
+    }
+    const dx = pointer.point.x - previous.x, dy = pointer.point.y - previous.y;
 
-    if (dragMode === 'pan') {
+    if (pointer.mode === 'pan') {
       const basis = cameraBasis();
       const worldPerPixel = camera.distance / Math.max(1, basis.focal);
       const translation = add(
@@ -3096,22 +3136,28 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     updateAndDraw();
   });
   const finishPointer = (event) => {
-    dragging = false;
-    previousPointer = null;
+    if (!pointers.delete(event.pointerId)) return;
+    if (pinch?.ids.includes(event.pointerId)) {
+      pinch = null;
+      if (pointers.size >= 2) beginPinch();
+      // With one finger left, its last position is already the rotation origin.
+    }
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    canvas.style.cursor = 'grab';
+    canvas.style.cursor = pointers.size ? 'grabbing' : 'grab';
   };
-  canvas.addEventListener('pointerup', finishPointer);
-  canvas.addEventListener('pointercancel', finishPointer);
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(type, finishPointer);
+  window.addEventListener('blur', cancelPointers);
+  window.addEventListener('resize', cancelPointers);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelPointers(); });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    camera.distance *= Math.exp(event.deltaY * 0.0012);
-    camera.distance = Math.max(5200, Math.min(26000, camera.distance));
+    if (pointers.size) return;
+    camera.distance = zoomDistance(camera.distance * Math.exp(event.deltaY * 0.0012));
     updateAndDraw();
   }, { passive: false });
   canvas.style.cursor = 'grab';
 
-  dom.trajectory.addEventListener('change', onTrajectoryChanged);
+  dom.trajectory.addEventListener('change', () => { cancelPointers();onTrajectoryChanged(); });
   dom.play.addEventListener('click', () => setPlaying(!state.playing));
   dom.reset.addEventListener('click', () => {
     state.time = 0;
@@ -3119,19 +3165,23 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
     updateAndDraw();
   });
   dom.resetView.addEventListener('click', () => {
+    cancelPointers();
     resetCamera();
     updateAndDraw();
   });
   dom.topView.addEventListener('click', () => {
+    cancelPointers();
     camera.pitch = Math.PI / 2;
     updateAndDraw();
   });
   dom.frontView.addEventListener('click', () => {
+    cancelPointers();
     camera.yaw = 0;
     camera.pitch = 0;
     updateAndDraw();
   });
   dom.sideView.addEventListener('click', () => {
+    cancelPointers();
     camera.yaw = -Math.PI / 2;
     camera.pitch = 0;
     updateAndDraw();
