@@ -25,6 +25,19 @@ async function instrument(page) {
         return result;
       }};
     }});
+    let mobile3d;
+    Object.defineProperty(window,'PhysMobile3D',{configurable:true,get:()=>mobile3d,set:value=>{
+      mobile3d={...value,draw(ctx,kind,position,options){
+        const p=options.project(position),f=options.frame?.forward;
+        const next=f?options.project({x:position.x+f.x,y:position.y+f.y,z:position.z+f.z}):null;
+        window.__mobileDraw={kind,x:p.x,y:p.y,angle:next?Math.atan2(next.y-p.y,next.x-p.x):0,time:options.time,frame:options.frame,position};
+        const before=[ctx.getTransform().toString(),ctx.fillStyle,ctx.strokeStyle,ctx.lineWidth,ctx.globalAlpha];
+        const result=value.draw(ctx,kind,position,options);
+        const after=[ctx.getTransform().toString(),ctx.fillStyle,ctx.strokeStyle,ctx.lineWidth,ctx.globalAlpha];
+        if(JSON.stringify(before)!==JSON.stringify(after))throw Error('3D mobile renderer leaked canvas state');
+        return result;
+      }};
+    }});
   });
 }
 (async()=>{
