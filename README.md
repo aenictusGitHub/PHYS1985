@@ -39,17 +39,6 @@ Cliquez sur un QR code pour ouvrir l’animation.
 
 ## Fichiers
 
-- `cinematique_2d_webapp_fr.html` et `cinematique_3d_webapp_fr.html` : versions autonomes prêtes à ouvrir ;
-- `cinematique_2d_webapp_fr.zip` et `cinematique_3d_webapp_fr.zip` : archives contenant les sources séparées ;
-- `puissance_travail_webapp_fr.html` : animation autonome sur le travail et la puissance ;
-- `puissance_travail_webapp_fr.zip` : archive contenant ses sources séparées ;
-- `energie_mecanique_webapp_fr.html` et `energie_mecanique_webapp_fr.zip` : animation autonome sur l’énergie et archive de ses sources ;
-- `potentiel_force_webapp_fr.html` et `potentiel_force_webapp_fr.zip` : animation autonome reliant potentiel et force, et archive de ses sources ;
-- `moment_cinetique_webapp_fr.html` et `moment_cinetique_webapp_fr.zip` : animation autonome sur le moment cinétique autour d’un axe fixe, et archive de ses sources ;
-- `collisions_webapp_fr.html` et `collisions_webapp_fr.zip` : animation autonome sur les chocs en 1D et 2D, et archive de ses sources et tests ;
-- `frottements_solides_webapp_fr.html` et `frottements_solides_webapp_fr.zip` : animation autonome sur les frottements solides, et archive de ses sources et tests ;
-- `poulies_webapp_fr.html` et `poulies_webapp_fr.zip` : animation autonome sur les poulies et archive de ses sources et tests ;
-- `equilibres_statiques_webapp_fr.html` et `equilibres_statiques_webapp_fr.zip` : animation autonome sur l’équilibre et la rotation d’une barre, avec ses sources et tests ;
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `notes/Notes_de_cours_2627.pdf` : notes de cours 2026–2027 au format A4 ;
 - `qr-codes/` : QR codes en PNG et SVG.
