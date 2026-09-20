@@ -1028,17 +1028,18 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
           <optgroup label="Trajectoires originales">
             <option value="lissajous">Lissajous (𝑛=2)</option>
             <option value="lissajous3">Lissajous (𝑛=3)</option>
+            <option value="mcua">Mouvement circulaire</option>
+            <option value="ballistic">Trajectoire balistique</option>
             <option value="astroid">Astroïde</option>
             <option value="quadrifolium">Quadrifolium</option>
-            <option value="mcua">Mouvement circulaire uniformément accéléré</option>
             <option value="fish">Courbe poisson</option>
-            <option value="ballistic">Trajectoire balistique</option>
           </optgroup>
           <optgroup label="Nœuds">
             <option value="trefoil">Nœud de trèfle T(2,3)</option>
             <option value="figureEightKnot">Nœud en huit</option>
-            <option value="cinquefoil">Nœud à cinq lobes T(2,5)</option>
-            <option value="harmonicKnot">Nœud harmonique (3,4,5)</option>
+            <!-- Retained only for previously shared configurations. -->
+            <option value="cinquefoil" hidden>Nœud à cinq lobes T(2,5)</option>
+            <option value="harmonicKnot" hidden>Nœud harmonique (3,4,5)</option>
           </optgroup>
           <optgroup label="Courbes toroïdales et sphériques">
             <option value="toroidalHelix">Hélice toroïdale (7 spires)</option>
@@ -1941,7 +1942,7 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
       },
     },
     mcua: {
-      label: 'Mouvement circulaire uniformément accéléré',
+      label: 'Mouvement circulaire',
       duration: MCUA_DURATION,
       closed: false,
       scaleV: 0.5,
@@ -3545,6 +3546,10 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 
   function onTrajectoryChanged() {
     state.trajectoryKey = dom.trajectory.value;
+    if (state.trajectoryKey === 'ballistic') {
+      state.playbackSpeed = 0.5;
+      dom.speed.value = '0.5';
+    }
     state.time = 0;
     configureTimelineForCurrentTrajectory();
     updateEquationPanel();

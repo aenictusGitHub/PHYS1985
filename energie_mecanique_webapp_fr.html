@@ -1101,7 +1101,7 @@ async function startEnergyApp() {
           ['Masses différentes', {m1: 2, m2: .5, theta1: 90, theta2: -60}],
           ['Au repos à l’équilibre', {theta1: 0, theta2: 0}],
         ],
-        equations: [tex`K_i=\frac12 m_i\lvert\vec v_i\rvert^2`, tex`U_i=m_i g(z_i-z_{i,\min})`, tex`K=K_1+K_2,\quad U=U_1+U_2`, tex`E=K_1+U_1+K_2+U_2`, tex`\frac{\mathrm dE}{\mathrm dt}=0`],
+        equations: [tex`K_i=\frac12 m_i\lvert\vec v_i\rvert^2`, tex`U_i=m_i g(z_i-z_{i,\min})`, tex`K=K_1+K_2,\quad U=U_1+U_2`, tex`E=K_1+U_1+K_2+U_2`, tex`\frac{dE}{dt}=0`],
         reference: 'Tiges rigides, sans masse, pivot fixe. Les angles sont mesurés depuis la verticale descendante. Pour chaque masse, le potentiel est nul à sa hauteur minimale, lorsque les deux tiges sont verticales vers le bas.',
       },
     };
@@ -1270,7 +1270,7 @@ async function startEnergyApp() {
           : state.model === 'simple-pendulum'
           ? [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f}=-m\gamma\vec v`, tex`\ddot\theta+\gamma\dot\theta+\frac{g}{\ell}\sin\theta=0`]
           : [definition.equations[0], definition.equations[1], tex`\vec F_{\mathrm f,i}=-m_i\gamma\vec v_i`];
-        equations = [...equations, tex`E=K+U`, tex`\frac{\mathrm dE}{\mathrm dt}=-2\gamma K`, tex`E_{\mathrm{diss}}=\int_0^t 2\gamma K(\tau)\,\mathrm d\tau`, tex`E+E_{\mathrm{diss}}=E(0)`];
+        equations = [...equations, tex`E=K+U`, tex`\frac{dE}{dt}=-2\gamma K`, tex`E_{\mathrm{diss}}=\int_0^t 2\gamma K(\tau)\,\mathrm d\tau`, tex`E+E_{\mathrm{diss}}=E(0)`];
       }
       $('relations').replaceChildren(...equations.map(eq => {
         const div = document.createElement('div'); div.className = 'equation'; math(div, eq); return div;
