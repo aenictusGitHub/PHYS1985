@@ -1,0 +1,6 @@
+.phys-language{display:flex;align-items:center;justify-content:space-between;gap:.65rem;flex-wrap:wrap;margin-top:.85rem;min-width:0}
+.phys-language>label{width:auto;margin:0;font:600 .85rem/1.4 system-ui,sans-serif;color:#52667e}
+.phys-language>select{box-sizing:border-box;width:auto;max-width:72%;min-width:116px;min-height:44px;margin:0;border:1px solid #cbd8e5;border-radius:9px;padding:.45rem 1.9rem .45rem .65rem;background-color:#fff;color:#233449;font:400 .85rem/1.4 system-ui,sans-serif;touch-action:manipulation}
+.phys-language>select:focus-visible{outline:3px solid #82b3d9;outline-offset:2px}
+.phys-language-status{flex-basis:100%;margin:.2rem 0;color:#a33232;font-size:.8rem;overflow-wrap:anywhere}
+.phys-language-status[hidden]{display:none}

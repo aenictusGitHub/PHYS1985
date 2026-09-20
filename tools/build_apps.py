@@ -5,6 +5,7 @@ can instead package a working source folder. No external dependencies are needed
 """
 
 import argparse
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -30,6 +31,8 @@ TOUCH_LINK = '<link rel="stylesheet" href="./phys1985-touch.css" />'
 TOUCH_SCRIPT = '<script src="./phys1985-touch.js" defer></script>'
 MOBILE_SCRIPT = '<script src="./phys1985-mobile.js" defer></script>'
 MOBILE_3D_SCRIPT = '<script src="./phys1985-mobile-3d.js" defer></script>'
+LANGUAGE_SCRIPT = '<script src="./phys1985-language.js" defer></script>'
+LANGUAGE_LINK = '<link rel="stylesheet" href="./phys1985-language.css" />'
 
 
 def build(name, source, archive_root, app_kind):
@@ -40,6 +43,19 @@ def build(name, source, archive_root, app_kind):
     files.pop(f"{name}.html", None)
     files.pop(f"{name}.zip", None)
     html = files["index.html"].decode("utf-8")
+    # Run before the app's first MathJax pass (also in extracted source builds).
+    translation_init = 'globalThis.PhysLang?.translateTree(document.documentElement);\n'
+    app_code = files['app.js'].decode('utf-8')
+    if translation_init not in app_code:
+        files['app.js'] = (translation_init + app_code).encode('utf-8')
+    if LANGUAGE_SCRIPT not in html:
+        html = html.replace('<script src="./vendor/mathjax/tex-svg.js" defer></script>', LANGUAGE_SCRIPT + '\n  <script src="./vendor/mathjax/tex-svg.js" defer></script>')
+    if LANGUAGE_LINK not in html:
+        html = html.replace('</head>', '  ' + LANGUAGE_LINK + '\n</head>')
+    catalogue = json.loads((PROJECT / 'assets/phys1985-en.json').read_text(encoding='utf-8'))
+    language = (PROJECT / 'assets/phys1985-language.js').read_text(encoding='utf-8').replace('/* PHYS1985_ENGLISH */ {}', json.dumps(catalogue, ensure_ascii=False).replace('</', '<\\/'))
+    files['phys1985-language.js'] = language.encode('utf-8')
+    files['phys1985-language.css'] = (PROJECT / 'assets/phys1985-language.css').read_bytes()
     if THEME_LINK not in html:
         html = html.replace('<link rel="stylesheet" href="./style.css" />',
                             '<link rel="stylesheet" href="./style.css" />\n  ' + THEME_LINK)
@@ -76,6 +92,8 @@ def build(name, source, archive_root, app_kind):
         '<script src="./app.js" defer></script>': ("script", "app.js"),
         TOUCH_LINK: ("style", "phys1985-touch.css"),
         TOUCH_SCRIPT: ("script", "phys1985-touch.js"),
+        LANGUAGE_SCRIPT: ("script", "phys1985-language.js"),
+        LANGUAGE_LINK: ("style", "phys1985-language.css"),
     }
     if "physics.js" in files:
         bindings['<script src="./physics.js" defer></script>'] = ("script", "physics.js")

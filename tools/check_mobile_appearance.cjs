@@ -4,7 +4,7 @@ const {pathToFileURL} = require('node:url'), playwright = require('playwright');
 const root = path.resolve(process.argv[2] || path.join(__dirname,'..'));
 const out = process.env.RESULT_DIR || fs.mkdtempSync(path.join(os.tmpdir(),'phys-mobile-'));
 fs.mkdirSync(out,{recursive:true});
-const kinds = ['point','fly','butterfly','ladybug'];
+const kinds = ['point','fly','butterfly','ladybug','tore'];
 const apps = ['cinematique_2d','cinematique_3d'];
 const engines = (process.env.ENGINES || 'chromium,webkit,firefox').split(',');
 const stripped = snapshot => {
@@ -57,7 +57,7 @@ async function instrument(page) {
           const select=page.locator('#mobile-appearance'), canvas=page.locator(app==='cinematique_2d'?'#scene-canvas':'#viewport > canvas');
           assert.equal(await select.inputValue(),'point');
           assert.deepEqual(await select.locator('option').evaluateAll(xs=>xs.map(e=>e.value)),kinds);
-          assert.deepEqual(await select.locator('option').allTextContents(),['Point','Mouche','Papillon','Coccinelle']);
+          assert.deepEqual(await select.locator('option').allTextContents(),['Point','Mouche','Papillon','Coccinelle','Toré']);
           await select.scrollIntoViewIfNeeded();
           if(tablet)assert((await select.boundingBox()).height>=44);
           const baseline=await page.evaluate(()=>PhysShare.capture());
@@ -99,7 +99,7 @@ async function instrument(page) {
           }));
           assert.deepEqual(await page.evaluate(()=>PhysShare.capture()),beforeInvalid);
           await page.locator('#play-button').click();
-          await select.selectOption('fly');assert.equal(await page.locator('#play-button').innerText(),'Pause');
+          await select.selectOption('tore');assert.equal(await page.locator('#play-button').innerText(),'Pause');
           await page.locator('#play-button').click();
           if(app==='cinematique_3d') for(const preset of ['front-view','side-view','top-view','reset-view']) {
             await page.locator('#'+preset).click();
@@ -128,7 +128,7 @@ async function instrument(page) {
             await page.goto(url);await page.waitForFunction(()=>window.PhysShare?.ready);
             await page.locator('#play-button').click();
             const time=await page.evaluate(()=>PhysShare.capture().data.state.time);
-            await select.selectOption('fly');
+            await select.selectOption('tore');
             assert.equal(await page.evaluate(()=>PhysShare.capture().data.state.time),time);
             await page.locator('#play-button').click();
             await page.waitForFunction(t=>PhysShare.capture().data.state.time>t+.15,time);

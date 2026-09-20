@@ -18,7 +18,7 @@ async function roundtrip(page,browser,label){
   await next.addInitScript(()=>Object.defineProperty(navigator,'webdriver',{get:()=>false}));
   try{
     await next.goto(url);await next.waitForFunction(()=>window.PhysShare?.ready&&document.querySelector('.phys-share-status')?.textContent, {timeout:25000});
-    const text=await next.locator('.phys-share-status').innerText();assert.match(text,/restaurée/,label+': '+text);
+    const text=await next.locator('.phys-share-status').innerText();assert.match(text,process.env.LANGUAGE==='en'?/restored/:/restaurée/,label+': '+text);
     const after=await next.evaluate(()=>PhysShare.capture());let differences=diff(before,after);
     assert.deepEqual(differences,[],label+' round-trip');
     assert.equal(await next.getByRole('button',{name:'Pause',exact:true}).count(),0,label+' transport must be paused');
@@ -30,7 +30,7 @@ async function roundtrip(page,browser,label){
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
  let failed=0;
  try{for(const name of names){const page=await browser.newPage({viewport:{width:1440,height:1000}});try{
-   page.on('pageerror',e=>console.error(name+': '+e.message));await page.goto('file://'+path.join(root,name+'_webapp_fr.html'));
+   page.on('pageerror',e=>console.error(name+': '+e.message));await page.goto('file://'+path.join(root,name+'_webapp_fr.html')+'?lang='+(process.env.LANGUAGE||'fr'));
    await page.waitForFunction(()=>window.PhysShare?.ready,{timeout:25000});
    await roundtrip(page,browser,name+' default');
    const select=async(id,value)=>{await page.selectOption('#'+id,value);await page.waitForTimeout(30);};

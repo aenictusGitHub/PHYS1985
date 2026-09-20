@@ -1,3 +1,4 @@
+var physTranslate = globalThis.PhysLang?.t || (value => value);
 /* Native pinch zoom without editing the experiment. No dependencies/network.
  * Kinematics keeps its own anchored scene zoom. Other canvases use page zoom.
  * A one-finger edit is provisional until the gesture is known to be single-touch:
@@ -27,7 +28,7 @@
       const footer = document.querySelector('.panel-footer');
       if (footer) {
         const hint = document.createElement('span'); hint.className = 'phys-touch-help';
-        hint.textContent = 'Un doigt : manipuler · deux doigts : agrandir la page';
+        hint.textContent = physTranslate('Un doigt : manipuler · deux doigts : agrandir la page');
         footer.append(hint);
       }
     }

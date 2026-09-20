@@ -1,4 +1,4 @@
-/* Lightweight, offline 3D insect meshes for the canvas renderer.
+/* Lightweight, offline 3D mobile meshes for the canvas renderer.
  * Local x is the direction of travel, y the wing span, z the dorsal side.
  * Orientation is illustrative, not a model of insect flight dynamics. */
 (() => {
@@ -49,6 +49,7 @@
   }
   const shellSpots=[[-8,0,2],[-5,-5,2.25],[-5,5,2.25],[1,-6,2.1],[1,6,2.1],[6,-3.8,1.7],[6,3.8,1.7]];
   function baseModel(kind) {
+    if(kind==='tore')return window.PhysMobile.toreGeometry();
     const g={faces:[],lines:[]};
     if(kind==='fly'){
       legs(g);antennae(g,10);
@@ -72,7 +73,7 @@
     }
     return g;
   }
-  const models=Object.fromEntries(['fly','butterfly','ladybug'].map(k=>[k,baseModel(k)]));
+  const models=Object.fromEntries(['fly','butterfly','ladybug','tore'].map(k=>[k,baseModel(k)]));
   function bezier(a,b,c,d,n=12) {
     return Array.from({length:n+1},(_,i)=>{
       const t=i/n,u=1-t;return [u**3*a[0]+3*u*u*t*b[0]+3*u*t*t*c[0]+t**3*d[0],u**3*a[1]+3*u*u*t*b[1]+3*u*t*t*c[1]+t**3*d[1]];
@@ -109,7 +110,7 @@
   function geometry(kind,time=0) {
     const base=models[kind];if(!base)return null;
     const g={faces:[...base.faces],lines:[...base.lines]};
-    if(kind!=='ladybug')wings(g,kind,time);
+    if(kind==='fly'||kind==='butterfly')wings(g,kind,time);
     return g;
   }
   function shade(color,brightness,highlight=0) {
@@ -125,8 +126,8 @@
       let normal=localToWorld(f.normal,frame);const toward=unit(sub(eye,center));
       if(dot(normal,toward)<=0){if(!f.twoSided)continue;normal=mul(normal,-1);}
       const points=vertices.map(project);if(points.some(p=>!p))continue;
-      const diffuse=.52+.48*Math.max(0,dot(normal,lighting));
-      const gloss=.16*Math.max(0,dot(normal,unit(add(lighting,toward))))**24;
+      const diffuse=kind==='tore'?.62+.38*Math.max(0,dot(normal,lighting)):.52+.48*Math.max(0,dot(normal,lighting));
+      const gloss=(kind==='tore'?.025:.16)*Math.max(0,dot(normal,unit(add(lighting,toward))))**24;
       paint.push({points,depth:points.reduce((s,p)=>s+p.depth,0)/points.length,color:shade(f.color,diffuse,gloss),alpha:f.alpha});
     }
     for(const l of g.lines){

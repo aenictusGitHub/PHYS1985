@@ -71,7 +71,7 @@ async function inspect(page,label){
       p.fill=function(...a){if(this.canvas.id==='scene-canvas'&&this.fillStyle instanceof CanvasGradient&&this.__lastTestArc)(window.__testBodies||=[]).push(this.__lastTestArc);return fill.apply(this,a);};
     });
     try{
-     await page.goto('file://'+path.join(root,app+'_webapp_fr.html'));await page.waitForFunction(()=>window.PhysShare?.ready,{timeout:25000});
+     await page.goto('file://'+path.join(root,app+'_webapp_fr.html')+'?lang='+(process.env.LANGUAGE||'fr'));await page.waitForFunction(()=>window.PhysShare?.ready,{timeout:25000});
      const metrics=await page.evaluate(()=>({width:innerWidth,dpr:devicePixelRatio}));assert(Math.abs(metrics.width-width/zoom)<2,'native layout zoom');assert(Math.abs(metrics.dpr-zoom)<.01,'native DPR zoom');
      const prefix=app+'-'+zoom+'x-'+width;
      cases+=await inspect(page,prefix+'-default');
