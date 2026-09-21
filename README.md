@@ -5,6 +5,7 @@ Ressources pour le cours PHYS1985 - Physique générale I (partie Concepts).
 ## Notes de cours
 
 - [Notes de cours 2026–2027](https://aenictusgithub.github.io/PHYS1985/notes/Notes_de_cours_2627.pdf)
+- [Course notes 2026–2027 — English version](https://aenictusgithub.github.io/PHYS1985/notes/Course_notes_2627_EN.pdf)
 
 ## Ouvrir les animations
 
@@ -41,6 +42,7 @@ Cliquez sur un QR code pour ouvrir l’animation.
 
 - `index.html` : page d’accueil publiée avec GitHub Pages ;
 - `notes/Notes_de_cours_2627.pdf` : notes de cours 2026–2027 au format A4 ;
+- `notes/Course_notes_2627_EN.pdf` : version anglaise des notes 2026–2027 au format A4, 85 pages ;
 - `qr-codes/` : QR codes en PNG et SVG.
 
 Les applications intègrent MathJax. Sa licence est conservée dans `LICENSES/MathJax-LICENSE.txt`.
