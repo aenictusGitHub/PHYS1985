@@ -1,4 +1,10 @@
 {
+  "Paramétrage": "Parameterization",
+  "Original": "Original",
+  "Vitesse : norme constante": "Constant speed",
+  "Même courbe, même période. Changer de paramétrage recommence le mouvement.": "Same curve and period. Changing the parameterization restarts the motion.",
+  "Loi sinusoïdale originale : le module de la vitesse et celui de l’accélération varient.": "Original sinusoidal law: speed and acceleration magnitude both vary.",
+  "La distance parcourue est proportionnelle au temps. L’accélération est uniquement centripète. L désigne la longueur totale de la courbe.": "Distance travelled is proportional to time. Acceleration is purely centripetal. L is the total length of the curve.",
   "Cinématique 2D interactive": "Interactive 2D kinematics",
   "Cinématique 2D": "2D kinematics",
   "Trajectoires planes et décomposition vectorielle": "Planar trajectories and vector decomposition",

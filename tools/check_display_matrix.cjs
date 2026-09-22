@@ -80,6 +80,18 @@ async function inspect(page,label){
       await page.selectOption('#'+selector,choice);await page.waitForTimeout(30);
       cases+=await inspect(page,prefix+'-'+choice);
      }
+     if(app==='cinematique_2d'||app==='cinematique_3d'){
+      for(const order of [2,3]){
+      await page.selectOption('#trajectory-select',app==='cinematique_3d'&&order===2?'lissajous':'lissajous'+order);
+      for(const mode of ['original','constant-speed']){
+       await page.selectOption('#lissajous-parameterization',mode);
+       await page.waitForFunction(()=>document.querySelector('#trajectory-equations mjx-container'));
+       for(const t of [0,1.1,Math.PI,7.2]){
+        await input(page,'time-slider',t);cases+=await inspect(page,prefix+'-lissajous'+order+'-'+mode+'-t'+t);
+       }
+      }
+      }
+     }
      if(app==='collisions'){
       for(const dim of ['line','plane'])for(const mode of ['elastic','inelastic','sticking']){
        await page.selectOption('#dimension',dim);await page.selectOption('#mode',mode);
