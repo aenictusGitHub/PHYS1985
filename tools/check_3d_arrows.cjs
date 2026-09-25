@@ -38,10 +38,10 @@ pure += [
   'const vectorSelection = () => selection;'
 ].join('\n') + '\n';
 for (const name of ['cameraBasis', 'projectWorld', 'arrowMaterialColor', 'drawDepthArrowMarker',
-  'buildArrowFaces', 'paintArrowFaces', 'drawArrow', 'drawSelectedVectors']) pure += fn(name);
+  'buildArrowFaces', 'paintArrowFaces', 'drawArrow', 'drawSelectedVectors', 'vectorLegendArrowMarkup']) pure += fn(name);
 pure += [
   'return {V,add,sub,scale,dot,norm,toWorld,toScene,SCENE_UNITS_PER_METRE,ARROW,COLORS,TRAJECTORIES,derivatives,',
-  'camera,commands,state,cameraBasis,buildArrowFaces,paintArrowFaces,',
+  'camera,commands,state,cameraBasis,buildArrowFaces,paintArrowFaces,vectorLegendArrowMarkup,',
   'resize(w,h){viewportWidth=w;viewportHeight=h;},',
   'drawAll(key,t){commands.length=0;',
   'selection={position:true,velocity:true,acceleration:true,normal:true,tangential:true,jerk:true};',
@@ -61,7 +61,7 @@ assert(source.includes('dom.projections.checked = state.projections;'));
 const topViewHandler = source.match(/dom\.topView\.addEventListener\('click', \(\) => \{([\s\S]*?)\n  \}\);/)[1];
 const initialCamera = JSON.parse(JSON.stringify(app.camera));
 let redraws = 0;
-vm.runInNewContext(topViewHandler, {camera:app.camera, updateAndDraw(){redraws++;}});
+vm.runInNewContext(topViewHandler, {camera:app.camera, cancelPointers(){}, updateAndDraw(){redraws++;}});
 close(app.camera.pitch, Math.PI/2);
 assert.equal(redraws, 1);
 assert.equal(app.camera.yaw, initialCamera.yaw);
@@ -72,7 +72,7 @@ for(const [control,axis,up] of [['frontView',V(1,0,0),V(0,0,1)],['sideView',V(0,
   const handler=source.match(new RegExp("dom\\."+control+"\\.addEventListener\\('click', \\(\\) => \\{([\\s\\S]*?)\\n  \\}\\);"))[1];
   for(const distance of [5200,13800,26000]){
     app.camera.target=V(1400,-900,3200);app.camera.distance=distance;const before=JSON.stringify(app.camera.target);
-    const count=redraws;vm.runInNewContext(handler,{camera:app.camera,updateAndDraw(){redraws++;}});
+    const count=redraws;vm.runInNewContext(handler,{camera:app.camera,cancelPointers(){},updateAndDraw(){redraws++;}});
     assert.equal(redraws,count+1);assert.equal(app.camera.distance,distance);assert.equal(JSON.stringify(app.camera.target),before);
     close(app.camera.pitch,0);const basis=app.cameraBasis();
     close(norm(sub(basis.right,toWorld(axis))),0);close(norm(sub(basis.up,toWorld(up))),0);
@@ -152,6 +152,13 @@ for (const z of [-10,1,6,30]) {
   app.paintArrowFaces(app.buildArrowFaces(o,scale(V(100,20,-30),1/app.SCENE_UNITS_PER_METRE),1,app.COLORS.velocity,b));
 }
 const cameraBefore=JSON.stringify(app.camera);
+for(const color of Object.values(app.COLORS).filter(value=>typeof value==='string')){
+  const icon=app.vectorLegendArrowMarkup(color);
+  assert(icon.includes('data-color="'+color+'"'));
+  assert(icon.includes('data-part="shaft"')&&icon.includes('data-part="head"'));
+  assert(new Set([...icon.matchAll(/fill="([^"]+)"/g)].map(m=>m[1])).size>=6);
+  assert(!/NaN|Infinity/.test(icon));
+}
 for (const [key,item] of Object.entries(app.TRAJECTORIES)) for (const fraction of [0,.31,.7,1]) {
   const commands=app.drawAll(key,fraction*item.duration);
   assert(commands.length>0);

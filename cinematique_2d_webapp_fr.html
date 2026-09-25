@@ -603,6 +603,56 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
 .phys-app .curvature-details [hidden],
 .phys-app .curvature-radius-label[hidden] { display: none !important; }
 
+/* Keep the time and selected vector symbols clear of the view buttons. */
+.phys-app .viewport-hud {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  right: 0.85rem;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+.phys-app .time-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.45rem 0.65rem;
+  min-width: 0;
+}
+.phys-app .viewport-hud .time-badge {
+  position: static;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.phys-app .viewport-hud .viewport-toolbar {
+  position: static;
+  max-width: none;
+  pointer-events: auto;
+}
+.phys-app .vector-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.7rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(255,255,255,0.94);
+  font-size: var(--text-value, 1rem);
+}
+.phys-app .vector-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.phys-app .vector-legend-arrow { flex: 0 0 auto; width: 1.4rem; height: 0.6rem; overflow: visible; }
+.phys-app .vector-legend mjx-container { margin: 0 !important; }
+.phys-app .vector-legend[hidden], .phys-app .vector-legend-item[hidden] { display: none !important; }
+@media (max-width: 620px) {
+  .phys-app .viewport-hud { top: 0.6rem; left: 0.6rem; right: 0.6rem; gap: 0.4rem; }
+}
+
 </style>
   <style>
 /* PHYS1985 — shared visual language. Embedded in every standalone application. */
@@ -1293,15 +1343,20 @@ h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
         <div id="axis-ticks-x" class="axis-tick-layer" aria-hidden="true"></div>
         <div id="axis-ticks-y" class="axis-tick-layer" aria-hidden="true"></div>
 
-        <div class="viewport-toolbar">
-          <button id="move-origin" type="button" aria-pressed="false" aria-controls="origin-handle">Déplacer l’origine</button>
-          <button id="reset-origin" type="button" disabled>Origine initiale</button>
-          <button id="reset-view" type="button">Réinitialiser la vue</button>
+        <div class="viewport-hud">
+          <div id="time-legend" class="time-legend">
+            <div class="time-badge" aria-label="Temps courant">
+              <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
+            </div>
+            <div id="vector-legend" class="vector-legend" role="list" aria-label="Légende des vecteurs" hidden></div>
+          </div>
+          <div class="viewport-toolbar">
+            <button id="move-origin" type="button" aria-pressed="false" aria-controls="origin-handle">Déplacer l’origine</button>
+            <button id="reset-origin" type="button" disabled>Origine initiale</button>
+            <button id="reset-view" type="button">Réinitialiser la vue</button>
+          </div>
         </div>
         <button id="origin-handle" type="button" aria-label="Origine du repère : faire glisser pour la déplacer" title="Faire glisser l’origine (flèches du clavier : 0,1 m ; Maj : 1 m)" hidden><span class="origin-point" aria-hidden="true"></span><span class="origin-symbol tex-math" aria-hidden="true">\(O\)</span></button>
-        <div class="time-badge" aria-label="Temps courant">
-          <span class="tex-math">\(t=\)</span><span id="time-badge-digits" class="math-digits">0.00</span><span class="tex-math">\(\,\mathrm s\)</span>
-        </div>
         <div id="radius-label" class="curvature-radius-label" aria-hidden="true" hidden><span class="tex-math">\(R_c\)</span></div>
         <div id="warning-badge" class="warning-badge" hidden></div>
       </div>
@@ -2597,6 +2652,8 @@ var physTranslate = globalThis.PhysLang?.t || (value => value);
     timeSlider: document.getElementById('time-slider'),
     timeOutputDigits: document.getElementById('time-output-digits'),
     timeBadgeDigits: document.getElementById('time-badge-digits'),
+    timeLegend: document.getElementById('time-legend'),
+    vectorLegend: document.getElementById('vector-legend'),
     loop: document.getElementById('loop-toggle'),
     vectorScale: document.getElementById('vector-scale'),
     mobileAppearance: document.getElementById('mobile-appearance'),
@@ -2677,7 +2734,19 @@ var physTranslate = globalThis.PhysLang?.t || (value => value);
   });
 
   const readoutElements = {};
+  const legendElements = {};
+  let legendSelection = '';
   for (const [key, meta] of Object.entries(VECTOR_META)) {
+    const legend = document.createElement('span');
+    legend.className = 'vector-legend-item';
+    legend.dataset.vector = key;
+    legend.style.color = meta.color;
+    legend.setAttribute('role', 'listitem');
+    legend.setAttribute('aria-label', meta.plainName);
+    legend.innerHTML = '<svg class="vector-legend-arrow" viewBox="0 0 28 12" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1 5H19L16 1L28 6L16 11L19 7H1Z"/></svg><span class="tex-math"></span>';
+    legend.querySelector('.tex-math').textContent = '\\(' + meta.symbolTeX + '\\)';
+    dom.vectorLegend.append(legend);
+    legendElements[key] = legend;
     const element = document.createElement('div');
     element.className = 'vector-readout';
     element.style.setProperty('--readout-color', meta.color);
@@ -2760,6 +2829,14 @@ var physTranslate = globalThis.PhysLang?.t || (value => value);
   const vectorSelection = () => Object.fromEntries(
     Object.entries(dom.toggles).map(([key, input]) => [key, input.checked]),
   );
+
+  function updateVectorLegend(selected) {
+    const signature = Object.keys(legendElements).filter(key => selected[key]).join(',');
+    if (signature === legendSelection) return;
+    legendSelection = signature;
+    for (const [key, element] of Object.entries(legendElements)) element.hidden = !selected[key];
+    dom.vectorLegend.hidden = !signature;
+  }
 
   function queueTypeset(elements) {
     if (!mathIsReady || !window.MathJax?.typesetPromise) return Promise.resolve();
@@ -2900,7 +2977,8 @@ var physTranslate = globalThis.PhysLang?.t || (value => value);
   }
 
   function computePlotRect() {
-    const margins = { left: 112, right: 54, top: 42, bottom: 90 };
+    // Leave room for the time/legend and the y-axis title, also when they wrap.
+    const margins = { left: 112, right: 54, top: Math.max(42, dom.timeLegend.offsetHeight + 48), bottom: 90 };
     const availableWidth = Math.max(120, viewportWidth - margins.left - margins.right);
     const availableHeight = Math.max(120, viewportHeight - margins.top - margins.bottom);
     const viewAspect = (view.xmax - view.xmin) / (view.ymax - view.ymin);
@@ -3477,10 +3555,11 @@ var physTranslate = globalThis.PhysLang?.t || (value => value);
 
   function updateAndDraw() {
     if (!ctx) return;
+    const selected = vectorSelection();
+    updateVectorLegend(selected);
     computePlotRect();
     const item = currentTrajectory();
     const data = derivatives(item, state.time);
-    const selected = vectorSelection();
 
     dom.timeSlider.value = String(state.time);
     setMathDigits(dom.timeOutputDigits, state.time.toFixed(2));

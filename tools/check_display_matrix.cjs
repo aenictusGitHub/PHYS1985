@@ -26,6 +26,11 @@ async function inspect(page,label){
    const d=document.documentElement;if(d.scrollWidth>d.clientWidth+2)issues.push('page overflow '+d.scrollWidth+'/'+d.clientWidth);
    for(const e of document.querySelectorAll('.control-panel'))if(e.scrollWidth>e.clientWidth+2)issues.push('sidebar overflow '+e.scrollWidth+'/'+e.clientWidth);
    if(document.querySelector('mjx-merror,[data-mml-node="merror"]'))issues.push('MathJax error');
+   const hud=[...document.querySelectorAll('.time-badge,.vector-legend,.viewport-toolbar')].filter(visible);
+   for(let i=0;i<hud.length;i++)for(let j=i+1;j<hud.length;j++){
+     const a=hud[i].getBoundingClientRect(),b=hud[j].getBoundingClientRect();
+     if(Math.min(a.right,b.right)>Math.max(a.left,b.left)+1&&Math.min(a.bottom,b.bottom)>Math.max(a.top,b.top)+1)issues.push('overlapping viewport legend/time/buttons');
+   }
    // Detect actual clipping, while permitting an explicitly scrollable formula.
    for(const svg of document.querySelectorAll('.equation svg,mjx-container[display="true"] > svg')){
      if(!visible(svg)||svg.closest('.plot-label,.chart-label'))continue;
@@ -81,6 +86,9 @@ async function inspect(page,label){
       cases+=await inspect(page,prefix+'-'+choice);
      }
      if(app==='cinematique_2d'||app==='cinematique_3d'){
+      await page.click('[data-vector-preset="all"]');
+      cases+=await inspect(page,prefix+'-all-vector-legend');
+      await page.click('[data-vector-preset="velocity"]');
       for(const order of [2,3]){
       await page.selectOption('#trajectory-select',app==='cinematique_3d'&&order===2?'lissajous':'lissajous'+order);
       for(const mode of ['original','constant-speed']){
