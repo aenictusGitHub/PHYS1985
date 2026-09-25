@@ -19,7 +19,8 @@ function load(dimensions) {
   const source = read('app.js'), html = read('index.html'), css = read('style.css');
   new vm.Script(source);
   assert(!/<input id="osculating-toggle"[^>]*\bchecked\b/.test(html), 'Opt-in by default');
-  for (const id of ['osculating-toggle', 'curvature-details', 'curvature-value', 'curvature-digits',
+  assert(!/<input id="osculating-fill"[^>]*\bchecked\b/.test(html), 'Disk fill is opt-in');
+  for (const id of ['osculating-toggle', 'osculating-fill', 'curvature-details', 'curvature-value', 'curvature-digits',
     'curvature-scientific', 'curvature-exponent', 'curvature-status', 'radius-label']) {
     assert.equal((html.match(new RegExp('id="' + id + '"', 'g')) || []).length, 1, id);
     assert(source.includes("document.getElementById('" + id + "')"), id + ' is wired');
@@ -29,6 +30,9 @@ function load(dimensions) {
   assert(html.includes('Le cercle osculateur est le cercle qui épouse le mieux la courbe localement.'));
   assert(!html.includes(String.raw`\rho`));
   assert(css.includes('.curvature-radius-label[hidden]'));
+  assert.match(css,/\.curvature-radius-label\s*\{[^}]*background:\s*transparent;/,'Radius label has no opaque background');
+  assert.match(css,/\.curvature-radius-label\s*\{[^}]*color:\s*#16a34a;/,'Vivid green radius label');
+  assert(source.includes("ctx.fillStyle = 'rgba(22,163,74,0.12)'"),'Light vivid green disk');
   assert(source.includes("dom.osculating.addEventListener('change', updateAndDraw)"));
   const fn = name => {
     const start = source.indexOf('  function ' + name + '(');
@@ -49,7 +53,7 @@ function load(dimensions) {
     }});
     const element = () => ({ hidden: true, checked: false, style: {}, dataset: {},
       setAttribute(key, value) { this[key] = value; } });
-    const dom = Object.fromEntries(['osculating', 'curvatureDetails', 'curvatureValue',
+    const dom = Object.fromEntries(['osculating', 'osculatingFill', 'curvatureDetails', 'curvatureValue',
       'curvatureDigits', 'curvatureScientific', 'curvatureExponent', 'curvatureStatus', 'radiusLabel']
       .map(key => [key, element()]));
     const setMathDigits = (element, value) => { element.textContent = String(value); };
@@ -196,6 +200,15 @@ for (const dimensions of [2, 3]) {
   assert.equal(app.dom.curvatureExponent.textContent, '7');
   app.render(data);
   assert(app.dom.curvatureScientific.hidden, 'No stale exponent');
+  assert(!app.commands.some(c=>c[0]==='fill'), 'No disk fill by default');
+  app.dom.osculatingFill.checked = true;
+  app.render(data);
+  assert.equal(app.commands.filter(c=>c[0]==='fill').length,1,'One translucent disk, not overlapping triangles');
+  const filledCommands = JSON.stringify(app.commands);
+  app.state.vectorScale = 2;
+  assert.equal(JSON.stringify(app.render(data)),filledCommands,'Disk size is independent of vector scaling');
+  app.render({...data,velocity:V()});
+  assert.equal(app.commands.length,0,'No fill when the circle is undefined');
 
   let maximumCommands = 0;
   for (const radius of [0.1, 10, 1000, 1e5, 1e8, 1e11]) {
@@ -246,3 +259,90 @@ for (const dimensions of [2, 3]) {
     + valid + ' regular / ' + singular + ' singular samples; max ' + maximumCommands + ' canvas commands.');
 }
 console.log('Osculating circles and R_c checked in both standalone apps and archives.');
+
+if (process.env.BROWSER === '1') (async () => {
+  const {chromium, webkit, firefox} = require('playwright');
+  const {pathToFileURL} = require('node:url');
+  for (const [name,engine] of [['chromium',chromium],['webkit',webkit],['firefox',firefox]]) {
+    const browser = await engine.launch({headless:true,...(name==='chromium'
+      ? {executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'} : {})});
+    try { for (const dimensions of [2,3]) for (const lang of ['fr','en']) {
+      const context=await browser.newContext({viewport:{width:1024,height:1366},hasTouch:true});
+      // Keep pixel comparisons on the same renderer: repeated getImageData()
+      // can otherwise make Chromium switch from GPU to CPU antialiasing.
+      await context.addInitScript(()=>{
+        const getContext=HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext=function(type,options){
+          return getContext.call(this,type,type==='2d'?{...options,willReadFrequently:true}:options);
+        };
+      });
+      const page=await context.newPage(), errors=[];
+      page.on('pageerror',error=>errors.push(error.message));
+      const url=pathToFileURL(path.join(project,'cinematique_'+dimensions+'d_webapp_fr.html')).href+'?lang='+lang;
+      await page.goto(url);
+      await page.waitForFunction(()=>window.PhysShare?.ready);
+      if(await page.locator('#play-button').innerText()==='Pause') await page.locator('#play-button').click();
+      await page.selectOption('#trajectory-select',dimensions===2?'mc':'mcua');
+      await page.locator('#time-slider').evaluate(e=>{e.value='1';e.dispatchEvent(new Event('input',{bubbles:true}));});
+      const fill=page.locator('#osculating-fill'), circle=page.locator('#osculating-toggle');
+      assert(await fill.isHidden()); assert(!await fill.isChecked());
+      await circle.check();
+      assert(await fill.isVisible()); assert(!await fill.isChecked());
+      assert.equal(await page.locator('#radius-label').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
+      assert.equal(await page.locator('#radius-label').evaluate(e=>getComputedStyle(e).color),'rgb(22, 163, 74)');
+      assert.equal((await page.locator('label:has(#osculating-fill)').innerText()).trim(),lang==='fr'
+        ? 'Colorer légèrement le disque osculateur' : 'Lightly shade the osculating disk');
+      const state=await page.evaluate(()=>PhysShare.capture().data);
+      const readouts=await page.locator('.vector-readout').allTextContents();
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await page.evaluate(()=>{
+        const c=document.querySelector('#viewport canvas');
+        window.__diskBefore=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+      });
+      await fill.check();
+      const changedPixels=await page.evaluate(()=>{
+        const c=document.querySelector('#viewport canvas'),after=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+        let changed=0;
+        for(let i=0;i<after.length;i+=4) if(Math.abs(after[i]-__diskBefore[i])+Math.abs(after[i+1]-__diskBefore[i+1])+Math.abs(after[i+2]-__diskBefore[i+2])>3)changed++;
+        return changed;
+      });
+      assert(changedPixels>500,'A visible translucent disk must be painted');
+      assert.deepEqual(await page.evaluate(()=>PhysShare.capture().data),state,'Only display changes');
+      assert.deepEqual(await page.locator('.vector-readout').allTextContents(),readouts,'Physics readouts unchanged');
+      await fill.uncheck();
+      const reverted=await page.evaluate(()=>{
+        const c=document.querySelector('#viewport canvas'),after=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
+        return after.every((v,i)=>v===__diskBefore[i]);
+      });
+      assert(reverted,'Turning shading off restores the original drawing exactly');
+      await fill.check();
+      await circle.uncheck(); assert(await fill.isHidden()); assert(await fill.isChecked());
+      await circle.check(); assert(await fill.isVisible()); assert(await fill.isChecked());
+      const snapshot=await page.evaluate(()=>PhysShare.capture());
+      assert.equal(snapshot.controls['osculating-fill'],true);
+      const link=await page.evaluate(()=>PhysShare.makeLink());
+      const shared=await context.newPage();
+      await shared.goto(link); await shared.waitForFunction(()=>window.PhysShare?.ready);
+      assert(await shared.locator('#osculating-toggle').isChecked());
+      assert(await shared.locator('#osculating-fill').isChecked());
+      assert.equal(await shared.locator('#play-button').innerText(),lang==='fr'?'Lire':'Play');
+      await shared.close();
+      if(dimensions===3) for(const id of ['top-view','front-view','side-view','reset-view']) await page.locator('#'+id).click();
+      if(name==='chromium' && lang==='fr') await page.locator('#viewport').screenshot({path:'/private/tmp/osculating-fill-'+dimensions+'d.png'});
+      await fill.uncheck();
+      const old=structuredClone(snapshot);delete old.controls['osculating-fill'];
+      const oldPage=await context.newPage();await oldPage.goto(url);await oldPage.waitForFunction(()=>window.PhysShare?.ready);
+      await oldPage.evaluate(s=>PhysShare.restore(s),old);
+      assert(!await oldPage.locator('#osculating-fill').isChecked(),'Old configurations default to unfilled');
+      await oldPage.close();
+      for(const width of [834,512,390]) {
+        await page.setViewportSize({width,height:1000});
+        await fill.check();await fill.uncheck();
+        assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal page overflow');
+      }
+      assert.deepEqual(errors,[]);
+      console.log('PASS disk fill',name,dimensions+'D',lang,changedPixels+' tinted pixels; tablet, camera, sharing and old links');
+      await context.close();
+    }} finally { await browser.close(); }
+  }
+})().catch(error=>{console.error(error);process.exitCode=1;});
