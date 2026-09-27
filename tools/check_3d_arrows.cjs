@@ -114,6 +114,9 @@ for (const size of [[280,400],[900,650]]) for (const distance of [3500,13800,420
       parts.add(face.part);
       close(norm(face.normal),1);
       assert(/^rgb\(\d+,\d+,\d+\)$/.test(face.color));
+      const channels=face.color.match(/\d+/g).map(Number);
+      const base=[1,3,5].map(i=>parseInt(app.COLORS.velocity.slice(i,i+2),16));
+      channels.forEach((value,i)=>assert(value>=Math.round(.9*base[i]),'Shadowed faces retain a readable color'));
       for (const p of face.points) {
         assert(Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.depth>5);
       }
@@ -158,6 +161,17 @@ for(const color of Object.values(app.COLORS).filter(value=>typeof value==='strin
   assert(icon.includes('data-part="shaft"')&&icon.includes('data-part="head"'));
   assert(new Set([...icon.matchAll(/fill="([^"]+)"/g)].map(m=>m[1])).size>=6);
   assert(!/NaN|Infinity/.test(icon));
+  const coordinates=part=>[...icon.matchAll(new RegExp('data-part="'+part+'" d="([^"]+)"','g'))]
+    .map(m=>[...m[1].matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)].map(p=>[Number(p[1]),Number(p[2])]));
+  const tail=coordinates('tail')[0],head=coordinates('head');
+  assert(tail?.length&&head.length,'Both ends of the miniature arrow are visible');
+  const tailX=tail.reduce((s,p)=>s+p[0],0)/tail.length;
+  const tailY=tail.reduce((s,p)=>s+p[1],0)/tail.length;
+  close(tailY,7,.001);
+  for(const triangle of head){
+    close(triangle[2][1],tailY,.001);
+    assert(triangle[2][0]>tailX,'Legend arrows point horizontally right');
+  }
 }
 for (const [key,item] of Object.entries(app.TRAJECTORIES)) for (const fraction of [0,.31,.7,1]) {
   const commands=app.drawAll(key,fraction*item.duration);

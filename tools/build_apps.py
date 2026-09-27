@@ -6,6 +6,7 @@ can instead package a working source folder. No external dependencies are needed
 
 import argparse
 import json
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -43,6 +44,13 @@ def build(name, source, archive_root, app_kind):
     files.pop(f"{name}.html", None)
     files.pop(f"{name}.zip", None)
     html = files["index.html"].decode("utf-8")
+    footer_pattern = re.compile(r'(<footer\b[^>]*class="[^"]*\bpanel-footer\b[^"]*"[^>]*>)(.*?)(</footer>)', re.S)
+    html = footer_pattern.sub(
+        lambda match: match.group(1) + match.group(2).replace(
+            "J. Martin", 'J. <span class="author-surname">Martin</span>'
+        ) + match.group(3),
+        html,
+    )
     # Run before the app's first MathJax pass (also in extracted source builds).
     translation_init = 'globalThis.PhysLang?.translateTree(document.documentElement);\n'
     app_code = files['app.js'].decode('utf-8')

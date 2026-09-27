@@ -6,7 +6,8 @@ const {chromium}=require('playwright');
   try {
     const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
-    await page.goto(pathToFileURL(path.join(__dirname,'..','puissance_travail_webapp_fr.html')).href);
+    const lang=process.env.LANGUAGE||'fr';
+    await page.goto(pathToFileURL(path.join(__dirname,'..','puissance_travail_webapp_fr.html')).href+'?lang='+lang);
     await page.waitForFunction(()=>document.getElementById('loading-message').hidden);
     let cases=0;
     for(const width of [1440,1024,390,320]) {
@@ -33,6 +34,14 @@ const {chromium}=require('playwright');
               documentWidth:document.documentElement.clientWidth,documentScroll:document.documentElement.scrollWidth};
           });
           const context=mode+'/'+field+'/'+width;
+          const centers=section.locator('.field-center-definition:visible');
+          assert.equal(await centers.count(),['periodic','central','vortex'].includes(field)?1:0,'Define C only for fields that use it: '+context);
+          if(await centers.count()){
+            const explanation=await centers.locator('..').textContent();
+            assert(explanation.includes(lang==='en'?'fixed point':'point fixe'),'Explain C as a fixed point: '+context);
+          }
+          const lengthNote=await section.locator('.field-length-definition').textContent();
+          assert(lengthNote.includes(lang==='en'?'length scale':'échelle de longueur'),context);
           assert(layout.panelScroll<=layout.panelWidth+1,'No sidebar overflow: '+context);
           assert(layout.documentScroll<=layout.documentWidth+1,'No page overflow: '+context);
           assert(layout.boxes.every(b=>b.scroll<=b.width+1),'No nested horizontal equation scrolling: '+context);
@@ -45,6 +54,8 @@ const {chromium}=require('playwright');
           assert.equal(await page.locator('mjx-merror,[data-mml-node="merror"]').count(),0,context);
           if(process.env.SCREENSHOT_DIR&&mode==='paths'&&field==='cellular')
             await section.screenshot({path:path.join(process.env.SCREENSHOT_DIR,`work-equations-${width}.png`)});
+          if(process.env.SCREENSHOT_DIR&&mode==='free'&&['cellular','central'].includes(field)&&width===1024)
+            await section.screenshot({path:path.join(process.env.SCREENSHOT_DIR,'work-equations-'+field+'-'+lang+'.png')});
           cases++;
         }
       }

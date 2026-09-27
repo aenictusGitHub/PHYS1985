@@ -217,6 +217,7 @@
   white-space: normal;
 }
 .phys-app .panel-footer > span:first-child { flex: 0 0 auto; }
+.phys-app .panel-footer .author-surname { font-variant-caps: small-caps; }
 .phys-app .visualization-panel {
   min-width: 0;
   min-height: 0;

@@ -2,7 +2,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(process.argv[2]||path.join(__dirname,'..'));
 const out=process.env.RESULT_DIR||fs.mkdtempSync(require('node:os').tmpdir()+'/phys1985-tablet-touch-');fs.mkdirSync(out,{recursive:true});
-const apps={cinematique_2d:['#scene-canvas'],cinematique_3d:['#viewport > canvas'],collisions:['#scene-canvas','#history-canvas'],energie_mecanique:['#scene-canvas','#history-canvas','.mass-handle'],equilibres_statiques:['#scene-canvas'],frottements_solides:['#scene-canvas','#history-canvas','#force-history-canvas'],moment_cinetique:['#scene-canvas','#history-canvas'],potentiel_force:['#potential-canvas','#force-canvas','.body-handle'],poulies:['#scene-canvas','#history-canvas'],puissance_travail:['#scene-canvas','#power-canvas']};
+const apps={cinematique_2d:['#scene-canvas'],cinematique_3d:['#viewport > canvas'],collisions:['#scene-canvas','#history-canvas'],energie_mecanique:['#scene-canvas','#history-canvas','.mass-handle'],equilibres_statiques:['#scene-canvas'],frottements_solides:['#scene-canvas','#history-canvas','#force-history-canvas'],moment_cinetique:['#scene-canvas','#history-canvas'],potentiel_force:['#potential-canvas','#force-canvas','.body-handle'],poulies:['#scene-canvas','#history-canvas'],puissance_travail:['#scene-canvas','#power-canvas','#kinetic-canvas']};
 const frames=p=>p.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
 async function pause(p){for(const b of await p.locator('button:visible').all())if((await b.innerText()).trim()==='Pause')await b.tap();}
 (async()=>{

@@ -290,8 +290,21 @@ if (process.env.BROWSER === '1') (async () => {
       assert(await fill.isVisible()); assert(!await fill.isChecked());
       assert.equal(await page.locator('#radius-label').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
       assert.equal(await page.locator('#radius-label').evaluate(e=>getComputedStyle(e).color),'rgb(22, 163, 74)');
-      assert.equal((await page.locator('label:has(#osculating-fill)').innerText()).trim(),lang==='fr'
-        ? 'Colorer légèrement le disque osculateur' : 'Lightly shade the osculating disk');
+      assert.equal((await page.locator('label:has(#osculating-fill)').innerText()).trim(),dimensions===3
+        ? (lang==='fr' ? 'Rempli' : 'Filled')
+        : (lang==='fr' ? 'Colorer légèrement le disque osculateur' : 'Lightly shade the osculating disk'));
+      if(dimensions===3){
+        const help=await page.locator('#curvature-details > p.microcopy:last-child').textContent();
+        assert(!help.includes('Le tracé')&&!help.includes('position scale'),'Scale sentence is removed');
+        assert(help.includes(lang==='fr'?'En 3D':'In 3D'),'Keep the osculating plane explanation');
+        const grid=await page.locator('#space-grid-help').textContent();
+        assert(grid.startsWith(lang==='fr'?'Même pas que les graduations :':'Same spacing as the ticks:'));
+        assert(!/quadrillage|grid|visible/.test(grid),'Grid help ends after the spacing');
+        const gridHelp=page.locator('#space-grid-help'),gridToggle=page.locator('#space-grid-toggle');
+        assert(await gridHelp.isHidden(),'Grid explanation is initially hidden');
+        await gridToggle.check();assert(await gridHelp.isVisible());
+        await gridToggle.uncheck();assert(await gridHelp.isHidden());
+      }
       const state=await page.evaluate(()=>PhysShare.capture().data);
       const readouts=await page.locator('.vector-readout').allTextContents();
       await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -318,6 +331,7 @@ if (process.env.BROWSER === '1') (async () => {
       await fill.check();
       await circle.uncheck(); assert(await fill.isHidden()); assert(await fill.isChecked());
       await circle.check(); assert(await fill.isVisible()); assert(await fill.isChecked());
+      if(dimensions===3)await page.check('#space-grid-toggle');
       const snapshot=await page.evaluate(()=>PhysShare.capture());
       assert.equal(snapshot.controls['osculating-fill'],true);
       const link=await page.evaluate(()=>PhysShare.makeLink());
@@ -325,6 +339,12 @@ if (process.env.BROWSER === '1') (async () => {
       await shared.goto(link); await shared.waitForFunction(()=>window.PhysShare?.ready);
       assert(await shared.locator('#osculating-toggle').isChecked());
       assert(await shared.locator('#osculating-fill').isChecked());
+      if(dimensions===3){
+        assert(await shared.locator('#space-grid-toggle').isChecked());
+        assert(await shared.locator('#space-grid-help').isVisible(),'Shared grid restores its explanation');
+        await shared.uncheck('#space-grid-toggle');
+        assert(await shared.locator('#space-grid-help').isHidden());
+      }
       assert.equal(await shared.locator('#play-button').innerText(),lang==='fr'?'Lire':'Play');
       await shared.close();
       if(dimensions===3) for(const id of ['top-view','front-view','side-view','reset-view']) await page.locator('#'+id).click();
