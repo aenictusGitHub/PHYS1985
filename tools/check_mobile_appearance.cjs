@@ -55,9 +55,9 @@ async function instrument(page) {
           const url=pathToFileURL(path.join(root,app+'_webapp_fr.html')).href;
           await page.goto(url);await page.waitForFunction(()=>window.PhysShare?.ready);
           const select=page.locator('#mobile-appearance'), canvas=page.locator(app==='cinematique_2d'?'#scene-canvas':'#viewport > canvas');
-          assert.equal(await select.inputValue(),'point');
+          assert.equal(await select.inputValue(),'ladybug');
           assert.deepEqual(await select.locator('option').evaluateAll(xs=>xs.map(e=>e.value)),kinds);
-          assert.deepEqual(await select.locator('option').allTextContents(),['Point','Mouche','Papillon','Coccinelle','Toré']);
+          assert.deepEqual(await select.locator('option').allTextContents(),['Point','Mouche','Papillon','Écureuil','Toré']);
           await select.scrollIntoViewIfNeeded();
           if(tablet)assert((await select.boundingBox()).height>=44);
           const baseline=await page.evaluate(()=>PhysShare.capture());
@@ -76,7 +76,7 @@ async function instrument(page) {
             assert.deepEqual(await page.evaluate(()=>PhysShare.capture()),snap,'appearance round-trip');
             cases++;
           }
-          // Earlier local links using the replaced ball now show a ladybug.
+          // Earlier local links using the replaced ball now show a squirrel.
           const beforeMigration=await page.evaluate(()=>PhysShare.capture());
           await page.evaluate(async()=>{
             const old=PhysShare.capture();old.data.state.mobileAppearance='ball';old.controls['mobile-appearance']='ball';
@@ -85,13 +85,13 @@ async function instrument(page) {
           assert.equal(await select.inputValue(),'ladybug');
           assert.equal(await page.evaluate(()=>window.__mobileDraw.kind),'ladybug');
           assert.deepEqual(stripped(await page.evaluate(()=>PhysShare.capture())),stripped(beforeMigration));
-          // Old links did not have the new field/control: they must still open as a point.
+          // Links without an appearance field follow the current squirrel default.
           await page.evaluate(async()=>{
             const old=PhysShare.capture();delete old.data.state.mobileAppearance;delete old.controls['mobile-appearance'];
             await PhysShare.restore(old);
           });
-          assert.equal(await select.inputValue(),'point');
-          assert.equal(await page.evaluate(()=>PhysShare.capture().data.state.mobileAppearance),'point');
+          assert.equal(await select.inputValue(),'ladybug');
+          assert.equal(await page.evaluate(()=>PhysShare.capture().data.state.mobileAppearance),'ladybug');
           const beforeInvalid=await page.evaluate(()=>PhysShare.capture());
           assert(await page.evaluate(async()=>{
             const s=PhysShare.capture();s.data.state.mobileAppearance='<img onerror=alert(1)>';

@@ -65,29 +65,59 @@
       ellipse(ctx,16,side*5,.9,.9,0,'#3a3c3a');
     }
   }
-  function ladybug(ctx) {
-    ctx.lineWidth = 1.2; ctx.strokeStyle = '#293238';
-    for (const side of [-1,1]) {
-      for (const [x,bend,tip] of [[-6,-10,-13],[0,0,3],[6,10,14]]) {
-        ctx.beginPath(); ctx.moveTo(x,side*6); ctx.lineTo(bend,side*11);
-        ctx.lineTo(tip,side*12.5); ctx.stroke();
-      }
-      ctx.beginPath(); ctx.moveTo(12,side*2); ctx.quadraticCurveTo(15,side*6,18,side*5); ctx.stroke();
-      ellipse(ctx,18,side*5,.8,.8,0,'#293238');
+  function squirrel(ctx) {
+    const outline = '#704329';
+    const fur = ctx.createLinearGradient(-20,-16,13,9);
+    fur.addColorStop(0,'#a64e28');
+    fur.addColorStop(.55,'#cc7132');
+    fur.addColorStop(1,'#df9348');
+    ctx.lineWidth = 1.25; ctx.strokeStyle = outline;
+    // The raised tail stays behind the body; broken, tapered tufts keep its
+    // silhouette fluffy even at the small display size.
+    ctx.beginPath(); ctx.moveTo(-8,4);
+    ctx.bezierCurveTo(-12,7,-17,6,-20,2);
+    ctx.quadraticCurveTo(-22,2,-23,3);
+    ctx.quadraticCurveTo(-22,-1,-24,-3);
+    ctx.lineTo(-26,-4);
+    ctx.quadraticCurveTo(-24,-6,-25,-9);
+    ctx.lineTo(-27,-12);
+    ctx.quadraticCurveTo(-24,-12,-25,-15);
+    ctx.quadraticCurveTo(-24,-18,-22,-18);
+    ctx.lineTo(-21,-20);
+    ctx.quadraticCurveTo(-19,-18,-17,-19);
+    ctx.quadraticCurveTo(-15,-18,-14,-16);
+    ctx.lineTo(-12,-16);
+    ctx.quadraticCurveTo(-11,-13,-12,-11);
+    ctx.bezierCurveTo(-15,-7,-12,-5,-8,-4);
+    ctx.bezierCurveTo(-5,-1,-5,2,-8,4);
+    ctx.closePath(); ctx.fillStyle = fur; ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#f1b575'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-20,-15);
+    ctx.bezierCurveTo(-23,-8,-20,0,-15,2); ctx.stroke();
+    ctx.lineWidth = .8;
+    for (const [x,y,cx,cy,ex,ey] of [
+      [-24,-12,-22,-11,-21,-9],
+      [-23,-5,-21,-4,-20,-1],
+      [-18,-16,-15,-14,-14,-12]
+    ]) {
+      ctx.beginPath(); ctx.moveTo(x,y);
+      ctx.quadraticCurveTo(cx,cy,ex,ey); ctx.stroke();
     }
-    ellipse(ctx,11,0,5,4.5,0,'#293238');
-    const red = ctx.createRadialGradient(-4,-5,1,0,0,13);
-    red.addColorStop(0,'#ff7664'); red.addColorStop(.5,'#e83c32'); red.addColorStop(1,'#b82227');
-    ctx.lineWidth = 1.3; ellipse(ctx,0,0,12,10,0,red,'#642c2c');
-    ctx.strokeStyle = '#512f30'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(10,0); ctx.stroke();
-    // Seven black spots on the two red wing cases.
-    for (const [x,y,r] of [[-8,0,2],[-5,-5,2.25],[-5,5,2.25],[1,-6,2.1],[1,6,2.1],[6,-3.8,1.7],[6,3.8,1.7]]) {
-      ellipse(ctx,x,y,r,r,0,'#272c30');
-    }
-    ellipse(ctx,9.5,-3.1,1.1,1.7,.3,'#fff2d8');
-    ellipse(ctx,9.5,3.1,1.1,1.7,-.3,'#fff2d8');
-    ellipse(ctx,-3.7,-7.4,2.6,1.1,-.2,'rgba(255,255,255,.34)');
+    ctx.lineWidth = 1.2; ctx.strokeStyle = outline;
+    ellipse(ctx,-6,8,4,2.5,-.15,'#a9562a',outline);
+    ellipse(ctx,4,9,3.8,2.2,.1,'#b9632f',outline);
+    ellipse(ctx,-1,1,10,7,-.14,fur,outline);
+    ellipse(ctx,4,4,5.2,3.4,-.15,'#f2d8a5');
+    ctx.beginPath(); ctx.moveTo(6,-8); ctx.lineTo(7,-13);
+    ctx.quadraticCurveTo(10,-15,12,-9); ctx.closePath();
+    ctx.fillStyle = '#b45b2c'; ctx.fill(); ctx.stroke();
+    ellipse(ctx,9,-5,6,5.5,-.2,fur,outline);
+    ellipse(ctx,12,-2,3.5,2.3,-.2,'#f2d8a5');
+    ellipse(ctx,16,-3,1.35,1.1,0,'#603c30');
+    ellipse(ctx,11,-7,1.15,1.2,0,'#302e2b');
+    ellipse(ctx,11.35,-7.4,.38,.38,0,'#fff7e8');
+    ctx.beginPath(); ctx.moveTo(14.5,-.8);
+    ctx.lineTo(17,.2); ctx.strokeStyle = '#704329'; ctx.lineWidth = .8; ctx.stroke();
   }
   // Stylised timber Toré, based on the supplied side and front photographs.
   // One mesh is shared by the 2D illustration and the perspective 3D renderer.
@@ -217,13 +247,14 @@
   function draw(ctx, kind, x, y, {angle = 0, time = 0} = {}) {
     if (!valid(kind) || kind === 'point' || ![x,y,angle,time].every(Number.isFinite)) return false;
     ctx.save(); ctx.translate(x,y); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    // Keep their physical centre fixed while slightly reducing these two icons.
-    if (kind === 'butterfly' || kind === 'ladybug') ctx.scale(.85,.85);
+    // Keep the physical centre fixed while sizing each illustration independently.
+    if (kind === 'butterfly') ctx.scale(.85,.85);
+    else if (kind === 'ladybug') ctx.scale(.78,.78);
     // Slow illustrative wingbeat, tied to simulation time: frozen in pause.
     ctx.rotate(angle); const phase = 2 * Math.PI * 3 * time;
     if (kind === 'fly') fly(ctx,phase);
     else if (kind === 'butterfly') butterfly(ctx,phase);
-    else if (kind === 'ladybug') ladybug(ctx);
+    else if (kind === 'ladybug') squirrel(ctx);
     else tore(ctx);
     // Discreet centre marker: vectors and trajectory use this exact point.
     ellipse(ctx,0,0,1.4,1.4,0,'#fff0c5');

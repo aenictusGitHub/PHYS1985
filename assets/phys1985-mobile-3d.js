@@ -1,6 +1,6 @@
 /* Lightweight, offline 3D mobile meshes for the canvas renderer.
- * Local x is the direction of travel, y the wing span, z the dorsal side.
- * Orientation is illustrative, not a model of insect flight dynamics. */
+ * Local x is the direction of travel, y is lateral, z is the dorsal side.
+ * Orientation is illustrative, not a model of animal locomotion. */
 (() => {
   'use strict';
   const V=(x=0,y=0,z=0)=>({x,y,z});
@@ -47,7 +47,68 @@
   function antennae(g,x) {
     for(const side of [-1,1])line(g,[V(x,side,1),V(x+4,side*5,2.5),V(x+7,side*4,2)],'#30373b',.9);
   }
-  const shellSpots=[[-8,0,2],[-5,-5,2.25],[-5,5,2.25],[1,-6,2.1],[1,6,2.1],[6,-3.8,1.7],[6,3.8,1.7]];
+  function squirrel(g) {
+    const curve=(a,b,c,d,t)=>{
+      const u=1-t;
+      return V(u*u*u*a.x+3*u*u*t*b.x+3*u*t*t*c.x+t*t*t*d.x,0,
+        u*u*u*a.z+3*u*u*t*b.z+3*u*t*t*c.z+t*t*t*d.z);
+    };
+    // A tapered, slightly uneven plume reads as fur from side and overhead.
+    const tailCenter=t=>t<=.72
+      ?curve(V(-10,0,0),V(-19,0,0),V(-26,0,11),V(-19,0,14),t/.72)
+      :curve(V(-19,0,14),V(-14,0,17),V(-13,0,14),V(-14,0,10.5),(t-.72)/.28);
+    const tailSegments=32,tailSides=16;
+    const tailRadius=t=>.2+(1.6+4.6*Math.sin(Math.PI*t))*Math.pow(1-t,.45);
+    const tailPoint=(t,a)=>{
+      const center=tailCenter(t);
+      const tangent=unit(sub(tailCenter(Math.min(1,t+.001)),tailCenter(Math.max(0,t-.001))));
+      const radial=V(-tangent.z,0,tangent.x);
+      const r=tailRadius(t)*(1+.07*Math.sin(9*Math.PI*t+3*a)+.04*Math.cos(15*Math.PI*t-5*a));
+      return add(center,add(V(0,r*.9*Math.cos(a),0),mul(radial,r*1.08*Math.sin(a))));
+    };
+    const rings=[];
+    for(let i=0;i<=tailSegments;i++){
+      const t=i/tailSegments;
+      rings.push(Array.from({length:tailSides},(_,j)=>tailPoint(t,2*Math.PI*j/tailSides)));
+    }
+    for(let i=1;i<rings.length;i++)for(let j=0;j<tailSides;j++){
+      const k=(j+1)%tailSides,t=(i-.5)/tailSegments;
+      const center=tailCenter(t),points=[rings[i-1][j],rings[i-1][k],rings[i][k],rings[i][j]];
+      const middle=mul(points.reduce(add,V()),.25),outward=sub(middle,center);
+      face(g,points,outward,t>.84?'#df9348':outward.z>0?'#cc7132':'#a64e28');
+    }
+    face(g,rings[tailSegments],sub(tailCenter(1),tailCenter(.99)),'#df9348',true);
+    // Short pointed locks break the tube silhouette without adding moving geometry.
+    for(let i=4;i<tailSegments-2;i+=2){
+      const t=i/tailSegments,tipT=Math.min(.985,t+.055);
+      for(let j=0;j<8;j++){
+        const a=2*Math.PI*j/8+(i%4)*Math.PI/16;
+        const surface=tailPoint(tipT,a),outward=unit(sub(surface,tailCenter(tipT)));
+        const lift=.55+.18*Math.sin(i*2.3+j*1.7)+.4*Math.max(0,tailRadius(t)-tailRadius(tipT));
+        const tip=add(surface,mul(outward,lift));
+        face(g,[tailPoint(t,a-.16),tailPoint(t,a+.16),tip],outward,
+          j%3===0?'#e6a05a':j%3===1?'#b86130':'#d47d3b',true);
+      }
+    }
+    // The body straddles the trajectory point; the head points along +x.
+    ellipsoid(g,V(-2,0,-1),V(10,5,4.8),(n)=>n.z<-.25?'#a64e28':'#cc7132',10,20);
+    ellipsoid(g,V(2,0,-3.1),V(6,4.2,2.5),'#f2d8a5',8,14);
+    for(const side of [-1,1]){
+      ellipsoid(g,V(-8,side*3.3,-3.3),V(3.4,2.6,3.3),'#a64e28',6,12);
+      ellipsoid(g,V(-6.7,side*4.1,-5.7),V(3.2,2.2,1.1),'#704329',6,10);
+      ellipsoid(g,V(7,side*3.8,-4.5),V(2.4,1.6,2.4),'#b95e2c',6,10);
+      ellipsoid(g,V(9,side*4,-6),V(2.3,1.8,.9),'#704329',6,10);
+    }
+    ellipsoid(g,V(9,0,2.5),V(5.3,4.1,4.6),'#cc7132',10,20);
+    ellipsoid(g,V(13.3,0,1),V(3,3.2,2.2),'#f2d8a5',8,14);
+    ellipsoid(g,V(16.1,0,1.8),V(1.15,1.2,.9),'#704329',6,10);
+    for(const side of [-1,1]){
+      ellipsoid(g,V(6.8,side*3,6.7),V(1.7,1.15,2.7),'#a64e28',6,12);
+      ellipsoid(g,V(7.1,side*3.95,6.8),V(.8,.28,1.5),'#e5a168',6,10);
+      ellipsoid(g,V(11.3,side*3.7,4.1),V(.95,.55,.95),'#302723',6,10);
+      ellipsoid(g,V(11.5,side*4.2,4.4),V(.25,.12,.28),'#fff4dc',6,10);
+    }
+  }
   function baseModel(kind) {
     if(kind==='tore')return window.PhysMobile.toreGeometry();
     const g={faces:[],lines:[]};
@@ -61,15 +122,13 @@
       ellipsoid(g,V(-2,0,0),V(9,2.1,2.1),'#41433b');
       ellipsoid(g,V(7,0,.2),V(3,2.5,2.4),'#373b38');antennae(g,8);
       for(const side of [-1,1])line(g,[V(0,side,-1),V(3,side*5,-3),V(7,side*6,-3)],'#3a3c3a',.8);
-    }else{
-      legs(g);antennae(g,11);
-      ellipsoid(g,V(11,0,0),V(5,4.5,3.7),'#293238');
-      // Colour the shell itself: spots follow its curvature and cannot sink
-      // into the body or float in front of it when viewed obliquely.
-      ellipsoid(g,V(),V(12,10,6),(n,p)=>n.z<-.18?'#32393c':
-        p.z>0&&shellSpots.some(([x,y,r])=>(p.x-x)**2+(p.y-y)**2<r*r)?'#242c30':'#e33d32',32,64);
-      line(g,Array.from({length:25},(_,i)=>{const x=-11.9+i*23.6/24;return V(x,0,6*Math.sqrt(1-x*x/144)+.18);}),'#492e30',.75);
-      for(const side of [-1,1])ellipsoid(g,V(10,side*3,2.1),V(1.1,1.5,1),'#fff2d8',6,12);
+    }else if(kind==='ladybug'){
+      squirrel(g); // Legacy kind for existing shared links.
+      // Keep the head-on silhouette smaller than the overhead silhouette.
+      for(const f of g.faces){
+        f.points=f.points.map(p=>V(p.x,p.y*1.2,p.z*.5));
+        f.normal=unit(V(f.normal.x,f.normal.y/1.2,f.normal.z/.5));
+      }
     }
     return g;
   }
@@ -118,7 +177,7 @@
   }
   function draw(ctx,kind,position,{frame,time=0,project,eye,light,unitScale=14}={}) {
     const g=geometry(kind,time);if(!g||!frame)return false;
-    const size=unitScale*(kind==='fly'?1:.85),lighting=unit(light);
+    const size=unitScale*(kind==='fly'?1:kind==='ladybug'?1.05:.85),lighting=unit(light);
     const world=p=>add(position,mul(localToWorld(p,frame),size));
     const paint=[];
     for(const f of g.faces){
